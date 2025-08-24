@@ -22,15 +22,14 @@ jobs:
       OS_VERSION: "9" # e.g. "22.04"
       
     steps:
-      - run: echo "oci" > requirements.txt
+      - run: echo "oci-cli" > requirements.txt
       - uses: actions/setup-python@v5.6.0
         with:
           python-version: '3.x'
           check-latest: false
           update-environment: true
           cache: 'pip'
-          cache-dependency-path: requirements.txt
-      - run: pip install -r requirements.txt
+      - run: pip install --user -r requirements.txt
 
       - name: Setup OCI configuration
         env:
