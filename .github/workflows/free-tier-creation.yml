@@ -101,9 +101,10 @@ jobs:
           OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
           OCI_SUBNET_ID: ${{ secrets.OCI_SUBNET_ID }}
           OCI_IMAGE_ID: ${{ secrets.OCI_IMAGE_ID }}
+          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
-          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+          OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: true
         run: |
           # Determine compartment to use (default to tenancy if not provided)
           if [ -z "$OCI_COMPARTMENT_ID" ]; then
