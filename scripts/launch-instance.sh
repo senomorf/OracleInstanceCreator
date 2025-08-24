@@ -13,10 +13,10 @@ determine_compartment() {
     
     if [[ -z "${OCI_COMPARTMENT_ID:-}" ]]; then
         comp_id="$OCI_TENANCY_OCID"
-        log_info "Using tenancy OCID as compartment: $comp_id"
+        log_info "Using tenancy OCID as compartment"
     else
         comp_id="$OCI_COMPARTMENT_ID"
-        log_info "Using specified compartment: $comp_id"
+        log_info "Using specified compartment"
     fi
     
     echo "$comp_id"
@@ -28,7 +28,7 @@ lookup_image_id() {
     
     if [[ -n "${OCI_IMAGE_ID:-}" ]]; then
         image_id="$OCI_IMAGE_ID"
-        log_info "Using specified image ID: $image_id"
+        log_info "Using specified image ID"
     else
         log_info "Looking up latest image for OS $OPERATING_SYSTEM $OS_VERSION..."
         
