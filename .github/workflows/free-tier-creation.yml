@@ -22,6 +22,9 @@ jobs:
       OS_VERSION: "9" # e.g. "22.04"
       
     steps:
+      - name: OCI tool pip requirements
+        run: echo "oci" > requirements.txt
+        
       - name: Setup Python with pip cache
         uses: actions/setup-python@v5.6.0
         with:
@@ -29,9 +32,6 @@ jobs:
           cache: 'pip'
           check-latest: false
 
-      - name: OCI tool pip requirements
-        run: echo "oci" > requirements.txt
-        
       - name: Install tool dependencies
         run: |
           pip install ${{ env.OUTPUT }} -r requirements.txt
