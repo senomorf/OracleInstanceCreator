@@ -63,7 +63,11 @@ jobs:
           mkdir -p ~/.ssh
           echo "${SSH_AUTHORIZED_KEYS_FILE}" > ~/.ssh/private_key_pub.pem
           chmod 644 ~/.ssh/private_key_pub.pem
-          
+
+      - name: Test tool
+        run: |
+          which oci
+
       - name: Launch Free Tier Instance
         env:
           OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
