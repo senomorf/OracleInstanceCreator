@@ -29,6 +29,14 @@ jobs:
           check-latest: false
           update-environment: true
           cache: 'pip'
+      - uses: actions/cache@v4.2.4
+        with:
+          path: |
+            ~/.local/lib/
+            ~/.local/bin/
+          key: ${{ runner.os }}-local-installed-by-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-local-installed-by-pip-
       - run: pip install --user -r requirements.txt
 
       - name: Setup OCI configuration
