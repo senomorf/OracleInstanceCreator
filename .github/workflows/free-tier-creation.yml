@@ -60,6 +60,7 @@ jobs:
         env:
           SSH_AUTHORIZED_KEYS_FILE: ${{ secrets.INSTANCE_SSH_PUBLIC_KEY }}
         run: |
+          mkdir -p ~/.ssh
           echo "${SSH_AUTHORIZED_KEYS_FILE}" > ~/.ssh/private_key_pub.pem
           chmod 644 ~/.ssh/private_key_pub.pem
           
