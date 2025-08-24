@@ -120,20 +120,29 @@ launch_instance() {
     local launch_args
     readarray -t launch_args < <(build_launch_command "$comp_id" "$image_id")
     
-    # Execute launch command
+    # Execute launch command with single attempt for rate limiting
     local output
     local status
     
     set +e
-    output=$(oci_cmd "${launch_args[@]}" 2>&1)
+    # Use oci directly instead of oci_cmd to avoid any potential retry logic
+    log_debug "Executing OCI command: ${launch_args[*]}"
+    output=$(oci "${launch_args[@]}" 2>&1)
     status=$?
     set -e
     
     echo "$output"
     
     if [[ $status -ne 0 ]]; then
+        # Check for rate limiting first to avoid further API calls
+        if echo "$output" | grep -qi "too many requests\|rate limit\|throttle\|429"; then
+            log_info "Rate limit detected - will retry on next schedule"
+            log_info "Capacity issue detected - will retry on next schedule"
+            return 0
+        fi
+        
         if handle_launch_error "$output"; then
-            # Capacity error - log and exit successfully
+            # Other capacity errors - log and exit successfully
             log_info "Capacity issue detected - will retry on next schedule"
             return 0
         else
