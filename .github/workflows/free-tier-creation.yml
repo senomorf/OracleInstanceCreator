@@ -66,10 +66,12 @@ jobs:
           chmod 644 ~/.ssh/private_key_pub.pem
 
       - name: Test tool
+        if: false
         run: |
           which oci
 
       - name: Launch Free Tier Instance
+        if: false
         env:
           OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
           OCI_SUBNET_ID: ${{ secrets.OCI_SUBNET_ID }}
