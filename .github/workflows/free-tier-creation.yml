@@ -43,6 +43,7 @@ jobs:
           OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
           OCI_REGION: ${{ secrets.OCI_REGION }}
           OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+          SSH_AUTHORIZED_KEYS_FILE: ${{ secrets.INSTANCE_SSH_PUBLIC_KEY }}
         run: |
           mkdir -p ~/.oci
           
@@ -57,10 +58,10 @@ jobs:
           
           echo "${OCI_PRIVATE_KEY}" > ~/.oci/oci_api_key.pem
           chmod 600 ~/.oci/oci_api_key.pem
-        
-          echo "$SSH_AUTHORIZED_KEYS_FILE" > ~/.ssh/private_key_pub.pem
+          
+          echo "${SSH_AUTHORIZED_KEYS_FILE}" > ~/.ssh/private_key_pub.pem
           chmod 644 ~/.ssh/private_key_pub.pem
-
+          
       - name: Launch Free Tier Instance
         env:
           OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
