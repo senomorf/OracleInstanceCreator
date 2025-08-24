@@ -75,7 +75,6 @@ jobs:
           which oci
 
       - name: Launch Free Tier Instance
-        if: false
         env:
           OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
           OCI_SUBNET_ID: ${{ secrets.OCI_SUBNET_ID }}
