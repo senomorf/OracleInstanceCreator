@@ -22,20 +22,15 @@ jobs:
       OS_VERSION: "9" # e.g. "22.04"
       
     steps:
-      - name: OCI tool pip requirements
-        run: echo "oci" > requirements.txt
-        
-      - name: Setup Python with pip cache
-        uses: actions/setup-python@v5.6.0
+      - run: echo "oci" > requirements.txt
+      - uses: actions/setup-python@v5.6.0
         with:
           python-version: '3.x'
           check-latest: false
+          update-environment: true
           cache: 'pip'
           cache-dependency-path: requirements.txt
-
-      - name: Install tool dependencies
-        run: |
-          pip install -r requirements.txt
+      - run: pip install -r requirements.txt
 
       - name: Setup OCI configuration
         env:
@@ -66,7 +61,6 @@ jobs:
           chmod 644 ~/.ssh/private_key_pub.pem
 
       - name: Test tool
-        if: false
         run: |
           which oci
 
