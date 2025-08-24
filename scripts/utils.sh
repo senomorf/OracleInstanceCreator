@@ -24,15 +24,15 @@ fi
 
 # Logging functions
 log_info() {
-    echo "${BLUE}[INFO]${RESET} $*"
+    echo "${BLUE}[INFO]${RESET} $*" >&2
 }
 
 log_success() {
-    echo "${GREEN}[SUCCESS]${RESET} $*"
+    echo "${GREEN}[SUCCESS]${RESET} $*" >&2
 }
 
 log_warning() {
-    echo "${YELLOW}[WARNING]${RESET} $*"
+    echo "${YELLOW}[WARNING]${RESET} $*" >&2
 }
 
 log_error() {
@@ -41,7 +41,7 @@ log_error() {
 
 log_debug() {
     if [[ "${DEBUG:-}" == "true" ]]; then
-        echo "${BOLD}[DEBUG]${RESET} $*"
+        echo "${BOLD}[DEBUG]${RESET} $*" >&2
     fi
 }
 
