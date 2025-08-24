@@ -30,11 +30,11 @@ jobs:
         with:
           python-version: '3.x'
           cache: 'pip'
-          check-latest: false
+          #check-latest: false
 
       - name: Install tool dependencies
         run: |
-          pip install ${{ env.OUTPUT }} -r requirements.txt
+          pip install -r requirements.txt
 
       - name: Setup OCI configuration
         env:
