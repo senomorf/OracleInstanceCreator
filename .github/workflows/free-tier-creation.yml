@@ -59,6 +59,7 @@ jobs:
           region=${OCI_REGION}
           key_file=${HOME}/.oci/oci_api_key.pem
           EOL
+          chmod 600 ~/.oci/config
           echo "${OCI_PRIVATE_KEY}" > ~/.oci/oci_api_key.pem
           chmod 600 ~/.oci/oci_api_key.pem
 
