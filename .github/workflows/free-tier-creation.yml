@@ -43,10 +43,8 @@ jobs:
           OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
           OCI_REGION: ${{ secrets.OCI_REGION }}
           OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
-          SSH_AUTHORIZED_KEYS_FILE: ${{ secrets.INSTANCE_SSH_PUBLIC_KEY }}
         run: |
           mkdir -p ~/.oci
-          
           cat > ~/.oci/config <<EOL
           [DEFAULT]
           user=${OCI_USER_OCID}
@@ -55,10 +53,13 @@ jobs:
           region=${OCI_REGION}
           key_file=${HOME}/.oci/oci_api_key.pem
           EOL
-          
           echo "${OCI_PRIVATE_KEY}" > ~/.oci/oci_api_key.pem
           chmod 600 ~/.oci/oci_api_key.pem
-          
+
+      - name: Setup SSH configuration
+        env:
+          SSH_AUTHORIZED_KEYS_FILE: ${{ secrets.INSTANCE_SSH_PUBLIC_KEY }}
+        run: |
           echo "${SSH_AUTHORIZED_KEYS_FILE}" > ~/.ssh/private_key_pub.pem
           chmod 644 ~/.ssh/private_key_pub.pem
           
