@@ -1,0 +1,166 @@
+name: 'Oracle free fier instance creator'
+
+on:
+  #schedule:
+  #  - cron:  "2/5 * * * *"
+
+  workflow_dispatch:
+
+jobs:
+  poll-instance:
+    runs-on: ubuntu-latest
+    name: Attempt instance creation once
+    env:
+      # Configuration (non-sensitive defaults)
+      OCI_AD: "fgaj:AP-SINGAPORE-1-AD-1" # e.g. "FeVO:EU-FRANKFURT-1-AD-2"
+      OCI_SHAPE: "VM.Standard.A1.Flex" # e.g. "VM.Standard.E2.1.Micro"
+      OCI_OCPUS: "4"
+      OCI_MEMORY_IN_GBS: "24"
+      INSTANCE_DISPLAY_NAME: "a1-sg"
+      ASSIGN_PUBLIC_IP: "false"
+      OPERATING_SYSTEM: "Oracle Linux" # e.g. "Canonical Ubuntu"
+      OS_VERSION: "9" # e.g. "22.04"
+      
+    steps:
+      - name: Setup Python with pip cache
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: '3.x'
+          cache: 'pip'
+          check-latest: false
+
+      - name: OCI tool pip requirements
+        run: echo "oci" > requirements.txt
+        
+      - name: Install tool dependencies
+        run: |
+          pip install ${{ env.OUTPUT }} -r requirements.txt
+
+      - name: Setup OCI configuration
+        env:
+          OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
+          OCI_KEY_FINGERPRINT: ${{ secrets.OCI_KEY_FINGERPRINT }}
+          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.oci
+          
+          cat > ~/.oci/config <<EOL
+          [DEFAULT]
+          user=${OCI_USER_OCID}
+          fingerprint=${OCI_KEY_FINGERPRINT}
+          tenancy=${OCI_TENANCY_OCID}
+          region=${OCI_REGION}
+          key_file=${HOME}/.oci/oci_api_key.pem
+          EOL
+          
+          echo "${OCI_PRIVATE_KEY}" > ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/oci_api_key.pem
+        
+          echo "$SSH_AUTHORIZED_KEYS_FILE" > ~/.ssh/private_key_pub.pem
+          chmod 644 ~/.ssh/private_key_pub.pem
+
+      - name: Launch Free Tier Instance
+        env:
+          OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
+          OCI_SUBNET_ID: ${{ secrets.OCI_SUBNET_ID }}
+          OCI_IMAGE_ID: ${{ secrets.OCI_IMAGE_ID }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
+          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+        run: |
+          # Determine compartment to use (default to tenancy if not provided)
+          if [ -z "$OCI_COMPARTMENT_ID" ]; then
+            COMP_ID="$OCI_TENANCY_OCID"
+          else
+            COMP_ID="$OCI_COMPARTMENT_ID"
+          fi
+
+          # Determine image ID (lookup by OS if OCI_IMAGE_ID not given)
+          if [ -n "$OCI_IMAGE_ID" ]; then
+            image_id="$OCI_IMAGE_ID"
+          else
+            echo "Looking up latest image for OS $OPERATING_SYSTEM $OS_VERSION ..."
+            image_id=$(oci compute image list --compartment-id "$COMP_ID" --all \
+                     --shape "$OCI_SHAPE" \
+                     --operating-system "$OPERATING_SYSTEM" \
+                     --operating-system-version "$OS_VERSION" \
+                     --query 'data[0].id' --raw-output)
+            if [ -z "$image_id" ]; then
+              echo "ERROR: No image found for $OPERATING_SYSTEM $OS_VERSION in OCI."
+              # Send Telegram alert for configuration error (no image found)
+              error_msg="OCI poller error: No image found for $OPERATING_SYSTEM $OS_VERSION."
+              curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+                   -d "chat_id=${TELEGRAM_USER_ID}" \
+                   --data-urlencode "text=${error_msg}"
+              exit 1
+            fi
+            echo "Using image $image_id"
+          fi
+
+          # Avoid duplicate instance creation: check if instance already exists
+          existing_id=$(oci compute instance list --compartment-id "$COMP_ID" \
+                        --display-name "$INSTANCE_DISPLAY_NAME" --all \
+                        --query 'data[0].id' --raw-output)
+          if [ -n "$existing_id" ]; then
+            echo "Instance '${INSTANCE_DISPLAY_NAME}' already exists (OCID: $existing_id). Skipping creation."
+            exit 0
+          fi
+
+          echo "Attempting to launch instance '${INSTANCE_DISPLAY_NAME}' in AD ${OCI_AD}..."
+          # Build base launch command
+          launch_args=(oci compute instance launch 
+                       --availability-domain "$OCI_AD" 
+                       --compartment-id "$COMP_ID" 
+                       --shape "$OCI_SHAPE" 
+                       --subnet-id "$OCI_SUBNET_ID" 
+                       --image-id "$image_id" 
+                       --display-name "$INSTANCE_DISPLAY_NAME" 
+                       --assign-private-dns-record true)
+          # If shape is flexible, add shape-config for OCPUs and memory
+          if [[ "$OCI_SHAPE" == *"Flex" ]]; then
+            launch_args+=(--shape-config "{\"ocpus\": ${OCI_OCPUS}, \"memoryInGBs\": ${OCI_MEMORY_IN_GBS}}")
+          fi
+          # Set public IP assignment as per configuration
+          if [ "$ASSIGN_PUBLIC_IP" == "true" ]; then
+            launch_args+=(--assign-public-ip true)
+          else
+            launch_args+=(--assign-public-ip false)
+          fi
+
+          # Execute the launch command and capture output
+          set +e
+          output=$("${launch_args[@]}" 2>&1)
+          status=$?
+          set -e
+
+          echo "$output"
+          if [ $status -ne 0 ]; then
+            # Check for "out of capacity" error message
+            if echo "$output" | grep -qi "capacity"; then
+              echo "No capacity available for shape at this time. Will retry on next schedule."
+              exit 0  # not a failure, just capacity issue
+            else
+              echo "Unexpected error during instance launch."
+              # Send Telegram notification for the error
+              error_line=$(echo "$output" | sed -n '1p')
+              error_msg="OCI instance launch failed: ${error_line}"
+              curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+                   -d "chat_id=${TELEGRAM_USER_ID}" \
+                   --data-urlencode "text=${error_msg}"
+              exit 1
+            endfi
+          fi
+
+          # If we reach here, launch was successful
+          # Extract the new instance OCID (find first ocid1.instance in output)
+          instance_id=$(echo "$output" | grep -o 'ocid1.instance[^"]*')
+          echo "Instance launched successfully! OCID: $instance_id"
+          # Notify via Telegram about success
+          success_msg="OCI instance created: ${INSTANCE_DISPLAY_NAME} (OCID: ${instance_id})."
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+               -d "chat_id=${TELEGRAM_USER_ID}" \
+               --data-urlencode "text=${success_msg}"
+
+
