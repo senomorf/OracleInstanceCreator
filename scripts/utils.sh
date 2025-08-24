@@ -106,8 +106,12 @@ check_oci_cli() {
 get_error_type() {
     local error_output="$1"
     
-    if echo "$error_output" | grep -qi "capacity\|host capacity\|out of capacity"; then
+    if echo "$error_output" | grep -qi "capacity\|host capacity\|out of capacity\|service limit\|quota exceeded\|resource unavailable\|insufficient capacity"; then
+        log_debug "Detected CAPACITY error pattern in: $error_output"
         echo "CAPACITY"
+    elif echo "$error_output" | grep -qi "too many requests\|rate limit\|throttle\|429"; then
+        log_debug "Detected RATE_LIMIT error pattern in: $error_output"
+        echo "CAPACITY"  # Treat rate limiting as capacity issue
     elif echo "$error_output" | grep -qi "authentication\|authorization\|unauthorized"; then
         echo "AUTH"
     elif echo "$error_output" | grep -qi "network\|timeout\|connection"; then

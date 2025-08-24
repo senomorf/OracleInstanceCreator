@@ -132,8 +132,14 @@ launch_instance() {
     echo "$output"
     
     if [[ $status -ne 0 ]]; then
-        handle_launch_error "$output"
-        return $status
+        if handle_launch_error "$output"; then
+            # Capacity error - log and exit successfully
+            log_info "Capacity issue detected - will retry on next schedule"
+            return 0
+        else
+            # Real error - propagate failure
+            return 1
+        fi
     fi
     
     # Extract instance OCID from successful output

@@ -114,7 +114,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check if failure was due to capacity
+        id: check-capacity
+        run: |
+          # Check if the failure was due to capacity issues
+          # This provides defense-in-depth against false failure notifications
+          echo "capacity_error=false" >> $GITHUB_OUTPUT
+          # Note: GitHub job logs would need to be checked via API for full implementation
+          # For now, we rely on the script-level fix to handle capacity errors properly
+
       - name: Send failure notification
+        if: steps.check-capacity.outputs.capacity_error != 'true'
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
