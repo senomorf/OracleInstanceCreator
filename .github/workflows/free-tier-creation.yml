@@ -5,6 +5,23 @@ on:
   #  - cron:  "2/5 * * * *"
 
   workflow_dispatch:
+    inputs:
+      # output of tools suppressed by default, but can be enabled
+      verbose_output:
+        description: 'Debug: verbose/debug output (quiet by default)'
+        type: boolean
+        default: true
+
+env:
+  # verbosity controls:
+  # for those that have both options
+  OUTPUT: ${{ inputs.verbose_output && '--verbose' || '--quiet' }}
+  # for those that don't have one of options
+  VERBOSE: ${{ inputs.verbose_output && '--verbose' || '' }}
+  DEBUG: ${{ inputs.verbose_output && '--debug' || '' }}
+  QUIET: ${{ !inputs.verbose_output && '--quiet' || '' }}
+  # redirects stdout to null in cases with no verbosity control
+  NULL_OUTPUT: ${{ !inputs.verbose_output && ' >/dev/null' || '' }}
 
 jobs:
   poll-instance:
@@ -40,7 +57,7 @@ jobs:
           key: ${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-pip-${{ hashFiles('**/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-pip-
-      - run: pip install --user -r requirements.txt
+      - run: pip install ${{ env.OUTPUT }} --user -r requirements.txt
 
       - name: Setup OCI configuration
         env:
@@ -72,6 +89,7 @@ jobs:
           chmod 644 ~/.ssh/private_key_pub.pem
 
       - name: Test tool
+        if: false
         run: |
           which oci
 
@@ -96,7 +114,7 @@ jobs:
             image_id="$OCI_IMAGE_ID"
           else
             echo "Looking up latest image for OS $OPERATING_SYSTEM $OS_VERSION ..."
-            image_id=$(oci compute image list --compartment-id "$COMP_ID" --all \
+            image_id=$(oci ${{ env.DEBUG }} compute image list --compartment-id "$COMP_ID" --all \
                      --shape "$OCI_SHAPE" \
                      --operating-system "$OPERATING_SYSTEM" \
                      --operating-system-version "$OS_VERSION" \
@@ -114,7 +132,7 @@ jobs:
           fi
 
           # Avoid duplicate instance creation: check if instance already exists
-          existing_id=$(oci compute instance list --compartment-id "$COMP_ID" \
+          existing_id=$(oci ${{ env.DEBUG }} compute instance list --compartment-id "$COMP_ID" \
                         --display-name "$INSTANCE_DISPLAY_NAME" --all \
                         --query 'data[0].id' --raw-output)
           if [ -n "$existing_id" ]; then
@@ -124,7 +142,7 @@ jobs:
 
           echo "Attempting to launch instance '${INSTANCE_DISPLAY_NAME}' in AD ${OCI_AD}..."
           # Build base launch command
-          launch_args=(oci compute instance launch 
+          launch_args=(oci ${{ env.DEBUG }} compute instance launch 
                        --availability-domain "$OCI_AD" 
                        --compartment-id "$COMP_ID" 
                        --shape "$OCI_SHAPE" 
