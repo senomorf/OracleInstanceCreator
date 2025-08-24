@@ -128,4 +128,31 @@ cat config/regions.yml
 - **Backward Compatibility**: All existing GitHub secrets and functionality are preserved
 - **Better Maintainability**: Clear separation of concerns makes the system easier to understand and modify
 - **Comprehensive Documentation**: Detailed documentation available in `docs/configuration.md`
-- Never store credentials in artifacts or other places with broader access scope
+
+## Critical Technical Patterns (Lessons Learned)
+
+### Command Substitution + Logging Anti-Pattern
+- **NEVER** use stdout in logging functions when called via `$()`
+- **Solution**: Always redirect logging to stderr: `echo "message" >&2`
+- **Impact**: Prevents log text injection into CLI commands
+
+### GitHub Actions Security
+- **NEVER** store credentials in artifacts between jobs
+- **Solution**: Consolidate credential operations in single job
+- **Rationale**: Artifacts accessible to anyone with repo permissions
+
+### Oracle Cloud Gotchas
+- OCID validation is critical: `^ocid1\\.type\\.[a-z0-9-]*\\.[a-z0-9-]*\\..+`
+- "Out of host capacity" is expected for free tier (not a failure)
+- Flexible shapes need `--shape-config {"ocpus": N, "memoryInGBs": N}`
+
+### Error Classification
+- **CAPACITY**: `grep -qi "capacity"` → Silent retry
+- **AUTH**: Authentication errors → Immediate alert  
+- **CONFIG**: Invalid parameters → Review needed
+- **NETWORK**: Connectivity issues → Retry with backoff
+
+### Debugging Indicators
+- **<30 seconds runtime**: Configuration/parsing errors
+- **2+ minutes runtime**: Successful API calls (even with capacity errors)
+- Use `DEBUG=true` and `--field verbose_output=true` for troubleshooting
