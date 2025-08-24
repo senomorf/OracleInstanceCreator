@@ -8,14 +8,34 @@ This is an Oracle Cloud Infrastructure (OCI) automation project that uses GitHub
 
 ## Architecture
 
-The project consists of a single GitHub Actions workflow (`free-tier-creation.yml`) that:
+The project has been refactored into a modular architecture with the following components:
 
-1. **Sets up the environment**: Installs OCI CLI via pip and configures authentication
-2. **Configures OCI authentication**: Uses GitHub secrets to set up OCI configuration files
-3. **Sets up SSH keys**: Prepares SSH public keys for instance access
-4. **Attempts instance creation**: Launches OCI free tier instances with specified configuration
-5. **Handles capacity issues**: Gracefully handles "out of capacity" responses and retries
-6. **Provides notifications**: Sends Telegram notifications on success or unexpected errors
+### File Structure
+```
+├── .github/workflows/free-tier-creation.yml  # GitHub Actions workflow (refactored)
+├── scripts/
+│   ├── setup-oci.sh                          # OCI CLI configuration
+│   ├── setup-ssh.sh                          # SSH key setup  
+│   ├── validate-config.sh                    # Configuration validation
+│   ├── launch-instance.sh                    # Instance creation logic
+│   ├── notify.sh                             # Telegram notifications
+│   └── utils.sh                              # Common utility functions
+├── config/
+│   ├── instance-profiles.yml                 # Pre-defined configurations
+│   ├── defaults.yml                          # Default values and validation
+│   └── regions.yml                           # Region reference data
+└── docs/
+    └── configuration.md                       # Comprehensive documentation
+```
+
+### Workflow Jobs
+
+The GitHub Actions workflow consists of two secure jobs:
+
+1. **create-instance**: Validates configuration, sets up environment, and creates OCI instance (consolidated for security)
+2. **notify-on-failure**: Sends failure notifications if the main job fails
+
+**Security Enhancement**: All credential operations occur within a single job to prevent exposure through artifacts.
 
 ## Key Configuration
 
@@ -63,20 +83,49 @@ The workflow implements intelligent error handling:
 
 ## Development Commands
 
-Since this is a GitHub Actions-only project, development primarily involves:
+The refactored project supports both GitHub Actions execution and local testing:
 
+### GitHub Actions Workflow
 ```bash
 # Validate workflow syntax
 cat .github/workflows/free-tier-creation.yml
+```
 
-# Test workflow locally (requires act or similar tools)
-# Note: Local testing requires all secrets to be configured
+### Local Script Testing
+```bash
+# Make all scripts executable
+chmod +x scripts/*.sh
+
+# Test individual components (requires environment variables)
+./scripts/validate-config.sh      # Validate configuration
+./scripts/setup-oci.sh           # Setup OCI authentication
+./scripts/setup-ssh.sh           # Setup SSH keys
+./scripts/launch-instance.sh     # Launch instance
+./scripts/notify.sh test         # Test Telegram notifications
+
+# Check script syntax
+bash -n scripts/*.sh
+```
+
+### Configuration Management
+```bash
+# View available instance profiles
+cat config/instance-profiles.yml
+
+# Check default values and validation rules
+cat config/defaults.yml
+
+# Reference region information
+cat config/regions.yml
 ```
 
 ## Important Notes
 
-- The project contains no traditional source code - it's entirely workflow-based
-- All logic is contained within the GitHub Actions workflow file
-- Configuration is done via environment variables and GitHub secrets
-- The workflow is designed to be idempotent and can safely retry
-- Capacity issues are expected and handled gracefully
+- **Refactored Architecture**: The project has been transformed from a monolithic workflow into a modular system with separate scripts for different functions
+- **Enhanced Testability**: Individual scripts can now be tested locally without GitHub Actions
+- **Improved Error Handling**: Comprehensive error classification with intelligent retry logic and notifications  
+- **Configuration Management**: Structured configuration files support multiple deployment scenarios
+- **Backward Compatibility**: All existing GitHub secrets and functionality are preserved
+- **Better Maintainability**: Clear separation of concerns makes the system easier to understand and modify
+- **Comprehensive Documentation**: Detailed documentation available in `docs/configuration.md`
+- Never store credentials in artifacts or other places with broader access scope
