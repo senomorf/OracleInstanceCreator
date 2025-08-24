@@ -146,13 +146,47 @@ cat config/regions.yml
 - "Out of host capacity" is expected for free tier (not a failure)
 - Flexible shapes need `--shape-config {"ocpus": N, "memoryInGBs": N}`
 
-### Error Classification
-- **CAPACITY**: `grep -qi "capacity"` → Silent retry
-- **AUTH**: Authentication errors → Immediate alert  
-- **CONFIG**: Invalid parameters → Review needed
-- **NETWORK**: Connectivity issues → Retry with backoff
+### Error Classification & Capacity Handling (UPDATED 2025-08-24)
+- **CAPACITY/RATE_LIMIT**: Treated as expected success conditions
+  - "Out of host capacity" (Oracle free tier limitation)
+  - "Too many requests" / HTTP 429 (rate limiting)
+  - "Service limit exceeded", "Quota exceeded"
+  - "Resource unavailable", "Insufficient capacity"
+  - **Result**: Script returns 0 → Workflow succeeds → No false alerts
+- **AUTH**: Authentication/authorization errors → Immediate Telegram alert
+- **CONFIG**: Invalid parameters/OCIDs → Review needed, Telegram alert
+- **NETWORK**: Connectivity/timeout issues → Telegram alert
 
-### Debugging Indicators
-- **<30 seconds runtime**: Configuration/parsing errors
-- **2+ minutes runtime**: Successful API calls (even with capacity errors)
+### Capacity Error Handling Implementation
+**Key Files Modified:**
+- `scripts/launch-instance.sh` (lines 113-152): Enhanced error handling
+- `scripts/utils.sh` (lines 109-120): Expanded error classification patterns  
+- `.github/workflows/free-tier-creation.yml`: Added workflow-level safeguards
+
+**Core Logic:**
+```bash
+# Early rate limit detection to avoid redundant API calls
+if echo "$output" | grep -qi "too many requests\|rate limit\|throttle\|429"; then
+    return 0  # Treat as success
+fi
+```
+
+### Debugging Indicators & Performance Optimizations
+- **<30 seconds runtime**: Configuration/parsing errors (genuine failures)
+- **~2 minutes runtime**: Successful API calls reaching Oracle (capacity/rate limit expected)
+- **Single API Call**: Direct `oci` CLI usage prevents redundant requests on rate limiting
+- **Workflow Success Pattern**: Capacity Error → Exit 0 → Green Status → No Alert
 - Use `DEBUG=true` and `--field verbose_output=true` for troubleshooting
+
+### Testing Capacity Error Handling
+```bash
+# Test error classification locally
+source scripts/utils.sh && get_error_type "Too many requests for the user"
+# Expected output: CAPACITY
+
+# Test workflow with verbose output
+gh workflow run free-tier-creation.yml --field verbose_output=true --field send_notifications=false
+
+# Monitor results
+gh run watch <run-id>
+```
