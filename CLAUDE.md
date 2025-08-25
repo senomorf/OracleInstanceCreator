@@ -107,6 +107,9 @@ export OCI_PROXY_URL="myuser:mypass@proxy.example.com:3128"
 
 **Common Issues:**
 - **Special Characters**: Use URL encoding for passwords containing `@`, `:`, or `%` characters
+  - **Required Encoding**: `@` → `%40`, `:` → `%3A`, `%` → `%25`
+  - **Example**: Password `user@domain.com:password` becomes `user%40domain.com%3Apassword`
+  - **Full Example**: `myuser:my%40pass%3Aword@proxy.company.com:8080` (for password `my@pass:word`)
 - **IPv6 Format**: Always use brackets around IPv6 addresses: `[::1]` not `::1`
 - **Port Range**: Ensure port is between 1-65535
 - **Connectivity**: Use `DEBUG=true` for detailed proxy setup logging
