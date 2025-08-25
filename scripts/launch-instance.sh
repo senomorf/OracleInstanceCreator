@@ -8,6 +8,37 @@ set -euo pipefail
 source "$(dirname "$0")/utils.sh"
 source "$(dirname "$0")/notify.sh"
 
+# Ensure proxy configuration is applied if needed
+setup_proxy_for_oci() {
+    if [[ -n "${OCI_PROXY_URL:-}" ]]; then
+        log_info "Setting up proxy configuration for OCI CLI..."
+        
+        # Parse format: USER:PASS@HOST:PORT
+        if [[ "$OCI_PROXY_URL" =~ ^([^:]+):([^@]+)@([^:]+):([0-9]+)$ ]]; then
+            local proxy_user="${BASH_REMATCH[1]}"
+            local proxy_pass="${BASH_REMATCH[2]}"
+            local proxy_host="${BASH_REMATCH[3]}"
+            local proxy_port="${BASH_REMATCH[4]}"
+            
+            # Construct proxy URL with authentication
+            local proxy_url="http://${proxy_user}:${proxy_pass}@${proxy_host}:${proxy_port}/"
+            
+            # Set both uppercase and lowercase versions for maximum compatibility
+            export HTTP_PROXY="${proxy_url}"
+            export HTTPS_PROXY="${proxy_url}"
+            export http_proxy="${proxy_url}"
+            export https_proxy="${proxy_url}"
+            
+            log_debug "Proxy configured for ${proxy_host}:${proxy_port} with authentication"
+        else
+            log_warning "Invalid OCI_PROXY_URL format - proxy will not be used"
+        fi
+    fi
+}
+
+# Apply proxy configuration
+setup_proxy_for_oci
+
 determine_compartment() {
     local comp_id
     

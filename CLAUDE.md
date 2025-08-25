@@ -65,6 +65,20 @@ The workflow requires these secrets to be configured in the GitHub repository:
 - **TELEGRAM_TOKEN**: Telegram bot token for notifications
 - **TELEGRAM_USER_ID**: Telegram user ID for notifications
 
+## Optional GitHub Secrets
+
+### Proxy Support
+
+- **OCI_PROXY_URL**: Proxy server URL with authentication (optional)
+  - Format: `username:password@proxy.example.org:3128`
+  - Example with IP address: `myuser:mypass@192.168.1.100:3128`
+  - Example with hostname: `myuser:mypass@proxy.company.com:8080`
+  - Used for environments requiring HTTP/HTTPS proxy for OCI API calls
+  - If not configured, OCI CLI will connect directly to Oracle Cloud
+  - Supports authenticated proxies with embedded credentials
+  - Applied transparently to all OCI CLI commands via HTTP_PROXY/HTTPS_PROXY environment variables
+  - The script automatically adds the `http://` protocol prefix and trailing `/` when constructing the proxy URL
+
 ## Workflow Execution
 
 The workflow can be triggered:

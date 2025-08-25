@@ -59,6 +59,7 @@ jobs:
           OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
           OCI_SUBNET_ID: ${{ secrets.OCI_SUBNET_ID }}
           OCI_IMAGE_ID: ${{ secrets.OCI_IMAGE_ID }}
+          OCI_PROXY_URL: ${{ secrets.OCI_PROXY_URL }}
           INSTANCE_SSH_PUBLIC_KEY: ${{ secrets.INSTANCE_SSH_PUBLIC_KEY }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
@@ -96,6 +97,7 @@ jobs:
           OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
           OCI_REGION: ${{ secrets.OCI_REGION }}
           OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+          OCI_PROXY_URL: ${{ secrets.OCI_PROXY_URL }}
           INSTANCE_SSH_PUBLIC_KEY: ${{ secrets.INSTANCE_SSH_PUBLIC_KEY }}
         run: |
           # Run setup scripts in parallel for faster execution
@@ -110,6 +112,7 @@ jobs:
           OCI_IMAGE_ID: ${{ secrets.OCI_IMAGE_ID }}
           OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
           OCI_REGION: ${{ secrets.OCI_REGION }}
+          OCI_PROXY_URL: ${{ secrets.OCI_PROXY_URL }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
         run: ./scripts/launch-instance.sh
