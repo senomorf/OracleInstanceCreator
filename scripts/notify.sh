@@ -1,7 +1,12 @@
 #!/bin/bash
 
 # Telegram notification script
-# Handles sending notifications via Telegram bot
+# Handles sending notifications via Telegram bot with severity levels:
+# - critical: 🚨 Authentication/config failures requiring immediate attention
+# - error: ❌ Operational failures
+# - warning: ⚠️ Capacity issues, rate limits
+# - info: ℹ️ Status updates, informational
+# - success: ✅ Successful operations
 
 set -euo pipefail
 
@@ -9,7 +14,7 @@ source "$(dirname "$0")/utils.sh"
 
 # Send Telegram notification
 send_telegram_notification() {
-    local notification_type="$1"  # success, error, warning, info
+    local notification_type="$1"  # success, error, critical, warning, info
     local message="$2"
     
     # Validate required environment variables
@@ -27,6 +32,9 @@ send_telegram_notification() {
         "error")
             formatted_message="❌ **ERROR**: $message"
             ;;
+        "critical")
+            formatted_message="🚨 **CRITICAL**: $message"
+            ;;
         "warning")
             formatted_message="⚠️ **WARNING**: $message"
             ;;
@@ -34,7 +42,7 @@ send_telegram_notification() {
             formatted_message="ℹ️ **INFO**: $message"
             ;;
         *)
-            formatted_message="$message"
+            formatted_message="💬 $message"
             ;;
     esac
     
@@ -154,7 +162,7 @@ notify_authentication_error() {
 
 **Action Required:** Verify OCI configuration in GitHub secrets."
     
-    send_telegram_notification_with_retry "error" "$message"
+    send_telegram_notification_with_retry "critical" "$message"
 }
 
 # Send network error notification
@@ -228,7 +236,7 @@ send_notification() {
 }
 
 # Run test if called directly with 'test' argument
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
     if [[ "${1:-}" == "test" ]]; then
         test_telegram_config
     else

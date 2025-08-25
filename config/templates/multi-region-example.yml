@@ -1,0 +1,67 @@
+# Multi-Region Configuration Example
+# Advanced setup for users with multiple regions configured
+
+# Primary Region Configuration
+OCI_REGION: "ap-tokyo-1"
+OCI_AD: "ctKs:AP-TOKYO-1-AD-1"
+
+# Instance Configuration - High Performance
+OCI_SHAPE: "VM.Standard3.Flex"
+OCI_OCPUS: "2"
+OCI_MEMORY_IN_GBS: "16"
+INSTANCE_DISPLAY_NAME: "prod-instance-tokyo"
+ASSIGN_PUBLIC_IP: "true"
+
+# Operating System
+OPERATING_SYSTEM: "Oracle Linux"
+OS_VERSION: "9"
+
+# Boot Volume Configuration - Performance
+BOOT_VOLUME_SIZE: "100"          # Larger boot volume for production
+
+# Instance Recovery and Compatibility
+RECOVERY_ACTION: "RESTORE_INSTANCE"
+LEGACY_IMDS_ENDPOINTS: "false"
+
+# Multi-AD Retry Configuration - Conservative
+RETRY_WAIT_TIME: "60"            # Longer wait for production instances
+
+# Instance Verification Timeout - Extended
+INSTANCE_VERIFY_MAX_CHECKS: "10" # More time for larger instances
+INSTANCE_VERIFY_DELAY: "45"
+
+# Logging Configuration - Structured
+LOG_FORMAT: "json"               # Structured logging for production monitoring
+
+# Production Monitoring
+DEBUG: "false"                   # Disable debug in production
+ENABLE_NOTIFICATIONS: "true"     # Ensure notifications are enabled
+
+# Alternative Configuration (commented out):
+# Secondary Region Setup
+# OCI_REGION: "eu-frankfurt-1"
+# OCI_AD: "unja:EU-FRANKFURT-1-AD-1,unja:EU-FRANKFURT-1-AD-2,unja:EU-FRANKFURT-1-AD-3"
+
+# High-Memory Configuration Example:
+# OCI_SHAPE: "VM.Standard.E4.Flex"
+# OCI_OCPUS: "8"
+# OCI_MEMORY_IN_GBS: "128"
+
+# Required GitHub Secrets (not environment variables):
+# OCI_USER_OCID: Your OCI user OCID
+# OCI_KEY_FINGERPRINT: Your API key fingerprint  
+# OCI_TENANCY_OCID: Your tenancy OCID
+# OCI_PRIVATE_KEY: Your private API key content
+# OCI_COMPARTMENT_ID: Target compartment OCID
+# OCI_SUBNET_ID: Target subnet OCID
+# INSTANCE_SSH_PUBLIC_KEY: SSH public key for instance access
+# TELEGRAM_TOKEN: Telegram bot token
+# TELEGRAM_USER_ID: Your Telegram user ID
+
+# Notes:
+# - This configuration is for PAID instances, not free tier
+# - Adjust resource limits based on your subscription
+# - JSON logging recommended for production environments
+# - Consider multiple regions for high availability
+# - Monitor costs carefully with flexible shapes
+# - Use longer timeouts for larger instance provisioning
