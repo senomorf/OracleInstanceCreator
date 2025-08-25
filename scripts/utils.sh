@@ -139,10 +139,10 @@ oci_cmd_debug() {
         log_error "OCI debug command failed with status $status"
         log_error "Command: ${cmd[*]}"
         log_error "Output: $output"
-        return $status
     fi
     
     echo "$output"
+    return $status
 }
 
 # Intelligent OCI CLI command wrapper - uses appropriate mode
