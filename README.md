@@ -138,6 +138,17 @@ If workflow takes longer than expected:
 2. Expected debug output should show: `oci --debug --no-retry --connection-timeout 5 --read-timeout 15`
 3. Normal execution should complete in 17-20 seconds
 
+### Common Workflow Issues
+**Preflight Check Failures**: If preflight check fails with "OCI CLI not available":
+- Verify workflow step ordering: OCI CLI installation must happen before preflight check
+- Check for dependency issues in GitHub Actions workflow
+- Expected sequence: Checkout → Setup Python → Install OCI CLI → Preflight Check → Setup Config
+
+**Step Ordering**: The workflow has critical dependency requirements:
+- Tools must be installed before validation attempts
+- Configuration setup must happen before connectivity tests
+- See [CLAUDE.md](CLAUDE.md) for detailed workflow timing patterns
+
 ### Debug Mode
 Enable verbose output for troubleshooting:
 ```bash
