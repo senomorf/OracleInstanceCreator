@@ -155,24 +155,9 @@ main() {
     fi
     
     # Determine overall result
-    log_debug "STATUS_A1='$STATUS_A1', STATUS_E2='$STATUS_E2'"
-    log_debug "About to declare success_count"
     local success_count=0
-    log_debug "success_count initialized to $success_count"
-    
-    log_debug "Checking STATUS_A1..."
-    if [[ $STATUS_A1 -eq 0 ]]; then
-        log_debug "A1 success, incrementing"
-        success_count=$((success_count + 1))
-    fi
-    log_debug "After A1 check: success_count=$success_count"
-    
-    log_debug "Checking STATUS_E2..."
-    if [[ $STATUS_E2 -eq 0 ]]; then
-        log_debug "E2 success, incrementing"
-        success_count=$((success_count + 1))
-    fi
-    log_debug "Final success_count=$success_count"
+    [[ $STATUS_A1 -eq 0 ]] && success_count=$((success_count + 1))
+    [[ $STATUS_E2 -eq 0 ]] && success_count=$((success_count + 1))
     
     log_elapsed "parallel_execution"
     
