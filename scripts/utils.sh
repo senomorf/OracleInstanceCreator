@@ -102,7 +102,7 @@ oci_cmd_data() {
     log_debug "Executing OCI data command: oci ${cmd[*]}"
     
     set +e
-    output=$(oci "${cmd[@]}" 2>&1)
+    output=$(oci --no-retry "${cmd[@]}" 2>&1)
     status=$?
     set -e
     
@@ -127,6 +127,10 @@ oci_cmd_debug() {
     if [[ "${DEBUG:-}" == "true" ]]; then
         oci_args+=("--debug")
     fi
+    
+    # Add no-retry flag for performance optimization
+    # Disables exponential backoff retry logic since we handle errors gracefully
+    oci_args+=("--no-retry")
     
     log_debug "Executing OCI debug command: oci ${oci_args[*]} ${cmd[*]}"
     
