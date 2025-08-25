@@ -1,0 +1,54 @@
+# Oracle Free Tier Configuration Template - US East (AMD)
+# Copy to your GitHub Actions workflow environment variables
+
+# Region and Availability Domain
+OCI_REGION: "us-ashburn-1"
+OCI_AD: "ZGqs:US-ASHBURN-AD-1,ZGqs:US-ASHBURN-AD-2,ZGqs:US-ASHBURN-AD-3"
+
+# Instance Configuration
+OCI_SHAPE: "VM.Standard.E2.1.Micro"
+INSTANCE_DISPLAY_NAME: "free-tier-amd-us"
+ASSIGN_PUBLIC_IP: "true"         # Common for US region setups
+
+# Operating System
+OPERATING_SYSTEM: "Oracle Linux"
+OS_VERSION: "9"
+
+# Boot Volume Configuration
+BOOT_VOLUME_SIZE: "50"           # Minimum 50 GB (max 200 GB for free tier)
+
+# Instance Recovery and Compatibility
+RECOVERY_ACTION: "RESTORE_INSTANCE"
+LEGACY_IMDS_ENDPOINTS: "false"
+
+# Multi-AD Retry Configuration
+RETRY_WAIT_TIME: "45"            # Longer wait for busier US regions
+
+# Instance Verification Timeout
+INSTANCE_VERIFY_MAX_CHECKS: "7"  # More checks due to potentially longer provisioning
+INSTANCE_VERIFY_DELAY: "30"
+
+# Logging Configuration
+LOG_FORMAT: "text"               # or "json" for structured logging
+
+# AMD Image Cache (Update periodically)
+# Check latest AMD images: oci compute image list --compartment-id <tenancy-ocid> --operating-system "Oracle Linux" --operating-system-version "9" --shape "VM.Standard.E2.1.Micro" --sort-by TIMECREATED --sort-order DESC
+OCI_CACHED_OL9_AMD_IMAGE: "ocid1.image.oc1.iad.aaaaaaaaexampleamdimage123456789"
+
+# Required GitHub Secrets (not environment variables):
+# OCI_USER_OCID: Your OCI user OCID
+# OCI_KEY_FINGERPRINT: Your API key fingerprint  
+# OCI_TENANCY_OCID: Your tenancy OCID
+# OCI_PRIVATE_KEY: Your private API key content
+# OCI_COMPARTMENT_ID: Target compartment OCID
+# OCI_SUBNET_ID: Target subnet OCID
+# INSTANCE_SSH_PUBLIC_KEY: SSH public key for instance access
+# TELEGRAM_TOKEN: Telegram bot token
+# TELEGRAM_USER_ID: Your Telegram user ID
+
+# Notes:
+# - AMD instances (E2.1.Micro) are fixed shape (1 OCPU, 1 GB RAM)
+# - No OCI_OCPUS or OCI_MEMORY_IN_GBS needed for fixed shapes
+# - US regions can be busier - consider longer retry times
+# - Three ADs available in US-Ashburn-1 for better distribution
+# - Free tier limits: 2 AMD instances OR 1 ARM instance per tenancy

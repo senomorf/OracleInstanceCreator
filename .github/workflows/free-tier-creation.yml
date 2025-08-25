@@ -34,31 +34,30 @@ jobs:
     name: Create OCI Instances (Both Shapes)
     env:
       # Common configuration for both shapes
+      # Multi-AD support: Use comma-separated list for multiple ADs
+      # Example: "fgaj:AP-SINGAPORE-1-AD-1,fgaj:AP-SINGAPORE-1-AD-2,fgaj:AP-SINGAPORE-1-AD-3"
       OCI_AD: "fgaj:AP-SINGAPORE-1-AD-1"
       ASSIGN_PUBLIC_IP: "false"
       OPERATING_SYSTEM: "Oracle Linux"
       OS_VERSION: "9"
+      # Boot volume configuration
+      BOOT_VOLUME_SIZE: "50"
+      # Instance recovery and compatibility settings
+      RECOVERY_ACTION: "RESTORE_INSTANCE"
+      LEGACY_IMDS_ENDPOINTS: "false"
+      # Retry configuration for multi-AD cycling
+      RETRY_WAIT_TIME: "30"
+      # Instance verification timeout configuration
+      INSTANCE_VERIFY_MAX_CHECKS: "5"
+      INSTANCE_VERIFY_DELAY: "30"
+      # Logging configuration (set to 'json' for structured logging)
+      LOG_FORMAT: "text"
       # Cached image IDs for both free tier shapes (update periodically)
       OCI_CACHED_OL9_ARM_IMAGE: "ocid1.image.oc1.ap-singapore-1.aaaaaaaalp5rsngiayobfuxdurkxdnxgkxjfbfqpl2c2yebldjmrrtbrteaa"
       OCI_CACHED_OL9_AMD_IMAGE: "ocid1.image.oc1.ap-singapore-1.aaaaaaaaejbjeklplq5qnuqlbpfszmywma2j3en3o7pjuc7jidtifmqgqxlq"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Validate configuration
-        env:
-          OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
-          OCI_KEY_FINGERPRINT: ${{ secrets.OCI_KEY_FINGERPRINT }}
-          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
-          OCI_REGION: ${{ secrets.OCI_REGION }}
-          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
-          OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
-          OCI_SUBNET_ID: ${{ secrets.OCI_SUBNET_ID }}
-          OCI_IMAGE_ID: ${{ secrets.OCI_IMAGE_ID }}
-          INSTANCE_SSH_PUBLIC_KEY: ${{ secrets.INSTANCE_SSH_PUBLIC_KEY }}
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
-        run: ./scripts/validate-config.sh
 
       - name: Create requirements file
         run: echo "oci-cli" > requirements.txt
@@ -84,6 +83,21 @@ jobs:
 
       - name: Install OCI CLI
         run: pip install --user -r requirements.txt
+
+      - name: Production preflight check
+        env:
+          OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
+          OCI_KEY_FINGERPRINT: ${{ secrets.OCI_KEY_FINGERPRINT }}
+          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+          OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
+          OCI_SUBNET_ID: ${{ secrets.OCI_SUBNET_ID }}
+          OCI_IMAGE_ID: ${{ secrets.OCI_IMAGE_ID }}
+          INSTANCE_SSH_PUBLIC_KEY: ${{ secrets.INSTANCE_SSH_PUBLIC_KEY }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
+        run: ./scripts/preflight-check.sh
 
       - name: Setup OCI and SSH configuration (parallel)
         env:
