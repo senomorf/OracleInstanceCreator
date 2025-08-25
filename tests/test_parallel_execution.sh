@@ -190,19 +190,19 @@ test_get_exit_code_for_error_type() {
     
     local capacity_code
     capacity_code=$(get_exit_code_for_error_type "CAPACITY")
-    assert_equals "$EXIT_CAPACITY_ERROR" "$capacity_code" "CAPACITY should map to capacity error code"
+    assert_equals "$OCI_EXIT_CAPACITY_ERROR" "$capacity_code" "CAPACITY should map to capacity error code"
     
     local auth_code
     auth_code=$(get_exit_code_for_error_type "AUTH")
-    assert_equals "$EXIT_CONFIG_ERROR" "$auth_code" "AUTH should map to config error code"
+    assert_equals "$OCI_EXIT_CONFIG_ERROR" "$auth_code" "AUTH should map to config error code"
     
     local network_code
     network_code=$(get_exit_code_for_error_type "NETWORK")
-    assert_equals "$EXIT_NETWORK_ERROR" "$network_code" "NETWORK should map to network error code"
+    assert_equals "$OCI_EXIT_NETWORK_ERROR" "$network_code" "NETWORK should map to network error code"
     
     local unknown_code
     unknown_code=$(get_exit_code_for_error_type "UNKNOWN")
-    assert_equals "$EXIT_GENERAL_ERROR" "$unknown_code" "UNKNOWN should map to general error code"
+    assert_equals "$OCI_EXIT_GENERAL_ERROR" "$unknown_code" "UNKNOWN should map to general error code"
 }
 
 test_timeout_validation() {

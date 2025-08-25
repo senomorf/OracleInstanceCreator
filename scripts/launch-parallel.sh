@@ -39,7 +39,7 @@ cleanup_handler() {
     [[ -n "$temp_dir" && -d "$temp_dir" ]] && rm -rf "$temp_dir" 2>/dev/null || true
     
     log_info "Cleanup completed"
-    exit $EXIT_GENERAL_ERROR
+    exit $OCI_EXIT_GENERAL_ERROR
 }
 
 # Set up signal handlers

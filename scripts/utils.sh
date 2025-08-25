@@ -523,12 +523,16 @@ retry_with_backoff() {
 # 3 = Configuration error (fix required)
 # 4 = Network/connectivity error (may resolve)
 # 124 = Timeout (GNU timeout standard)
-readonly EXIT_SUCCESS=0
-readonly EXIT_GENERAL_ERROR=1
-readonly EXIT_CAPACITY_ERROR=2
-readonly EXIT_CONFIG_ERROR=3
-readonly EXIT_NETWORK_ERROR=4
-readonly EXIT_TIMEOUT=124
+
+# Only define constants if not already defined (avoid readonly conflicts)
+if [[ -z "${OCI_EXIT_SUCCESS:-}" ]]; then
+    readonly OCI_EXIT_SUCCESS=0
+    readonly OCI_EXIT_GENERAL_ERROR=1
+    readonly OCI_EXIT_CAPACITY_ERROR=2
+    readonly OCI_EXIT_CONFIG_ERROR=3
+    readonly OCI_EXIT_NETWORK_ERROR=4
+    readonly OCI_EXIT_TIMEOUT=124
+fi
 
 # Constants for better maintainability
 readonly RESULT_FILE_TIMEOUT_SECONDS=10
@@ -541,7 +545,7 @@ readonly INSTANCE_VERIFY_MAX_CHECKS_DEFAULT=5
 readonly INSTANCE_VERIFY_DELAY_DEFAULT=30
 readonly BOOT_VOLUME_SIZE_DEFAULT=50
 readonly GRACEFUL_TERMINATION_DELAY=2
-readonly TIMEOUT_EXIT_CODE=$EXIT_TIMEOUT
+readonly TIMEOUT_EXIT_CODE=$OCI_EXIT_TIMEOUT
 
 # Wait for result file with polling and timeout
 wait_for_result_file() {
@@ -580,19 +584,19 @@ get_exit_code_for_error_type() {
     
     case "$error_type" in
         "CAPACITY"|"RATE_LIMIT"|"LIMIT_EXCEEDED")
-            echo $EXIT_CAPACITY_ERROR
+            echo $OCI_EXIT_CAPACITY_ERROR
             ;;
         "AUTH"|"CONFIG"|"DUPLICATE")
-            echo $EXIT_CONFIG_ERROR
+            echo $OCI_EXIT_CONFIG_ERROR
             ;;
         "NETWORK"|"INTERNAL_ERROR")
-            echo $EXIT_NETWORK_ERROR
+            echo $OCI_EXIT_NETWORK_ERROR
             ;;
         "TIMEOUT")
-            echo $EXIT_TIMEOUT
+            echo $OCI_EXIT_TIMEOUT
             ;;
         *)
-            echo $EXIT_GENERAL_ERROR
+            echo $OCI_EXIT_GENERAL_ERROR
             ;;
     esac
 }
