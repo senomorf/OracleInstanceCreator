@@ -155,9 +155,11 @@ main() {
     fi
     
     # Determine overall result
+    log_debug "STATUS_A1='$STATUS_A1', STATUS_E2='$STATUS_E2'"
     local success_count=0
     [[ $STATUS_A1 -eq 0 ]] && ((success_count++))
     [[ $STATUS_E2 -eq 0 ]] && ((success_count++))
+    log_debug "success_count=$success_count"
     
     log_elapsed "parallel_execution"
     
