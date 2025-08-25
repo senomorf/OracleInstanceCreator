@@ -14,6 +14,7 @@ This project automatically attempts to create Oracle Cloud free tier instances u
 - **Instance Recovery**: Auto-restart failed instances with `RESTORE_INSTANCE` configuration
 - **Enhanced Validation**: Comprehensive pre-flight checks and configuration validation
 - **Performance Optimized**: 93% execution time reduction (from ~2 minutes to ~17 seconds)
+- **Proxy Support**: Full IPv4/IPv6 proxy support with URL-encoded credentials
 - **Telegram Notifications**: Success/failure alerts via Telegram bot
 - **Modular Architecture**: Separate scripts for different functions (validation, setup, launch)
 
@@ -53,6 +54,13 @@ Configure these secrets in your GitHub repository:
 **Notifications:**
 - `TELEGRAM_TOKEN`: Telegram bot token
 - `TELEGRAM_USER_ID`: Your Telegram user ID
+
+**Proxy Support (Optional):**
+- `OCI_PROXY_URL`: Authenticated proxy server URL
+  - IPv4: `username:password@proxy.example.com:3128`
+  - IPv6: `username:password@[::1]:3128`
+  - Supports URL-encoded credentials for special characters
+  - Example: `myuser:mypass@proxy.company.com:8080`
 
 ### Manual Execution
 ```bash

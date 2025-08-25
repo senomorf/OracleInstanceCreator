@@ -41,7 +41,14 @@ EOL
     log_success "OCI configuration completed successfully"
 }
 
+# Setup proxy configuration
+setup_proxy_config() {
+    log_info "Setting up proxy configuration..."
+    parse_and_configure_proxy false
+}
+
 # Run setup if called directly
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     setup_oci_config
+    setup_proxy_config
 fi
