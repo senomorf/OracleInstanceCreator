@@ -220,3 +220,149 @@ gh workflow run free-tier-creation.yml --field verbose_output=true --field send_
 # Monitor results
 gh run watch <run-id>
 ```
+
+## Advanced Configuration & Implementation Details
+
+### OCI CLI Command Wrapper Architecture (scripts/utils.sh)
+
+The project implements a sophisticated dual-mode OCI CLI wrapper system:
+
+**1. oci_cmd_debug() - For actions requiring detailed logging:**
+- Adds `--debug` flag when `DEBUG=true` for troubleshooting
+- Includes performance optimization flags: `--no-retry`, `--connection-timeout 5`, `--read-timeout 15`
+- Used for instance launch and other critical operations
+- Logs full command for debugging: "Executing OCI debug command: oci ..."
+
+**2. oci_cmd_data() - For data extraction without debug pollution:**  
+- Optimized for queries that need clean output (JSON parsing, etc.)
+- Includes same performance flags but no debug verbosity
+- Used for image lookup, instance listing, and data retrieval operations
+
+**3. oci_cmd() - Intelligent router:**
+- Automatically selects appropriate mode based on command arguments
+- Uses `oci_cmd_data()` for commands with `--query` or `--raw-output`
+- Uses `oci_cmd_debug()` for action commands (launch, create, etc.)
+
+### Image Caching Strategy (scripts/launch-instance.sh)
+
+**Smart Image Resolution Logic:**
+```bash
+# Priority order for image selection:
+1. OCI_IMAGE_ID (explicit override) 
+2. Cached image IDs (OCI_CACHED_OL9_ARM_IMAGE, OCI_CACHED_OL9_AMD_IMAGE)
+3. API lookup with filters (fallback, slower)
+```
+
+**Cached Image Patterns:**
+- `Oracle Linux_9_VM.Standard.A1.Flex` → ARM-based free tier shape
+- `Oracle Linux_9_VM.Standard.E2.1.Micro` → AMD-based free tier shape
+- Cache keys: `"${OPERATING_SYSTEM}_${OS_VERSION}_${OCI_SHAPE}"`
+
+### Workflow Environment Variables & Logic
+
+**Critical Environment Variables:**
+- `DEBUG`: Controls verbose OCI CLI output (`--debug` flag)
+- `ENABLE_NOTIFICATIONS`: Controls Telegram notification sending
+- `CHECK_EXISTING_INSTANCE`: Smart instance checking logic
+  - Manual runs (`workflow_dispatch`): Respects user input
+  - Scheduled runs: Always `false` (direct launch for performance)
+- `OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING`: Prevents GitHub Actions noise
+
+**Workflow Input Parameters:**
+- `verbose_output` (boolean): Enables debug mode for troubleshooting
+- `send_notifications` (boolean): Controls Telegram alerts
+- `check_existing_instance` (boolean): Enable/disable duplicate checking
+
+### Error Detection Patterns (scripts/utils.sh get_error_type())
+
+**Comprehensive Error Classification Regex Patterns:**
+
+**CAPACITY Errors:**
+```bash
+"capacity|host capacity|out of capacity|service limit|quota exceeded|resource unavailable|insufficient capacity"
+```
+
+**RATE_LIMIT Errors (treated as CAPACITY):**
+```bash
+"too.*many.*requests|rate.*limit|throttle|429|TooManyRequests|\"code\".*\"TooManyRequests\"|\"status\".*429"
+```
+
+**DUPLICATE Errors (treated as success):**
+```bash
+"display name already exists|instance.*already exists|duplicate.*name"
+```
+
+**AUTH/CONFIG/NETWORK Errors:** Standard patterns for genuine failures
+
+### Performance Monitoring & Timing Infrastructure
+
+**Built-in Timer System (scripts/utils.sh):**
+- `start_timer()`: Records start time for performance phase
+- `log_elapsed()`: Calculates and logs elapsed time for analysis
+- Uses `date +%s.%N` for nanosecond precision timing
+- Automatic cleanup of timer variables after logging
+
+**Key Performance Phases Monitored:**
+- `total_execution`: End-to-end workflow timing
+- `oci_cli_check`: CLI availability verification  
+- `compartment_setup`: Compartment ID determination
+- `existing_instance_check`: Instance existence verification (when enabled)
+- `image_lookup`: Image ID resolution (cached vs API)
+- `instance_launch`: Actual OCI API call execution
+
+### GitHub Actions Security Patterns
+
+**Single-Job Security Model:**
+- All credential handling in `create-instance` job only
+- No credential passing through artifacts (security risk)
+- Secrets only available in environment variables during execution
+- `notify-on-failure` job runs independently without credentials
+
+**Credential Environment Variables:**
+All OCI credentials are passed as environment variables, never as parameters:
+```yaml
+env:
+  OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
+  OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+  # ... other secrets
+```
+
+### Troubleshooting Decision Tree
+
+**Execution Time Analysis:**
+- **<20 seconds**: Normal optimized performance ✅
+- **20-30 seconds**: Acceptable, possible minor network delays
+- **30-60 seconds**: Investigate - missing optimizations or config issues ⚠️  
+- **1-2 minutes**: Critical - likely missing `--no-retry` flag ❌
+- **>2 minutes**: Severe - multiple optimization failures ❌
+
+**Debug Flag Verification:**
+```bash
+# Check if optimization flags are present in logs:
+grep "Executing OCI debug command" logs.txt
+# Should show: oci --debug --no-retry --connection-timeout 5 --read-timeout 15
+```
+
+**Common Issues & Solutions:**
+1. **Missing performance flags**: Verify `scripts/utils.sh` has optimization flags
+2. **Wrong error classification**: Check `get_error_type()` regex patterns  
+3. **Credential issues**: Verify all GitHub secrets are configured
+4. **Network timeouts**: Check connection/read timeout values (5s/15s)
+
+### Oracle Cloud Infrastructure Specifics
+
+**Free Tier Behavior Patterns:**
+- Capacity errors are **normal** - Oracle has limited free tier resources
+- ARM instances (A1.Flex) more commonly available than AMD (E2.1.Micro)
+- Rate limiting (HTTP 429) indicates high demand, not system issues
+- "Out of host capacity" is expected response during high usage periods
+
+**OCID Format Validation:**
+- Pattern: `^ocid1\.type\.[a-z0-9-]*\.[a-z0-9-]*\..+`
+- All OCI resources have globally unique OCIDs
+- Critical for API calls - invalid OCIDs cause immediate failures
+
+**Shape Configuration Requirements:**
+- Flexible shapes (`*.Flex`) require explicit `--shape-config` parameter
+- Format: `{"ocpus": N, "memoryInGBs": N}`
+- Fixed shapes (like `*.Micro`) do not need shape configuration
