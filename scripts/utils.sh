@@ -46,23 +46,25 @@ log_debug() {
 }
 
 # Timing functions for performance monitoring
-declare -A TIMER_START_TIMES
+# Use simple variables instead of associative arrays for macOS compatibility
 
 start_timer() {
     local timer_name="$1"
-    TIMER_START_TIMES[$timer_name]=$(date +%s.%N)
+    local var_name="TIMER_START_${timer_name}"
+    eval "${var_name}=$(date +%s.%N)"
     log_debug "Started timer: $timer_name"
 }
 
 log_elapsed() {
     local timer_name="$1"
-    local start_time="${TIMER_START_TIMES[$timer_name]:-}"
+    local var_name="TIMER_START_${timer_name}"
+    local start_time="${!var_name:-}"
     
     if [[ -n "$start_time" ]]; then
         local end_time=$(date +%s.%N)
         local elapsed=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0")
         log_info "Timer '$timer_name' elapsed: ${elapsed}s"
-        unset TIMER_START_TIMES[$timer_name]
+        unset "$var_name"
     else
         log_warning "Timer '$timer_name' was not started"
     fi
@@ -235,6 +237,123 @@ retry_with_backoff() {
     
     log_error "Command failed after $max_attempts attempts"
     return 1
+}
+
+# URL encoding/decoding functions for proxy credentials
+url_encode() {
+    local string="$1"
+    local encoded=""
+    local i
+    
+    for ((i = 0; i < ${#string}; i++)); do
+        local char="${string:$i:1}"
+        case "$char" in
+            [a-zA-Z0-9._~-]) encoded+="$char" ;;
+            *) printf -v encoded "%s%%%02X" "$encoded" "'$char" ;;
+        esac
+    done
+    
+    echo "$encoded"
+}
+
+url_decode() {
+    local string="$1"
+    printf '%b\n' "${string//%/\\x}"
+}
+
+# Parse and configure proxy from OCI_PROXY_URL environment variable
+# Supports both IPv4 and IPv6 addresses with URL encoding
+parse_and_configure_proxy() {
+    local validate_only="${1:-false}"
+    
+    if [[ -z "${OCI_PROXY_URL:-}" ]]; then
+        log_debug "No OCI_PROXY_URL provided - proxy will not be used"
+        return 0
+    fi
+    
+    # Check if proxy is already configured (avoid redundant setup)
+    if [[ "${validate_only}" == "false" ]] && [[ -n "${HTTP_PROXY:-}" ]]; then
+        log_debug "Proxy already configured - skipping setup"
+        return 0
+    fi
+    
+    log_info "Processing OCI_PROXY_URL configuration..."
+    
+    local proxy_user proxy_pass proxy_host proxy_port
+    
+    # Check for IPv6 format first (contains brackets)
+    if [[ "$OCI_PROXY_URL" == *"@["*"]:"* ]]; then
+        log_debug "Detected IPv6 proxy format"
+        # Extract IPv6 components manually
+        local user_pass="${OCI_PROXY_URL%@\[*}"
+        local rest="${OCI_PROXY_URL#*@\[}"
+        proxy_host="${rest%\]:*}"
+        proxy_port="${rest##*\]:}"
+        proxy_user="${user_pass%:*}"
+        proxy_pass="${user_pass##*:}"
+        
+        # Validate IPv6 format
+        if [[ -z "$proxy_user" || -z "$proxy_pass" || -z "$proxy_host" || ! "$proxy_port" =~ ^[0-9]+$ ]]; then
+            log_error "Invalid IPv6 proxy format. Expected: USER:PASS@[HOST]:PORT"
+            log_error "Example: myuser:mypass@[::1]:3128"
+            die "Invalid IPv6 proxy configuration"
+        fi
+    else
+        # Try IPv4 format
+        local ipv4_pattern="^([^:]+):([^@]+)@([^:]+):([0-9]+)$"
+        if [[ "$OCI_PROXY_URL" =~ $ipv4_pattern ]]; then
+            proxy_user="${BASH_REMATCH[1]}"
+            proxy_pass="${BASH_REMATCH[2]}"
+            proxy_host="${BASH_REMATCH[3]}"
+            proxy_port="${BASH_REMATCH[4]}"
+            log_debug "Detected IPv4 proxy format"
+        else
+            log_error "Invalid OCI_PROXY_URL format. Expected formats:"
+            log_error "  IPv4: USER:PASS@HOST:PORT"
+            log_error "  IPv6: USER:PASS@[HOST]:PORT"
+            log_error "Examples:"
+            log_error "  myuser:mypass@proxy.example.com:3128"
+            log_error "  myuser:mypass@192.168.1.100:3128"
+            log_error "  myuser:mypass@[::1]:3128"
+            die "Invalid proxy configuration - check OCI_PROXY_URL format"
+        fi
+    fi
+    
+    # Decode URL-encoded credentials
+    proxy_user=$(url_decode "$proxy_user")
+    proxy_pass=$(url_decode "$proxy_pass")
+    
+    # Validate components
+    if [[ -z "$proxy_user" || -z "$proxy_pass" ]]; then
+        die "Proxy user and password cannot be empty"
+    fi
+    
+    if [[ -z "$proxy_host" ]]; then
+        die "Proxy host cannot be empty"
+    fi
+    
+    # Validate port range
+    if [[ $proxy_port -lt 1 || $proxy_port -gt 65535 ]]; then
+        die "Proxy port must be between 1 and 65535, got: $proxy_port"
+    fi
+    
+    # If validation only, we're done
+    if [[ "${validate_only}" == "true" ]]; then
+        log_success "Proxy configuration validation passed: ${proxy_host}:${proxy_port}"
+        return 0
+    fi
+    
+    # Construct proxy URL with authentication
+    local proxy_url="http://${proxy_user}:${proxy_pass}@${proxy_host}:${proxy_port}/"
+    
+    # Set both uppercase and lowercase versions for maximum compatibility
+    export HTTP_PROXY="${proxy_url}"
+    export HTTPS_PROXY="${proxy_url}"
+    export http_proxy="${proxy_url}"
+    export https_proxy="${proxy_url}"
+    
+    log_debug "Proxy configured for ${proxy_host}:${proxy_port} with authentication (credentials not logged)"
+    log_success "Proxy configuration applied successfully"
 }
 
 # Validate OCID format

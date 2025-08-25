@@ -114,40 +114,7 @@ validate_notification_configuration() {
 
 validate_proxy_configuration() {
     log_info "Validating proxy configuration..."
-    
-    if [[ -n "${OCI_PROXY_URL:-}" ]]; then
-        # Validate OCI_PROXY_URL format: USER:PASS@HOST:PORT
-        if [[ "$OCI_PROXY_URL" =~ ^([^:]+):([^@]+)@([^:]+):([0-9]+)$ ]]; then
-            local proxy_user="${BASH_REMATCH[1]}"
-            local proxy_pass="${BASH_REMATCH[2]}"
-            local proxy_host="${BASH_REMATCH[3]}"
-            local proxy_port="${BASH_REMATCH[4]}"
-            
-            # Validate port range
-            if [[ $proxy_port -lt 1 || $proxy_port -gt 65535 ]]; then
-                die "Proxy port must be between 1 and 65535, got: $proxy_port"
-            fi
-            
-            # Check for empty credentials
-            if [[ -z "$proxy_user" || -z "$proxy_pass" ]]; then
-                die "Proxy user and password cannot be empty"
-            fi
-            
-            # Check for empty host
-            if [[ -z "$proxy_host" ]]; then
-                die "Proxy host cannot be empty"
-            fi
-            
-            log_info "Proxy configuration: ${proxy_host}:${proxy_port} with authentication"
-            log_success "Proxy configuration validation passed"
-        else
-            log_error "Invalid OCI_PROXY_URL format. Expected: USER:PASS@HOST:PORT"
-            log_error "Example: myuser:mypass@proxy.example.com:3128"
-            die "Proxy configuration validation failed"
-        fi
-    else
-        log_info "No proxy configuration found - direct connection will be used"
-    fi
+    parse_and_configure_proxy true
 }
 
 print_configuration_summary() {

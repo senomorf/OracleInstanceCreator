@@ -70,14 +70,25 @@ The workflow requires these secrets to be configured in the GitHub repository:
 ### Proxy Support
 
 - **OCI_PROXY_URL**: Proxy server URL with authentication (optional)
-  - Format: `username:password@proxy.example.org:3128`
-  - Example with IP address: `myuser:mypass@192.168.1.100:3128`
-  - Example with hostname: `myuser:mypass@proxy.company.com:8080`
-  - Used for environments requiring HTTP/HTTPS proxy for OCI API calls
-  - If not configured, OCI CLI will connect directly to Oracle Cloud
-  - Supports authenticated proxies with embedded credentials
-  - Applied transparently to all OCI CLI commands via HTTP_PROXY/HTTPS_PROXY environment variables
-  - The script automatically adds the `http://` protocol prefix and trailing `/` when constructing the proxy URL
+  - **IPv4 Format**: `username:password@proxy.example.org:3128`
+  - **IPv6 Format**: `username:password@[::1]:3128`
+  - **URL Encoding Support**: Special characters in credentials are supported via URL encoding
+    - Example with special chars: `myuser:my%40pass%3Aword@proxy.company.com:8080` (for password `my@pass:word`)
+  - **Examples**:
+    - IPv4 with hostname: `myuser:mypass@proxy.company.com:8080`
+    - IPv4 with IP address: `myuser:mypass@192.168.1.100:3128`
+    - IPv6 with brackets: `myuser:mypass@[2001:db8::1]:3128`
+    - IPv6 localhost: `myuser:mypass@[::1]:3128`
+    - With URL-encoded credentials: `my%2Buser:my%40pass@proxy.example.com:3128`
+  - **Features**:
+    - Used for environments requiring HTTP/HTTPS proxy for OCI API calls
+    - If not configured, OCI CLI will connect directly to Oracle Cloud
+    - Supports authenticated proxies with embedded credentials
+    - Applied transparently to all OCI CLI commands via HTTP_PROXY/HTTPS_PROXY environment variables
+    - The script automatically adds the `http://` protocol prefix and trailing `/` when constructing the proxy URL
+    - Comprehensive validation including port range (1-65535) and credential checks
+    - Smart redundancy prevention: skips re-configuration if proxy is already set
+    - Centralized parsing logic with consistent error handling across all scripts
 
 ## Workflow Execution
 

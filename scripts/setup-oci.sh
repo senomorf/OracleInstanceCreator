@@ -43,37 +43,8 @@ EOL
 
 # Setup proxy configuration
 setup_proxy_config() {
-    log_info "Checking for proxy configuration..."
-    
-    if [[ -n "${OCI_PROXY_URL:-}" ]]; then
-        log_info "OCI_PROXY_URL found - parsing proxy configuration"
-        
-        # Parse format: USER:PASS@HOST:PORT
-        if [[ "$OCI_PROXY_URL" =~ ^([^:]+):([^@]+)@([^:]+):([0-9]+)$ ]]; then
-            local proxy_user="${BASH_REMATCH[1]}"
-            local proxy_pass="${BASH_REMATCH[2]}"
-            local proxy_host="${BASH_REMATCH[3]}"
-            local proxy_port="${BASH_REMATCH[4]}"
-            
-            # Construct proxy URL with authentication
-            local proxy_url="http://${proxy_user}:${proxy_pass}@${proxy_host}:${proxy_port}/"
-            
-            # Set both uppercase and lowercase versions for maximum compatibility
-            export HTTP_PROXY="${proxy_url}"
-            export HTTPS_PROXY="${proxy_url}"
-            export http_proxy="${proxy_url}"
-            export https_proxy="${proxy_url}"
-            
-            log_debug "Proxy configured for ${proxy_host}:${proxy_port} with authentication (credentials not logged)"
-            log_success "Proxy configuration applied successfully"
-        else
-            log_error "Invalid OCI_PROXY_URL format. Expected: USER:PASS@HOST:PORT"
-            log_error "Example: myuser:mypass@proxy.example.com:3128"
-            die "Proxy configuration failed - check OCI_PROXY_URL secret format"
-        fi
-    else
-        log_info "No OCI_PROXY_URL found - OCI CLI will run without proxy"
-    fi
+    log_info "Setting up proxy configuration..."
+    parse_and_configure_proxy false
 }
 
 # Run setup if called directly
