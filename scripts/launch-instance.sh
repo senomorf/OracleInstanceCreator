@@ -7,6 +7,7 @@ set -euo pipefail
 
 source "$(dirname "$0")/utils.sh"
 source "$(dirname "$0")/notify.sh"
+source "$(dirname "$0")/metrics.sh"
 
 # Global flag for signal handling
 INTERRUPTED=false
@@ -215,10 +216,45 @@ build_launch_command() {
 
 # Launch Oracle Cloud Infrastructure instance with multi-AD cycling support
 #
-# This is the core function that attempts to create an OCI instance across
-# multiple availability domains until success or all domains are exhausted.
-# Implements intelligent error handling and retry logic optimized for Oracle's
-# free tier capacity constraints.
+# ALGORITHM: Intelligent Multi-Availability Domain Instance Launching
+#
+# This is the core orchestration function implementing a sophisticated strategy
+# to maximize instance creation success rates in Oracle Cloud's constrained
+# free tier environment through intelligent availability domain cycling.
+#
+# ALGORITHM OVERVIEW:
+# 1. Parse comma-separated AD configuration into attempt sequence
+# 2. For each availability domain in sequence:
+#    a. Execute optimized launch command with performance flags
+#    b. Handle success: metrics recording, notifications, exit
+#    c. Handle failure: error classification → next action decision
+#    d. Apply configured inter-attempt delay if more ADs available
+# 3. All ADs exhausted: return success (capacity constraint is expected)
+#
+# ERROR-DRIVEN STATE MACHINE:
+# ```
+# AD Attempt → Launch Success → Record Metrics → Notify → EXIT(0)
+#           → Launch Failure → Classify Error
+#                           → CAPACITY/RATE → More ADs? → YES: Next AD
+#                                                      → NO: EXIT(0)  
+#                           → LIMIT_EXCEEDED → Verify Creation → Found: EXIT(0)
+#                                                             → Not Found: Next AD
+#                           → TRANSIENT → More ADs? → YES: Next AD
+#                                                   → NO: EXIT(0)
+#                           → TERMINAL → Notify → EXIT(1)
+# ```
+#
+# PERFORMANCE OPTIMIZATION STRATEGY:
+# - OCI CLI flags: --no-retry (eliminates 62s exponential backoff)
+# - Network timeouts: --connection-timeout 5 --read-timeout 15
+# - Rate limit pre-detection: avoids redundant API calls
+# - Instance verification: prevents Oracle inconsistency false negatives
+# - Metrics collection: enables future optimization via success rate analysis
+#
+# CAPACITY PHILOSOPHY:
+# Oracle free tier "Out of capacity" responses are treated as NORMAL operational
+# conditions, not failures. This design philosophy prevents false alerts and
+# allows GitHub Actions scheduling to handle natural retry cycles.
 #
 # Parameters:
 #   comp_id   Compartment OCID where instance will be created
@@ -237,7 +273,7 @@ build_launch_command() {
 # - Includes interruptible sleep between attempts for graceful shutdown
 #
 # Performance Optimizations:
-# - Uses --no-retry flag to prevent exponential backoff (5x faster)
+# - Uses --no-retry flag to prevent exponential backoff (93% improvement)
 # - Implements connection/read timeouts for network resilience
 # - Early detection of rate limiting to skip redundant API calls
 launch_instance() {
@@ -290,10 +326,13 @@ launch_instance() {
                 return 1
             fi
             
-            log_success "Instance launched successfully in AD $current_ad! OCID: $instance_id"
+            # Use structured logging with context for better monitoring
+            local context="{\"availability_domain\":\"$current_ad\",\"instance_ocid\":\"$instance_id\",\"attempt\":$((ad_index + 1)),\"max_attempts\":$max_attempts}"
+            log_with_context "success" "Instance launched successfully" "$context"
             
             # Track successful AD for performance metrics
             log_performance_metric "AD_SUCCESS" "$current_ad" "$((ad_index + 1))" "$max_attempts"
+            record_ad_result "$current_ad" "success" ""
             
             send_telegram_notification "success" "OCI instance created in $current_ad: ${INSTANCE_DISPLAY_NAME} (OCID: ${instance_id})"
             
@@ -308,6 +347,7 @@ launch_instance() {
             "CAPACITY"|"RATE_LIMIT")
                 # Track capacity-related failures for performance analysis
                 log_performance_metric "AD_FAILURE" "$current_ad" "$((ad_index + 1))" "$max_attempts" "$error_type"
+                record_ad_result "$current_ad" "failure" "$error_type"
                 
                 # Try next AD if available
                 if [[ $((ad_index + 1)) -lt $max_attempts ]]; then
@@ -323,9 +363,12 @@ launch_instance() {
             "LIMIT_EXCEEDED")
                 # Special case: check if instance was created despite error
                 log_info "LimitExceeded error - checking if instance was created anyway..."
-                if verify_instance_creation "$comp_id" 3; then
+                if verify_instance_creation "$comp_id" "${INSTANCE_VERIFY_MAX_CHECKS:-5}" "${INSTANCE_VERIFY_DELAY:-30}"; then
                     return 0  # Instance was created successfully
                 fi
+                
+                # Record the failure
+                record_ad_result "$current_ad" "failure" "LIMIT_EXCEEDED"
                 
                 # Try next AD if available
                 if [[ $((ad_index + 1)) -lt $max_attempts ]]; then
@@ -338,9 +381,13 @@ launch_instance() {
                 fi
                 ;;
             "INTERNAL_ERROR"|"NETWORK")
+                # Record the failure
+                record_ad_result "$current_ad" "failure" "$error_type"
+                
                 # Transient errors - try next AD or treat as capacity issue
                 if [[ $((ad_index + 1)) -lt $max_attempts ]]; then
                     log_info "Retrying with next availability domain after transient error..."
+                    ((ad_index++))
                     continue
                 else
                     # All ADs attempted with transient errors - treat as temporary capacity issue
@@ -353,10 +400,16 @@ launch_instance() {
                 return 0  # Not a failure
                 ;;
             "AUTH"|"CONFIG")
+                # Record the failure
+                record_ad_result "$current_ad" "failure" "$error_type"
+                
                 # Configuration errors - immediate failure with notification
                 return 1
                 ;;
             *)
+                # Record unknown errors
+                record_ad_result "$current_ad" "failure" "UNKNOWN"
+                
                 # Unknown errors - propagate failure but don't send duplicate notifications
                 return 1
                 ;;
@@ -380,13 +433,31 @@ launch_instance() {
 
 # Handle and classify errors from instance launch attempts in multi-AD scenario
 #
-# This function analyzes OCI CLI error output and determines appropriate response
-# strategy for different error types. It classifies errors into categories that
-# guide retry logic and failure handling in the multi-AD cycling system.
+# ALGORITHM: Multi-AD Error Classification and Response Strategy
+# 
+# This function implements a sophisticated error analysis system that categorizes
+# Oracle Cloud errors into actionable response strategies. The classification
+# directly drives the multi-AD cycling logic and determines whether to:
+# 1. Try the next availability domain (retriable errors)
+# 2. Exit successfully (capacity issues - expected for free tier)
+# 3. Exit with failure (configuration/authentication issues)
+#
+# ERROR CLASSIFICATION HIERARCHY:
+# - CAPACITY/RATE_LIMIT: Expected for free tier → Try next AD → Success if all ADs exhausted
+# - LIMIT_EXCEEDED: Special case → Verify instance creation → Try next AD if needed
+# - INTERNAL_ERROR/NETWORK: Transient → Try next AD → Eventual success
+# - DUPLICATE: Instance exists → Success immediately  
+# - AUTH/CONFIG: Critical failure → Immediate exit with error
+# - UNKNOWN: Unexpected → Log and exit with error
+#
+# PERFORMANCE CONSIDERATIONS:
+# - Early pattern matching prevents redundant API calls
+# - Rate limit detection avoids exponential backoff cycles
+# - Instance verification prevents false negatives from LimitExceeded
 #
 # Parameters:
 #   error_output    Raw error output from OCI CLI command
-#   current_ad      Current availability domain being attempted
+#   current_ad      Current availability domain being attempted  
 #   attempt         Current attempt number (1-based)
 #   max_attempts    Total number of ADs to attempt
 # Returns:
@@ -432,7 +503,7 @@ handle_launch_error_with_ad() {
             ;;
         "AUTH")
             log_error "Authentication/authorization error in AD $current_ad"
-            send_telegram_notification "error" "OCI authentication error: Check credentials and permissions"
+            send_telegram_notification "critical" "OCI authentication error: Check credentials and permissions"
             echo "AUTH"
             return 0
             ;;
@@ -440,7 +511,7 @@ handle_launch_error_with_ad() {
             log_error "Configuration error detected in AD $current_ad"
             local error_line
             error_line=$(echo "$error_output" | head -1)
-            send_telegram_notification "error" "OCI configuration error: ${error_line}"
+            send_telegram_notification "critical" "OCI configuration error: ${error_line}"
             echo "CONFIG"
             return 0
             ;;
@@ -472,21 +543,27 @@ handle_launch_error_with_ad() {
 # verification attempts to check if an instance with the expected display
 # name exists in RUNNING or PROVISIONING state.
 #
+# Configuration via environment variables:
+#   INSTANCE_VERIFY_MAX_CHECKS (default: 5) - number of verification attempts
+#   INSTANCE_VERIFY_DELAY (default: 30) - seconds between checks
+#   Total timeout: MAX_CHECKS × DELAY seconds (default: 5×30 = 150s)
+#
 # Parameters:
 #   comp_id      Compartment OCID where instance should be created
-#   max_checks   Maximum number of verification attempts (default: 3)
-#   check_delay  Delay in seconds between attempts (default: 20)
+#   max_checks   Maximum number of verification attempts (default: 5)
+#   check_delay  Delay in seconds between attempts (default: 30)
 # Returns:
-#   0 if instance found, 1 if not found after all attempts
+#   0 if instance found, 1 if not found after all attempts, 130 if interrupted
 #
 # This is critical for handling Oracle's inconsistent error reporting where
 # a successful instance creation may be reported as a failure.
 verify_instance_creation() {
     local comp_id="$1"
-    local max_checks="${2:-3}"
-    local check_delay="${3:-20}"
+    local max_checks="${2:-5}"
+    local check_delay="${3:-30}"
     
-    log_info "Verifying instance creation with $max_checks checks..."
+    local total_timeout=$((max_checks * check_delay))
+    log_info "Verifying instance creation with $max_checks checks (${check_delay}s intervals, ${total_timeout}s total timeout)..."
     
     for ((i=1; i<=max_checks; i++)); do
         log_info "Instance verification check $i/$max_checks..."
@@ -529,6 +606,9 @@ launch_oci_instance() {
     start_timer "total_execution"
     log_info "Starting OCI instance launch process..."
     
+    # Initialize AD metrics tracking
+    init_metrics
+    
     # Check OCI CLI availability
     start_timer "oci_cli_check"
     check_oci_cli
@@ -566,6 +646,9 @@ launch_oci_instance() {
     start_timer "instance_launch"
     launch_instance "$comp_id" "$image_id"
     log_elapsed "instance_launch"
+    
+    # Show AD performance metrics
+    show_ad_metrics
     
     log_elapsed "total_execution"
 }

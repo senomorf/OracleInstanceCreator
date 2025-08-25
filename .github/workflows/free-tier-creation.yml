@@ -51,6 +51,11 @@ jobs:
       LEGACY_IMDS_ENDPOINTS: "false"
       # Retry configuration for multi-AD cycling
       RETRY_WAIT_TIME: "30"
+      # Instance verification timeout configuration
+      INSTANCE_VERIFY_MAX_CHECKS: "5"
+      INSTANCE_VERIFY_DELAY: "30"
+      # Logging configuration (set to 'json' for structured logging)
+      LOG_FORMAT: "text"
       # Common image ID cache for Oracle Linux 9 ARM (update periodically)
       OCI_CACHED_OL9_ARM_IMAGE: "ocid1.image.oc1.ap-singapore-1.aaaaaaaalp5rsngiayobfuxdurkxdnxgkxjfbfqpl2c2yebldjmrrtbrteaa"
       OCI_CACHED_OL9_AMD_IMAGE: "ocid1.image.oc1.ap-singapore-1.aaaaaaaaejbjeklplq5qnuqlbpfszmywma2j3en3o7pjuc7jidtifmqgqxlq"
@@ -58,7 +63,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Validate configuration
+      - name: Production preflight check
         env:
           OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
           OCI_KEY_FINGERPRINT: ${{ secrets.OCI_KEY_FINGERPRINT }}
@@ -71,7 +76,7 @@ jobs:
           INSTANCE_SSH_PUBLIC_KEY: ${{ secrets.INSTANCE_SSH_PUBLIC_KEY }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
-        run: ./scripts/validate-config.sh
+        run: ./scripts/preflight-check.sh
 
       - name: Create requirements file
         run: echo "oci-cli" > requirements.txt

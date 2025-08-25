@@ -22,26 +22,85 @@ else
     RESET=""
 fi
 
-# Logging functions
+# Logging functions with colors for clear output and optional JSON format
+# Set LOG_FORMAT=json to enable structured logging
+
+log_json() {
+    local level="$1"
+    local message="$2"
+    local context="${3:-}"
+    
+    local timestamp
+    timestamp=$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')
+    
+    if [[ -n "$context" ]]; then
+        echo "{\"timestamp\":\"$timestamp\",\"level\":\"$level\",\"message\":\"$message\",\"context\":$context}" >&2
+    else
+        echo "{\"timestamp\":\"$timestamp\",\"level\":\"$level\",\"message\":\"$message\"}" >&2
+    fi
+}
+
 log_info() {
-    echo "${BLUE}[INFO]${RESET} $*" >&2
+    if [[ "${LOG_FORMAT:-}" == "json" ]]; then
+        log_json "info" "$*"
+    else
+        echo "${BLUE}[INFO]${RESET} $*" >&2
+    fi
 }
 
 log_success() {
-    echo "${GREEN}[SUCCESS]${RESET} $*" >&2
+    if [[ "${LOG_FORMAT:-}" == "json" ]]; then
+        log_json "success" "$*"
+    else
+        echo "${GREEN}[SUCCESS]${RESET} $*" >&2
+    fi
 }
 
 log_warning() {
-    echo "${YELLOW}[WARNING]${RESET} $*" >&2
+    if [[ "${LOG_FORMAT:-}" == "json" ]]; then
+        log_json "warning" "$*"
+    else
+        echo "${YELLOW}[WARNING]${RESET} $*" >&2
+    fi
 }
 
 log_error() {
-    echo "${RED}[ERROR]${RESET} $*" >&2
+    if [[ "${LOG_FORMAT:-}" == "json" ]]; then
+        log_json "error" "$*"
+    else
+        echo "${RED}[ERROR]${RESET} $*" >&2
+    fi
 }
 
 log_debug() {
     if [[ "${DEBUG:-}" == "true" ]]; then
-        echo "${BOLD}[DEBUG]${RESET} $*" >&2
+        if [[ "${LOG_FORMAT:-}" == "json" ]]; then
+            log_json "debug" "$*"
+        else
+            echo "${BOLD}[DEBUG]${RESET} $*" >&2
+        fi
+    fi
+}
+
+# Enhanced logging with context (useful for structured logging)
+# Parameters: level, message, optional JSON context object
+log_with_context() {
+    local level="$1"
+    local message="$2"
+    local context="${3:-}"
+    
+    if [[ "${LOG_FORMAT:-}" == "json" ]]; then
+        log_json "$level" "$message" "$context"
+    else
+        # For text format, just log normally (context ignored)
+        case "$level" in
+            "info") log_info "$message" ;;
+            "success") log_success "$message" ;;
+            "warning") log_warning "$message" ;;
+            "error") log_error "$message" ;;
+            "debug") log_debug "$message" ;;
+            *) echo "[$level] $message" >&2 ;;
+        esac
     fi
 }
 
@@ -275,7 +334,16 @@ has_jq() {
     command -v jq >/dev/null 2>&1
 }
 
-# Extract OCID from OCI CLI JSON output with fallback to regex
+# Extract and validate instance OCID from OCI CLI JSON output
+#
+# Uses jq for robust JSON parsing when available, falls back to regex.
+# Validates the extracted OCID format before returning to prevent downstream errors.
+#
+# Parameters:
+#   $1: output - JSON output from OCI CLI command
+# Returns:
+#   0: Valid OCID found and printed to stdout
+#   1: No valid OCID found (prints empty string)
 extract_instance_ocid() {
     local output="$1"
     local instance_id=""
@@ -297,14 +365,69 @@ extract_instance_ocid() {
         instance_id=$(echo "$output" | grep -o 'ocid1\.instance[^"]*' | head -1)
     fi
     
-    echo "$instance_id"
+    # Validate the extracted OCID format before returning
+    if [[ -n "$instance_id" ]]; then
+        if is_valid_ocid "$instance_id"; then
+            log_debug "Successfully extracted and validated instance OCID: ${instance_id:0:12}...${instance_id: -8}"
+            echo "$instance_id"
+        else
+            log_warning "Extracted string '$instance_id' does not pass OCID format validation"
+            echo ""
+            return 1
+        fi
+    else
+        log_debug "No instance OCID found in output"
+        echo ""
+    fi
 }
 
 # Classify OCI CLI error output into actionable categories
 #
-# Analyzes error messages and patterns to determine appropriate retry strategy.
-# Critical for intelligent multi-AD cycling and failure handling. Patterns are
-# ordered from most specific to most general to prevent misclassification.
+# ALGORITHM: Hierarchical Error Pattern Recognition and Classification
+#
+# This function implements a sophisticated error analysis system using pattern
+# matching to categorize Oracle Cloud errors into actionable response strategies.
+# The classification directly drives multi-AD retry logic and workflow outcomes.
+#
+# ALGORITHM DESIGN PRINCIPLES:
+# 1. Specificity Priority: Most specific patterns checked first to prevent misclassification
+# 2. Case-Insensitive Matching: Handles Oracle's inconsistent error formatting  
+# 3. Multiple Pattern Support: Each category matches various Oracle error formats
+# 4. Early Termination: Returns immediately on first match for performance
+# 5. Defensive Default: Unknown errors classified as UNKNOWN rather than assumption
+#
+# CLASSIFICATION HIERARCHY (in order of evaluation):
+# ```
+# LIMIT_EXCEEDED     → Special case requiring instance verification
+#   ↓
+# RATE_LIMIT         → Throttling, treat as capacity constraint
+#   ↓  
+# CAPACITY           → Expected free tier limitation
+#   ↓
+# INTERNAL_ERROR     → Temporary Oracle service issues
+#   ↓
+# DUPLICATE          → Instance exists (success condition)
+#   ↓
+# AUTH               → Credential/permission failures (terminal)
+#   ↓
+# CONFIG             → Parameter/resource errors (terminal)
+#   ↓
+# NETWORK            → Connectivity issues (retriable)
+#   ↓
+# UNKNOWN            → Unrecognized patterns (terminal, requires investigation)
+# ```
+#
+# PATTERN MATCHING STRATEGY:
+# - Uses grep -qi for case-insensitive, efficient string matching
+# - Multiple patterns per category (OR logic within categories)
+# - JSON-aware patterns: Handles both text and JSON error responses
+# - HTTP status codes: Recognizes 429, 502, etc. for network issues
+#
+# PERFORMANCE CONSIDERATIONS:
+# - Early termination on first match reduces evaluation overhead
+# - Simple grep-based matching faster than complex regex
+# - Debug logging only in debug mode to minimize I/O
+# - Single-pass evaluation through hierarchical checks
 #
 # Parameters:
 #   error_output  Raw error text from OCI CLI
