@@ -37,6 +37,10 @@ jobs:
       # Multi-AD support: Use comma-separated list for multiple ADs
       # Example: "fgaj:AP-SINGAPORE-1-AD-1,fgaj:AP-SINGAPORE-1-AD-2,fgaj:AP-SINGAPORE-1-AD-3"
       OCI_AD: "fgaj:AP-SINGAPORE-1-AD-1"
+      OCI_SHAPE: "VM.Standard.A1.Flex"  # Default shape for validation (overridden per-shape)
+      OCI_OCPUS: "4"  # Default for A1.Flex validation (overridden per-shape)
+      OCI_MEMORY_IN_GBS: "24"  # Default for A1.Flex validation (overridden per-shape)
+      INSTANCE_DISPLAY_NAME: "default-instance"  # Default for validation (overridden per-shape)
       ASSIGN_PUBLIC_IP: "false"
       OPERATING_SYSTEM: "Oracle Linux"
       OS_VERSION: "9"
