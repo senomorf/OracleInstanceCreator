@@ -86,9 +86,39 @@ The workflow requires these secrets to be configured in the GitHub repository:
     - Supports authenticated proxies with embedded credentials
     - Applied transparently to all OCI CLI commands via HTTP_PROXY/HTTPS_PROXY environment variables
     - The script automatically adds the `http://` protocol prefix and trailing `/` when constructing the proxy URL
+    - **Full URL encoding/decoding support**: Credentials containing special characters (@, :, /, %) are properly handled
+    - **Complete IPv6 support**: IPv6 addresses are correctly bracketed in final proxy URLs
     - Comprehensive validation including port range (1-65535) and credential checks
     - Smart redundancy prevention: skips re-configuration if proxy is already set
     - Centralized parsing logic with consistent error handling across all scripts
+    - **Test coverage**: Comprehensive test suite available at `tests/test_proxy.sh` with 15 test cases
+
+### Proxy Troubleshooting
+
+**Testing Proxy Configuration:**
+```bash
+# Run the comprehensive test suite
+./tests/test_proxy.sh
+
+# Test individual proxy configurations manually
+export OCI_PROXY_URL="myuser:mypass@proxy.example.com:3128"
+./scripts/validate-config.sh
+```
+
+**Common Issues:**
+- **Special Characters**: Use URL encoding for passwords containing `@`, `:`, or `%` characters
+- **IPv6 Format**: Always use brackets around IPv6 addresses: `[::1]` not `::1`
+- **Port Range**: Ensure port is between 1-65535
+- **Connectivity**: Use `DEBUG=true` for detailed proxy setup logging
+
+**Debug Commands:**
+```bash
+# Enable verbose proxy setup logging
+DEBUG=true ./scripts/setup-oci.sh
+
+# Verify final environment variables
+echo $HTTP_PROXY $HTTPS_PROXY
+```
 
 ## Workflow Execution
 

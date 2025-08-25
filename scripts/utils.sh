@@ -249,7 +249,10 @@ url_encode() {
         local char="${string:$i:1}"
         case "$char" in
             [a-zA-Z0-9._~-]) encoded+="$char" ;;
-            *) printf -v encoded "%s%%%02X" "$encoded" "'$char" ;;
+            *) 
+                # Convert character to hex
+                printf -v encoded "%s%%%02X" "$encoded" "'$char"
+                ;;
         esac
     done
     
@@ -279,11 +282,12 @@ parse_and_configure_proxy() {
     
     log_info "Processing OCI_PROXY_URL configuration..."
     
-    local proxy_user proxy_pass proxy_host proxy_port
+    local proxy_user proxy_pass proxy_host proxy_port is_ipv6=false
     
     # Check for IPv6 format first (contains brackets)
     if [[ "$OCI_PROXY_URL" == *"@["*"]:"* ]]; then
         log_debug "Detected IPv6 proxy format"
+        is_ipv6=true
         # Extract IPv6 components manually
         local user_pass="${OCI_PROXY_URL%@\[*}"
         local rest="${OCI_PROXY_URL#*@\[}"
@@ -343,8 +347,19 @@ parse_and_configure_proxy() {
         return 0
     fi
     
-    # Construct proxy URL with authentication
-    local proxy_url="http://${proxy_user}:${proxy_pass}@${proxy_host}:${proxy_port}/"
+    # Re-encode credentials to handle special characters in final URL
+    local encoded_user=$(url_encode "$proxy_user")
+    local encoded_pass=$(url_encode "$proxy_pass")
+    
+    # Construct proxy URL with authentication and proper IPv6 bracketing
+    local proxy_url
+    if [[ "$is_ipv6" == "true" ]]; then
+        proxy_url="http://${encoded_user}:${encoded_pass}@[${proxy_host}]:${proxy_port}/"
+        log_debug "Constructed IPv6 proxy URL with brackets: [${proxy_host}]:${proxy_port}"
+    else
+        proxy_url="http://${encoded_user}:${encoded_pass}@${proxy_host}:${proxy_port}/"
+        log_debug "Constructed IPv4 proxy URL: ${proxy_host}:${proxy_port}"
+    fi
     
     # Set both uppercase and lowercase versions for maximum compatibility
     export HTTP_PROXY="${proxy_url}"
