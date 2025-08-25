@@ -535,17 +535,20 @@ if [[ -z "${OCI_EXIT_SUCCESS:-}" ]]; then
 fi
 
 # Constants for better maintainability
-readonly RESULT_FILE_TIMEOUT_SECONDS=10
-readonly RESULT_FILE_POLL_INTERVAL=0.1
-readonly GITHUB_ACTIONS_TIMEOUT_SECONDS=55
-readonly OCI_CONNECTION_TIMEOUT_SECONDS=5
-readonly OCI_READ_TIMEOUT_SECONDS=15
-readonly RETRY_WAIT_TIME_DEFAULT=30
-readonly INSTANCE_VERIFY_MAX_CHECKS_DEFAULT=5
-readonly INSTANCE_VERIFY_DELAY_DEFAULT=30
-readonly BOOT_VOLUME_SIZE_DEFAULT=50
-readonly GRACEFUL_TERMINATION_DELAY=2
-readonly TIMEOUT_EXIT_CODE=$OCI_EXIT_TIMEOUT
+# Only define if not already defined (avoid readonly conflicts from multiple sourcing)
+if [[ -z "${RESULT_FILE_TIMEOUT_SECONDS:-}" ]]; then
+    readonly RESULT_FILE_TIMEOUT_SECONDS=10
+    readonly RESULT_FILE_POLL_INTERVAL=0.1
+    readonly GITHUB_ACTIONS_TIMEOUT_SECONDS=55
+    readonly OCI_CONNECTION_TIMEOUT_SECONDS=5
+    readonly OCI_READ_TIMEOUT_SECONDS=15
+    readonly RETRY_WAIT_TIME_DEFAULT=30
+    readonly INSTANCE_VERIFY_MAX_CHECKS_DEFAULT=5
+    readonly INSTANCE_VERIFY_DELAY_DEFAULT=30
+    readonly BOOT_VOLUME_SIZE_DEFAULT=50
+    readonly GRACEFUL_TERMINATION_DELAY=2
+    readonly TIMEOUT_EXIT_CODE=$OCI_EXIT_TIMEOUT
+fi
 
 # Wait for result file with polling and timeout
 wait_for_result_file() {
