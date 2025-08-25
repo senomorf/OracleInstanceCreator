@@ -36,6 +36,8 @@ jobs:
       ASSIGN_PUBLIC_IP: "false"
       OPERATING_SYSTEM: "Oracle Linux"
       OS_VERSION: "9"
+      # Common image ID cache for Oracle Linux 9 ARM (update periodically)
+      OCI_CACHED_OL9_ARM_IMAGE: "ocid1.image.oc1.ap-singapore-1.aaaaaaaa7l5pths62jxzpqzh3mfbw6qjzrcpv6h3ek2tewqr57hbj5v4mhca"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -58,41 +60,31 @@ jobs:
       - name: Create requirements file
         run: echo "oci-cli" > requirements.txt
 
-      - name: Setup Python
+      - name: Setup Python with caching
         uses: actions/setup-python@v5.6.0
         id: setup-python
         with:
           python-version: '3.x'
           check-latest: false
           update-environment: true
-
-      - name: Cache pip dependencies
-        uses: actions/cache@v4.2.4
-        with:
-          path: |
-            ~/.cache/pip
-            ~/.local/lib
-            ~/.local/bin
-          key: ${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-pip-
+          cache: 'pip'
 
       - name: Install OCI CLI
         run: pip install --user -r requirements.txt
 
-      - name: Setup OCI configuration
+      - name: Setup OCI and SSH configuration (parallel)
         env:
           OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
           OCI_KEY_FINGERPRINT: ${{ secrets.OCI_KEY_FINGERPRINT }}
           OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
           OCI_REGION: ${{ secrets.OCI_REGION }}
           OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
-        run: ./scripts/setup-oci.sh
-
-      - name: Setup SSH configuration
-        env:
           INSTANCE_SSH_PUBLIC_KEY: ${{ secrets.INSTANCE_SSH_PUBLIC_KEY }}
-        run: ./scripts/setup-ssh.sh
+        run: |
+          # Run setup scripts in parallel for faster execution
+          ./scripts/setup-oci.sh &
+          ./scripts/setup-ssh.sh &
+          wait
 
       - name: Launch OCI Instance
         env:

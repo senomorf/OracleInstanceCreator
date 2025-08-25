@@ -30,25 +30,42 @@ lookup_image_id() {
         image_id="$OCI_IMAGE_ID"
         log_info "Using specified image ID"
     else
-        log_info "Looking up latest image for OS $OPERATING_SYSTEM $OS_VERSION..."
+        # Try common cached image IDs first
+        local cache_key="${OPERATING_SYSTEM}_${OS_VERSION}_${OCI_SHAPE}"
+        case "$cache_key" in
+            "Oracle Linux_9_VM.Standard.A1.Flex")
+                # Common Oracle Linux 9 ARM image ID - update as needed
+                image_id="${OCI_CACHED_OL9_ARM_IMAGE:-}"
+                if [[ -n "$image_id" ]]; then
+                    log_info "Using cached Oracle Linux 9 ARM image ID"
+                fi
+                ;;
+        esac
         
-        image_id=$(oci_cmd compute image list \
-            --compartment-id "$comp_id" \
-            --all \
-            --shape "$OCI_SHAPE" \
-            --operating-system "$OPERATING_SYSTEM" \
-            --operating-system-version "$OS_VERSION" \
-            --query 'data[0].id' \
-            --raw-output)
+        # Fallback to API lookup if no cached image
+        if [[ -z "$image_id" ]]; then
+            log_info "Looking up latest image for OS $OPERATING_SYSTEM $OS_VERSION..."
             
-        if [[ -z "$image_id" || "$image_id" == "null" ]]; then
-            local error_msg="No image found for $OPERATING_SYSTEM $OS_VERSION"
-            log_error "$error_msg"
-            send_telegram_notification "error" "OCI poller error: $error_msg"
-            die "$error_msg"
+            image_id=$(oci_cmd compute image list \
+                --compartment-id "$comp_id" \
+                --shape "$OCI_SHAPE" \
+                --operating-system "$OPERATING_SYSTEM" \
+                --operating-system-version "$OS_VERSION" \
+                --limit 1 \
+                --sort-by TIMECREATED \
+                --sort-order DESC \
+                --query 'data[0].id' \
+                --raw-output)
+                
+            if [[ -z "$image_id" || "$image_id" == "null" ]]; then
+                local error_msg="No image found for $OPERATING_SYSTEM $OS_VERSION"
+                log_error "$error_msg"
+                send_telegram_notification "error" "OCI poller error: $error_msg"
+                die "$error_msg"
+            fi
+            
+            log_info "Found image ID: $image_id"
         fi
-        
-        log_info "Found image ID: $image_id"
     fi
     
     echo "$image_id"
@@ -63,7 +80,7 @@ check_existing_instance() {
     existing_id=$(oci_cmd compute instance list \
         --compartment-id "$comp_id" \
         --display-name "$INSTANCE_DISPLAY_NAME" \
-        --all \
+        --limit 1 \
         --query 'data[0].id' \
         --raw-output)
     
@@ -125,9 +142,8 @@ launch_instance() {
     local status
     
     set +e
-    # Use oci directly instead of oci_cmd to avoid any potential retry logic
-    log_debug "Executing OCI command: ${launch_args[*]}"
-    output=$(oci "${launch_args[@]}" 2>&1)
+    # Use oci_cmd to get debug output when enabled
+    output=$(oci_cmd "${launch_args[@]}")
     status=$?
     set -e
     
@@ -206,30 +222,44 @@ handle_launch_error() {
 
 # Main function
 launch_oci_instance() {
+    start_timer "total_execution"
     log_info "Starting OCI instance launch process..."
     
     # Check OCI CLI availability
+    start_timer "oci_cli_check"
     check_oci_cli
+    log_elapsed "oci_cli_check"
     
     # Determine compartment to use
+    start_timer "compartment_setup"
     local comp_id
     comp_id=$(determine_compartment)
+    log_elapsed "compartment_setup"
     
     # Check for existing instance
+    start_timer "existing_instance_check"
     local instance_status
     instance_status=$(check_existing_instance "$comp_id")
+    log_elapsed "existing_instance_check"
     
     if [[ "$instance_status" == "EXISTS" ]]; then
         log_info "Skipping creation - instance already exists"
+        log_elapsed "total_execution"
         return 0
     fi
     
     # Lookup or use provided image ID
+    start_timer "image_lookup"
     local image_id
     image_id=$(lookup_image_id "$comp_id")
+    log_elapsed "image_lookup"
     
     # Launch the instance
+    start_timer "instance_launch"
     launch_instance "$comp_id" "$image_id"
+    log_elapsed "instance_launch"
+    
+    log_elapsed "total_execution"
 }
 
 # Run launch if called directly

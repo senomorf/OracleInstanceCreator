@@ -45,6 +45,29 @@ log_debug() {
     fi
 }
 
+# Timing functions for performance monitoring
+declare -A TIMER_START_TIMES
+
+start_timer() {
+    local timer_name="$1"
+    TIMER_START_TIMES[$timer_name]=$(date +%s.%N)
+    log_debug "Started timer: $timer_name"
+}
+
+log_elapsed() {
+    local timer_name="$1"
+    local start_time="${TIMER_START_TIMES[$timer_name]:-}"
+    
+    if [[ -n "$start_time" ]]; then
+        local end_time=$(date +%s.%N)
+        local elapsed=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0")
+        log_info "Timer '$timer_name' elapsed: ${elapsed}s"
+        unset TIMER_START_TIMES[$timer_name]
+    else
+        log_warning "Timer '$timer_name' was not started"
+    fi
+}
+
 # Error handling
 die() {
     log_error "$*"
@@ -75,11 +98,17 @@ oci_cmd() {
     local cmd=("$@")
     local output
     local status
+    local oci_args=()
     
-    log_debug "Executing OCI command: ${cmd[*]}"
+    # Add debug flag if DEBUG is enabled
+    if [[ "${DEBUG:-}" == "true" ]]; then
+        oci_args+=("--debug")
+    fi
+    
+    log_debug "Executing OCI command: oci ${oci_args[*]} ${cmd[*]}"
     
     set +e
-    output=$(oci "${cmd[@]}" 2>&1)
+    output=$(oci "${oci_args[@]}" "${cmd[@]}" 2>&1)
     status=$?
     set -e
     
