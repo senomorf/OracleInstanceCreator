@@ -61,6 +61,19 @@ validate_instance_configuration() {
     export LEGACY_IMDS_ENDPOINTS="${LEGACY_IMDS_ENDPOINTS:-false}"
     export RETRY_WAIT_TIME="${RETRY_WAIT_TIME:-30}"
     
+    # Validate timeout values are within reasonable bounds
+    validate_timeout_value "RETRY_WAIT_TIME" "$RETRY_WAIT_TIME" 5 300
+    
+    if [[ -n "${INSTANCE_VERIFY_DELAY:-}" ]]; then
+        validate_timeout_value "INSTANCE_VERIFY_DELAY" "$INSTANCE_VERIFY_DELAY" 5 120
+    fi
+    
+    if [[ -n "${INSTANCE_VERIFY_MAX_CHECKS:-}" ]]; then
+        if ! [[ "$INSTANCE_VERIFY_MAX_CHECKS" =~ ^[0-9]+$ ]] || [[ "$INSTANCE_VERIFY_MAX_CHECKS" -lt 1 || "$INSTANCE_VERIFY_MAX_CHECKS" -gt 20 ]]; then
+            die "Invalid INSTANCE_VERIFY_MAX_CHECKS: $INSTANCE_VERIFY_MAX_CHECKS (must be between 1-20)"
+        fi
+    fi
+    
     # Validate availability domain format (supports comma-separated list)
     if ! validate_availability_domain "$OCI_AD"; then
         die "Availability domain validation failed"
@@ -144,6 +157,35 @@ validate_notification_configuration() {
 
 validate_proxy_configuration() {
     log_info "Validating proxy configuration..."
+    
+    if [[ -z "${OCI_PROXY_URL:-}" ]]; then
+        log_debug "No proxy URL provided - skipping proxy validation"
+        return 0
+    fi
+    
+    # Enhanced proxy URL validation with comprehensive regex
+    local proxy_url_regex='^(https?://)?([^:@]+):([^:@]+)@(\[([0-9a-fA-F:]+)\]|([^:@]+)):[0-9]+/?$'
+    
+    if ! [[ "$OCI_PROXY_URL" =~ $proxy_url_regex ]]; then
+        die "Invalid OCI_PROXY_URL format. Expected formats:
+  IPv4: [http://]user:pass@host:port[/]
+  IPv6: [http://]user:pass@[host]:port[/]
+  URL encoding supported for special characters"
+    fi
+    
+    # Validate port range
+    local port
+    if [[ "$OCI_PROXY_URL" =~ @\[([^]]+)\]:([0-9]+) ]]; then
+        port="${BASH_REMATCH[2]}"  # IPv6 format
+    elif [[ "$OCI_PROXY_URL" =~ @([^:]+):([0-9]+) ]]; then
+        port="${BASH_REMATCH[2]}"  # IPv4 format
+    fi
+    
+    if [[ -n "$port" ]] && (( port < 1 || port > 65535 )); then
+        die "Invalid proxy port: $port (must be between 1-65535)"
+    fi
+    
+    log_success "Proxy URL format validation passed"
     parse_and_configure_proxy true
 }
 

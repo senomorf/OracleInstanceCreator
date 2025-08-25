@@ -182,7 +182,7 @@ oci_cmd_data() {
     log_debug "Executing OCI data command: oci ${cmd[*]}"
     
     set +e
-    output=$(oci --no-retry --connection-timeout 5 --read-timeout 15 "${cmd[@]}" 2>&1)
+    output=$(oci --no-retry --connection-timeout $OCI_CONNECTION_TIMEOUT_SECONDS --read-timeout $OCI_READ_TIMEOUT_SECONDS "${cmd[@]}" 2>&1)
     status=$?
     set -e
     
@@ -515,6 +515,88 @@ retry_with_backoff() {
     return 1
 }
 
+# Error handling standards for all scripts
+# Return codes convention:
+# 0 = Success/Continue
+# 1 = General error/failure
+# 2 = Capacity/rate limit (expected, retry later)
+# 3 = Configuration error (fix required)
+# 4 = Network/connectivity error (may resolve)
+# 124 = Timeout (GNU timeout standard)
+readonly EXIT_SUCCESS=0
+readonly EXIT_GENERAL_ERROR=1
+readonly EXIT_CAPACITY_ERROR=2
+readonly EXIT_CONFIG_ERROR=3
+readonly EXIT_NETWORK_ERROR=4
+readonly EXIT_TIMEOUT=124
+
+# Constants for better maintainability
+readonly RESULT_FILE_TIMEOUT_SECONDS=10
+readonly RESULT_FILE_POLL_INTERVAL=0.1
+readonly GITHUB_ACTIONS_TIMEOUT_SECONDS=55
+readonly OCI_CONNECTION_TIMEOUT_SECONDS=5
+readonly OCI_READ_TIMEOUT_SECONDS=15
+readonly RETRY_WAIT_TIME_DEFAULT=30
+readonly INSTANCE_VERIFY_MAX_CHECKS_DEFAULT=5
+readonly INSTANCE_VERIFY_DELAY_DEFAULT=30
+readonly BOOT_VOLUME_SIZE_DEFAULT=50
+readonly GRACEFUL_TERMINATION_DELAY=2
+readonly TIMEOUT_EXIT_CODE=$EXIT_TIMEOUT
+
+# Wait for result file with polling and timeout
+wait_for_result_file() {
+    local file_path="$1"
+    local timeout="${2:-$RESULT_FILE_TIMEOUT_SECONDS}"
+    local elapsed=0
+    local poll_interval="$RESULT_FILE_POLL_INTERVAL"
+    
+    log_debug "Waiting for result file: $file_path (timeout: ${timeout}s)"
+    
+    while [[ $elapsed -lt $timeout ]]; do
+        if [[ -f "$file_path" && -s "$file_path" ]]; then
+            log_debug "Result file found and non-empty after ${elapsed}s"
+            return 0
+        fi
+        sleep "$poll_interval"
+        elapsed=$((elapsed + 1))
+    done
+    
+    log_warning "Result file not found within ${timeout}s timeout: $file_path"
+    return 1
+}
+
+# Mask credentials in proxy URLs for safe logging
+mask_credentials() {
+    local input="$1"
+    
+    # Pattern matches: user:pass@host or user:pass@[host]
+    # Replace credentials with [MASKED]:[MASKED]
+    echo "$input" | sed -E 's|([^/@]+):([^/@]+)@|[MASKED]:[MASKED]@|g'
+}
+
+# Get appropriate exit code for error type
+get_exit_code_for_error_type() {
+    local error_type="$1"
+    
+    case "$error_type" in
+        "CAPACITY"|"RATE_LIMIT"|"LIMIT_EXCEEDED")
+            echo $EXIT_CAPACITY_ERROR
+            ;;
+        "AUTH"|"CONFIG"|"DUPLICATE")
+            echo $EXIT_CONFIG_ERROR
+            ;;
+        "NETWORK"|"INTERNAL_ERROR")
+            echo $EXIT_NETWORK_ERROR
+            ;;
+        "TIMEOUT")
+            echo $EXIT_TIMEOUT
+            ;;
+        *)
+            echo $EXIT_GENERAL_ERROR
+            ;;
+    esac
+}
+
 # URL encoding/decoding functions for proxy credentials
 url_encode() {
     local string="$1"
@@ -704,6 +786,20 @@ validate_availability_domain() {
         return 1
     fi
     
+    # Check for leading/trailing commas or spaces
+    if [[ "$ad_list" =~ ^[[:space:]]*,|,[[:space:]]*$ ]]; then
+        log_error "Invalid AD format: leading or trailing commas not allowed"
+        log_error "Found: '$ad_list'"
+        return 1
+    fi
+    
+    # Check for consecutive commas
+    if [[ "$ad_list" =~ ,, ]]; then
+        log_error "Invalid AD format: consecutive commas not allowed"
+        log_error "Found: '$ad_list'"
+        return 1
+    fi
+    
     # Use a simple loop to split by comma
     local temp_list="$ad_list"
     
@@ -715,8 +811,13 @@ validate_availability_domain() {
         ad=$(echo "$ad" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         
         # Validate this AD
-        if [[ -n "$ad" ]] && ! [[ "$ad" =~ ^[a-zA-Z0-9-]+:[A-Z0-9-]+-[A-Z]+-[0-9]+-AD-[0-9]+$ ]]; then
-            log_error "Invalid availability domain format: $ad"
+        if [[ -z "$ad" ]]; then
+            log_error "Empty availability domain found in comma-separated list"
+            return 1
+        fi
+        
+        if ! [[ "$ad" =~ ^[a-zA-Z0-9-]+:[A-Z0-9-]+-[A-Z]+-[0-9]+-AD-[0-9]+$ ]]; then
+            log_error "Invalid availability domain format: '$ad'"
             log_error "Expected format: tenancy_prefix:REGION-AD-N (e.g., 'fgaj:AP-SINGAPORE-1-AD-1')"
             return 1
         fi
@@ -728,13 +829,40 @@ validate_availability_domain() {
     # Process the last (or only) AD
     if [[ -n "$temp_list" ]]; then
         local ad=$(echo "$temp_list" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        
+        if [[ -z "$ad" ]]; then
+            log_error "Empty availability domain found at end of list"
+            return 1
+        fi
+        
         if ! [[ "$ad" =~ ^[a-zA-Z0-9-]+:[A-Z0-9-]+-[A-Z]+-[0-9]+-AD-[0-9]+$ ]]; then
-            log_error "Invalid availability domain format: $ad"
+            log_error "Invalid availability domain format: '$ad'"
             log_error "Expected format: tenancy_prefix:REGION-AD-N (e.g., 'fgaj:AP-SINGAPORE-1-AD-1')"
             return 1
         fi
     fi
     
+    return 0
+}
+
+# Validate timeout values are within reasonable bounds
+validate_timeout_value() {
+    local var_name="$1"
+    local value="$2"
+    local min_val="$3"
+    local max_val="$4"
+    
+    if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+        log_error "$var_name must be a positive integer, got: $value"
+        return 1
+    fi
+    
+    if [[ "$value" -lt "$min_val" || "$value" -gt "$max_val" ]]; then
+        log_error "$var_name must be between $min_val-${max_val} seconds, got: $value"
+        return 1
+    fi
+    
+    log_debug "$var_name validation passed: ${value}s (range: $min_val-${max_val}s)"
     return 0
 }
 

@@ -10,6 +10,41 @@ set -euo pipefail
 source "$(dirname "$0")/utils.sh"
 source "$(dirname "$0")/notify.sh"
 
+# Global variables for signal handling
+PID_A1=""
+PID_E2=""
+temp_dir=""
+
+# Signal handler for graceful shutdown
+cleanup_handler() {
+    log_warning "Received interrupt signal - cleaning up background processes"
+    
+    if [[ -n "$PID_A1" ]]; then
+        log_debug "Terminating A1 process (PID: $PID_A1)"
+        kill $PID_A1 2>/dev/null || true
+    fi
+    
+    if [[ -n "$PID_E2" ]]; then
+        log_debug "Terminating E2 process (PID: $PID_E2)"
+        kill $PID_E2 2>/dev/null || true
+    fi
+    
+    sleep $GRACEFUL_TERMINATION_DELAY
+    
+    # Force kill if still running
+    [[ -n "$PID_A1" ]] && kill -9 $PID_A1 2>/dev/null || true
+    [[ -n "$PID_E2" ]] && kill -9 $PID_E2 2>/dev/null || true
+    
+    # Cleanup temporary files
+    [[ -n "$temp_dir" && -d "$temp_dir" ]] && rm -rf "$temp_dir" 2>/dev/null || true
+    
+    log_info "Cleanup completed"
+    exit $EXIT_GENERAL_ERROR
+}
+
+# Set up signal handlers
+trap cleanup_handler SIGTERM SIGINT
+
 # Shape configurations for Oracle Cloud free tier
 declare -A A1_FLEX_CONFIG=(
     ["SHAPE"]="VM.Standard.A1.Flex"
@@ -51,12 +86,14 @@ main() {
     log_info "Starting parallel OCI instance creation for both free tier shapes"
     
     # Set timeout to prevent exceeding 60 seconds (GitHub Actions billing boundary)
-    local timeout_seconds=55
+    # Using constant defined in utils.sh for consistency and maintainability
+    local timeout_seconds=$GITHUB_ACTIONS_TIMEOUT_SECONDS
     log_debug "Setting execution timeout to ${timeout_seconds}s to avoid 2-minute billing"
     
-    # Create temporary files for process communication
-    local temp_dir
-    temp_dir=$(mktemp -d)
+    # Create temporary files for process communication with secure permissions  
+    umask 077  # Ensure secure permissions (owner only)
+    temp_dir=$(mktemp -d)  # Using global variable for cleanup handler
+    log_debug "Created secure temporary directory: $temp_dir"
     local a1_result="${temp_dir}/a1_result"
     local e2_result="${temp_dir}/e2_result"
     
@@ -89,7 +126,7 @@ main() {
     
     # Wait for both processes with timeout protection
     local elapsed=0
-    local sleep_interval=1
+    local sleep_interval=1  # Monitor processes every second during execution
     
     # Keep checking until timeout or both processes complete
     while [[ $elapsed -lt $timeout_seconds ]]; do
@@ -106,28 +143,25 @@ main() {
     if [[ $elapsed -ge $timeout_seconds ]]; then
         log_warning "Execution timeout reached (${timeout_seconds}s) - terminating background processes"
         kill $PID_A1 $PID_E2 2>/dev/null || true
-        sleep 2  # Give processes time to terminate gracefully
+        sleep $GRACEFUL_TERMINATION_DELAY  # Give processes time to terminate gracefully before force kill
         kill -9 $PID_A1 $PID_E2 2>/dev/null || true
-        STATUS_A1=124  # timeout exit code
-        STATUS_E2=124  # timeout exit code
+        STATUS_A1=$TIMEOUT_EXIT_CODE  # Standard timeout exit code (GNU timeout compatibility)
+        STATUS_E2=$TIMEOUT_EXIT_CODE  # Standard timeout exit code (GNU timeout compatibility)
     fi
     
     # Always wait for processes to fully complete and flush their output
     wait $PID_A1 2>/dev/null || true
     wait $PID_E2 2>/dev/null || true
     
-    # Give a moment for result files to be written (race condition protection)
-    sleep 1
-    
-    # Read results from files if they exist, otherwise use default failure status
-    if [[ -f "$a1_result" ]]; then
+    # Wait for result files with proper timeout (fixes race condition)
+    if wait_for_result_file "$a1_result"; then
         STATUS_A1=$(cat "$a1_result")
         log_debug "A1 result file found with status: $STATUS_A1"
     else
         log_warning "A1 result file not found - using default failure status"
     fi
     
-    if [[ -f "$e2_result" ]]; then
+    if wait_for_result_file "$e2_result"; then
         STATUS_E2=$(cat "$e2_result")
         log_debug "E2 result file found with status: $STATUS_E2"
     else

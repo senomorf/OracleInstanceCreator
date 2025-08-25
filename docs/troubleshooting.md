@@ -7,9 +7,11 @@ This comprehensive runbook helps diagnose and resolve common issues with the Ora
 Before diving into specific issues, run through this checklist:
 
 1. **Run Preflight Check**: `./scripts/preflight-check.sh`
-2. **Check Recent Logs**: Look for error patterns in GitHub Actions logs
-3. **Verify Timing**: Check if execution time is within expected range (17-20 seconds)
-4. **Review Notifications**: Check Telegram for error details
+2. **Run Integration Tests**: `./tests/test_parallel_execution.sh`
+3. **Check Recent Logs**: Look for error patterns in GitHub Actions logs
+4. **Verify Timing**: Check if execution time is within expected range (17-20 seconds)
+5. **Review Notifications**: Check Telegram for error details
+6. **Test Signal Handling**: `./tests/test_signal_handling.sh`
 
 ## Common Issues and Solutions
 
@@ -196,6 +198,102 @@ Check for these performance indicators in logs:
 3. **Missing Optimizations**:
    - Ensure latest version with performance flags
    - Check if exponential backoff was re-enabled accidentally
+
+## Testing and Validation
+
+### 🧪 Running the Test Suite
+
+The project includes comprehensive tests for critical functionality:
+
+#### Integration Tests
+```bash
+# Run full integration test suite
+./tests/test_parallel_execution.sh
+
+# Test specific components
+source scripts/utils.sh
+wait_for_result_file "/tmp/test_file" 5  # Test race condition fixes
+mask_credentials "http://user:pass@proxy:8080"  # Test credential masking
+validate_availability_domain "test:US-REGION-AD-1,test:US-REGION-AD-2"  # Test AD validation
+```
+
+#### Signal Handling Tests
+```bash
+# Test graceful shutdown behavior
+./tests/test_signal_handling.sh
+
+# Manual signal test
+./scripts/launch-parallel.sh &
+PID=$!
+sleep 5
+kill -TERM $PID  # Should cleanup gracefully
+```
+
+#### AD Cycling Tests  
+```bash
+# Test multi-AD failover logic
+./tests/test_ad_cycling.sh
+
+# Manual AD cycling test
+export OCI_AD="test:AD-1,test:AD-2,test:AD-3"
+export DEBUG=true
+./scripts/launch-instance.sh
+```
+
+### 🔧 Validation Commands
+
+#### Configuration Validation
+```bash
+# Enhanced validation with new checks
+./scripts/validate-config.sh
+
+# Test timeout value validation
+source scripts/utils.sh
+validate_timeout_value "TEST_TIMEOUT" "30" 5 300
+
+# Test proxy URL validation (new enhanced format checking)
+export OCI_PROXY_URL="user:pass@proxy.com:8080"
+./scripts/validate-config.sh  # Should pass
+
+export OCI_PROXY_URL="invalid-format"
+./scripts/validate-config.sh  # Should fail with clear error
+```
+
+#### Error Handling Validation
+```bash
+# Test standardized error codes
+source scripts/utils.sh
+get_exit_code_for_error_type "CAPACITY"     # Should return 2
+get_exit_code_for_error_type "AUTH"         # Should return 3
+get_exit_code_for_error_type "NETWORK"      # Should return 4
+get_exit_code_for_error_type "UNKNOWN"      # Should return 1
+```
+
+### 📊 Performance Monitoring
+
+#### Check Optimization Flags
+```bash
+# Verify critical performance optimizations are active
+export DEBUG=true
+./scripts/launch-parallel.sh 2>&1 | grep "Executing OCI debug command"
+# Should show: --no-retry --connection-timeout 5 --read-timeout 15
+```
+
+#### Monitor Race Conditions  
+```bash
+# Test result file handling (should complete in <1 second)
+source scripts/utils.sh
+echo "test" > /tmp/race_test &
+time wait_for_result_file "/tmp/race_test" 10
+# Should find file almost immediately
+```
+
+#### Test Constants Usage
+```bash
+# Verify magic numbers have been replaced with constants
+grep -n "55\|124\|077" scripts/launch-parallel.sh
+# Should show references to constants, not magic numbers
+```
 
 #### Problem: Instance verification timeouts
 **Symptoms:**
