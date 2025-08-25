@@ -93,8 +93,31 @@ get_env_var_or_default() {
     echo "$var_value"
 }
 
-# OCI CLI command wrapper with error handling
-oci_cmd() {
+# OCI CLI command wrapper for data extraction (no debug pollution)
+oci_cmd_data() {
+    local cmd=("$@")
+    local output
+    local status
+    
+    log_debug "Executing OCI data command: oci ${cmd[*]}"
+    
+    set +e
+    output=$(oci "${cmd[@]}" 2>&1)
+    status=$?
+    set -e
+    
+    if [[ $status -ne 0 ]]; then
+        log_error "OCI data command failed with status $status"
+        log_error "Command: ${cmd[*]}"
+        log_error "Output: $output"
+        return $status
+    fi
+    
+    echo "$output"
+}
+
+# OCI CLI command wrapper with debug support (for troubleshooting)
+oci_cmd_debug() {
     local cmd=("$@")
     local output
     local status
@@ -105,7 +128,7 @@ oci_cmd() {
         oci_args+=("--debug")
     fi
     
-    log_debug "Executing OCI command: oci ${oci_args[*]} ${cmd[*]}"
+    log_debug "Executing OCI debug command: oci ${oci_args[*]} ${cmd[*]}"
     
     set +e
     output=$(oci "${oci_args[@]}" "${cmd[@]}" 2>&1)
@@ -113,13 +136,34 @@ oci_cmd() {
     set -e
     
     if [[ $status -ne 0 ]]; then
-        log_error "OCI command failed with status $status"
+        log_error "OCI debug command failed with status $status"
         log_error "Command: ${cmd[*]}"
         log_error "Output: $output"
         return $status
     fi
     
     echo "$output"
+}
+
+# Intelligent OCI CLI command wrapper - uses appropriate mode
+oci_cmd() {
+    local cmd=("$@")
+    
+    # Check if this is a data extraction command (contains --query or --raw-output)
+    local is_data_query=false
+    for arg in "${cmd[@]}"; do
+        if [[ "$arg" == "--query" || "$arg" == "--raw-output" ]]; then
+            is_data_query=true
+            break
+        fi
+    done
+    
+    # Use data mode for queries to avoid debug pollution, debug mode for actions
+    if [[ "$is_data_query" == "true" ]]; then
+        oci_cmd_data "${cmd[@]}"
+    else
+        oci_cmd_debug "${cmd[@]}"
+    fi
 }
 
 # Check if OCI CLI is available
@@ -141,6 +185,9 @@ get_error_type() {
     elif echo "$error_output" | grep -qi "too many requests\|rate limit\|throttle\|429"; then
         log_debug "Detected RATE_LIMIT error pattern in: $error_output"
         echo "CAPACITY"  # Treat rate limiting as capacity issue
+    elif echo "$error_output" | grep -qi "display name already exists\|instance.*already exists\|duplicate.*name"; then
+        log_debug "Detected DUPLICATE error pattern in: $error_output"
+        echo "DUPLICATE"  # Instance already exists - treat as success
     elif echo "$error_output" | grep -qi "authentication\|authorization\|unauthorized"; then
         echo "AUTH"
     elif echo "$error_output" | grep -qi "network\|timeout\|connection"; then

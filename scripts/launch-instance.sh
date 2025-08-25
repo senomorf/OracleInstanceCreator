@@ -200,6 +200,11 @@ handle_launch_error() {
             log_info "No capacity available for shape at this time. Will retry on next schedule."
             return 0  # Not a failure, just capacity issue
             ;;
+        "DUPLICATE")
+            log_info "Instance with this name already exists. Skipping creation."
+            send_telegram_notification "info" "OCI instance already exists: ${INSTANCE_DISPLAY_NAME}"
+            return 0  # Not a failure, instance exists
+            ;;
         "AUTH")
             log_error "Authentication/authorization error"
             send_telegram_notification "error" "OCI authentication error: Check credentials and permissions"
@@ -243,16 +248,20 @@ launch_oci_instance() {
     comp_id=$(determine_compartment)
     log_elapsed "compartment_setup"
     
-    # Check for existing instance
-    start_timer "existing_instance_check"
-    local instance_status
-    instance_status=$(check_existing_instance "$comp_id")
-    log_elapsed "existing_instance_check"
-    
-    if [[ "$instance_status" == "EXISTS" ]]; then
-        log_info "Skipping creation - instance already exists"
-        log_elapsed "total_execution"
-        return 0
+    # Check for existing instance (if enabled)
+    if [[ "${CHECK_EXISTING_INSTANCE:-false}" == "true" ]]; then
+        start_timer "existing_instance_check"
+        local instance_status
+        instance_status=$(check_existing_instance "$comp_id")
+        log_elapsed "existing_instance_check"
+        
+        if [[ "$instance_status" == "EXISTS" ]]; then
+            log_info "Skipping creation - instance already exists"
+            log_elapsed "total_execution"
+            return 0
+        fi
+    else
+        log_info "Skipping existing instance check - attempting direct launch"
     fi
     
     # Lookup or use provided image ID

@@ -14,11 +14,17 @@ on:
         description: 'Send Telegram notifications'
         type: boolean
         default: true
+      check_existing_instance:
+        description: 'Check for existing instance before launch'
+        type: boolean
+        default: true
 
 env:
   # Global environment variables
   DEBUG: ${{ inputs.verbose_output && 'true' || 'false' }}
   ENABLE_NOTIFICATIONS: ${{ inputs.send_notifications && 'true' || 'false' }}
+  # For scheduled runs: skip instance check (direct launch), for manual: allow checking
+  CHECK_EXISTING_INSTANCE: ${{ github.event_name == 'workflow_dispatch' && (inputs.check_existing_instance && 'true' || 'false') || 'false' }}
   # Suppress OCI CLI file permissions warnings
   OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: true
 
