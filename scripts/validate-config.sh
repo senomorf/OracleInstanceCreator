@@ -110,9 +110,29 @@ validate_instance_configuration() {
         die "LEGACY_IMDS_ENDPOINTS must be 'true' or 'false', got: $LEGACY_IMDS_ENDPOINTS"
     fi
     
-    # Validate retry wait time
-    if ! [[ "$RETRY_WAIT_TIME" =~ ^[0-9]+$ ]] || [[ "$RETRY_WAIT_TIME" -lt 0 ]]; then
-        die "RETRY_WAIT_TIME must be a non-negative integer, got: $RETRY_WAIT_TIME"
+    # Validate timeout configurations with bounds checking
+    if ! [[ "$RETRY_WAIT_TIME" =~ ^[0-9]+$ ]] || [[ "$RETRY_WAIT_TIME" -lt 1 || "$RETRY_WAIT_TIME" -gt 300 ]]; then
+        die "RETRY_WAIT_TIME must be between 1-300 seconds, got: $RETRY_WAIT_TIME"
+    fi
+    
+    # Validate transient error retry configuration
+    local max_retries="${TRANSIENT_ERROR_MAX_RETRIES:-3}"
+    local retry_delay="${TRANSIENT_ERROR_RETRY_DELAY:-15}"
+    
+    if ! [[ "$max_retries" =~ ^[0-9]+$ ]] || [[ "$max_retries" -lt 1 || "$max_retries" -gt 10 ]]; then
+        die "TRANSIENT_ERROR_MAX_RETRIES must be between 1-10, got: $max_retries"
+    fi
+    
+    if ! [[ "$retry_delay" =~ ^[0-9]+$ ]] || [[ "$retry_delay" -lt 1 || "$retry_delay" -gt 60 ]]; then
+        die "TRANSIENT_ERROR_RETRY_DELAY must be between 1-60 seconds, got: $retry_delay"
+    fi
+    
+    # Validate AD format (comma-separated OCID-like values)
+    if [[ -n "${OCI_AD:-}" ]]; then
+        if ! [[ "$OCI_AD" =~ ^[a-zA-Z0-9:._-]+(,[a-zA-Z0-9:._-]+)*$ ]]; then
+            die "OCI_AD format invalid. Expected comma-separated AD names, got: $OCI_AD"
+        fi
+        log_debug "AD format validation passed for: $OCI_AD"
     fi
     
     # Validate recovery action

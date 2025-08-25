@@ -93,9 +93,14 @@ main() {
     # Create temporary files for process communication with secure permissions  
     umask 077  # Ensure secure permissions (owner only)
     temp_dir=$(mktemp -d)  # Using global variable for cleanup handler
+    chmod 700 "$temp_dir"  # Explicit directory permissions
     log_debug "Created secure temporary directory: $temp_dir"
     local a1_result="${temp_dir}/a1_result"
     local e2_result="${temp_dir}/e2_result"
+    
+    # Pre-create result files with secure permissions
+    touch "$a1_result" "$e2_result"
+    chmod 600 "$a1_result" "$e2_result"
     
     # Launch A1.Flex in background
     log_info "Launching A1.Flex (ARM) instance in background..."
@@ -126,7 +131,8 @@ main() {
     
     # Wait for both processes with timeout protection
     local elapsed=0
-    local sleep_interval=1  # Monitor processes every second during execution
+    # Process monitoring interval - 1 second for responsive detection without excessive CPU usage
+    local sleep_interval=1
     
     # Keep checking until timeout or both processes complete
     while [[ $elapsed -lt $timeout_seconds ]]; do
@@ -142,9 +148,12 @@ main() {
     # Handle timeout case
     if [[ $elapsed -ge $timeout_seconds ]]; then
         log_warning "Execution timeout reached (${timeout_seconds}s) - terminating background processes"
-        kill $PID_A1 $PID_E2 2>/dev/null || true
+        # Fix: Add process existence checks before kill commands
+        [[ -n "$PID_A1" ]] && kill "$PID_A1" 2>/dev/null || true
+        [[ -n "$PID_E2" ]] && kill "$PID_E2" 2>/dev/null || true
         sleep $GRACEFUL_TERMINATION_DELAY  # Give processes time to terminate gracefully before force kill
-        kill -9 $PID_A1 $PID_E2 2>/dev/null || true
+        [[ -n "$PID_A1" ]] && kill -9 "$PID_A1" 2>/dev/null || true
+        [[ -n "$PID_E2" ]] && kill -9 "$PID_E2" 2>/dev/null || true
         STATUS_A1=$TIMEOUT_EXIT_CODE  # Standard timeout exit code (GNU timeout compatibility)
         STATUS_E2=$TIMEOUT_EXIT_CODE  # Standard timeout exit code (GNU timeout compatibility)
     fi

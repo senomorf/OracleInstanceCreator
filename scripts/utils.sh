@@ -150,8 +150,45 @@ log_elapsed() {
 
 # Error handling
 die() {
-    log_error "$*"
-    exit 1
+    local message="$1"
+    local exit_code="${2:-1}"  # Default to general error
+    log_error "$message"
+    exit "$exit_code"
+}
+
+# Standardized error handling functions using OCI constants
+die_config_error() {
+    die "$1" "$OCI_EXIT_CONFIG_ERROR"
+}
+
+die_capacity_error() {
+    die "$1" "$OCI_EXIT_CAPACITY_ERROR"
+}
+
+die_timeout_error() {
+    die "$1" "$TIMEOUT_EXIT_CODE"
+}
+
+# Return standardized exit codes based on error type
+handle_error_by_type() {
+    local error_message="$1"
+    local error_type
+    error_type=$(get_error_type "$error_message")
+    
+    case "$error_type" in
+        "CAPACITY"|"RATE_LIMIT"|"LIMIT_EXCEEDED")
+            return "$OCI_EXIT_CAPACITY_ERROR"
+            ;;
+        "AUTH"|"CONFIG"|"DUPLICATE")
+            return "$OCI_EXIT_CONFIG_ERROR"
+            ;;
+        "NETWORK"|"INTERNAL_ERROR")
+            return "$OCI_EXIT_GENERAL_ERROR"
+            ;;
+        *)
+            return "$OCI_EXIT_GENERAL_ERROR"
+            ;;
+    esac
 }
 
 # Environment variable validation
@@ -243,6 +280,12 @@ redact_sensitive_params() {
         elif [[ "$param" =~ (BEGIN|END).*PRIVATE.*KEY ]]; then
             # Redact private key content
             redacted_cmd+=("[PRIVATE_KEY_REDACTED]")
+            ((i++))
+        elif [[ "$param" =~ .*@.*:.* ]]; then
+            # Mask proxy URLs or credentials in the format user:pass@host:port
+            local masked_param
+            masked_param=$(mask_credentials "$param")
+            redacted_cmd+=("$masked_param")
             ((i++))
         elif [[ "$param" =~ --metadata.*ssh-authorized-keys || "$param" =~ ssh-rsa || "$param" =~ ssh-ed25519 ]]; then
             # Redact SSH keys
@@ -539,7 +582,7 @@ fi
 if [[ -z "${RESULT_FILE_TIMEOUT_SECONDS:-}" ]]; then
     readonly RESULT_FILE_TIMEOUT_SECONDS=10
     readonly RESULT_FILE_POLL_INTERVAL=0.1
-    readonly GITHUB_ACTIONS_TIMEOUT_SECONDS=55
+    readonly GITHUB_ACTIONS_TIMEOUT_SECONDS=55  # Stay under 60s to avoid 2-minute billing boundary
     readonly OCI_CONNECTION_TIMEOUT_SECONDS=5
     readonly OCI_READ_TIMEOUT_SECONDS=15
     readonly RETRY_WAIT_TIME_DEFAULT=30
@@ -547,7 +590,8 @@ if [[ -z "${RESULT_FILE_TIMEOUT_SECONDS:-}" ]]; then
     readonly INSTANCE_VERIFY_DELAY_DEFAULT=30
     readonly BOOT_VOLUME_SIZE_DEFAULT=50
     readonly GRACEFUL_TERMINATION_DELAY=2
-    readonly TIMEOUT_EXIT_CODE=$OCI_EXIT_TIMEOUT
+    
+    readonly TIMEOUT_EXIT_CODE=124
 fi
 
 # Wait for result file with polling and timeout
@@ -1017,29 +1061,4 @@ log_performance_metric() {
     esac
 }
 
-# URL encode function for proxy credentials
-url_encode() {
-    local string="$1"
-    local encoded=""
-    local i
-    
-    for ((i = 0; i < ${#string}; i++)); do
-        local char="${string:$i:1}"
-        case "$char" in
-            [a-zA-Z0-9._~-]) encoded+="$char" ;;
-            *) 
-                # Convert character to hex
-                printf -v encoded "%s%%%02X" "$encoded" "'$char"
-                ;;
-        esac
-    done
-    
-    echo "$encoded"
-}
-
-# URL decode function for proxy credentials
-url_decode() {
-    local string="$1"
-    printf '%b\n' "${string//%/\\x}"
-}
 
