@@ -8,6 +8,60 @@ set -euo pipefail
 source "$(dirname "$0")/utils.sh"
 source "$(dirname "$0")/notify.sh"
 
+# Global flag for signal handling
+INTERRUPTED=false
+
+# Signal handler for graceful shutdown
+cleanup_on_signal() {
+    local signal="$1"
+    log_warning "Received signal $signal - initiating graceful shutdown..."
+    INTERRUPTED=true
+    
+    # Kill any background processes if needed
+    if [[ -n "${SLEEP_PID:-}" ]]; then
+        kill "$SLEEP_PID" 2>/dev/null || true
+        wait "$SLEEP_PID" 2>/dev/null || true
+    fi
+    
+    log_info "Graceful shutdown completed"
+    exit 130  # Standard exit code for Ctrl+C
+}
+
+# Set up signal handlers
+trap 'cleanup_on_signal SIGTERM' SIGTERM
+trap 'cleanup_on_signal SIGINT' SIGINT
+
+# Interruptible sleep function
+interruptible_sleep() {
+    local duration="$1"
+    local message="${2:-Waiting}"
+    
+    log_info "$message ${duration}s..."
+    
+    # Check if already interrupted
+    if [[ "$INTERRUPTED" == true ]]; then
+        return 1
+    fi
+    
+    # Use background sleep so we can interrupt it
+    sleep "$duration" &
+    SLEEP_PID=$!
+    
+    # Wait for sleep to complete or signal to interrupt
+    if wait "$SLEEP_PID" 2>/dev/null; then
+        unset SLEEP_PID
+        return 0
+    else
+        # Sleep was interrupted
+        unset SLEEP_PID
+        if [[ "$INTERRUPTED" == true ]]; then
+            log_info "Sleep interrupted by signal"
+            return 1
+        fi
+        return 0
+    fi
+}
+
 determine_compartment() {
     local comp_id
     
@@ -159,6 +213,33 @@ build_launch_command() {
     printf '%s\n' "${launch_args[@]}"
 }
 
+# Launch Oracle Cloud Infrastructure instance with multi-AD cycling support
+#
+# This is the core function that attempts to create an OCI instance across
+# multiple availability domains until success or all domains are exhausted.
+# Implements intelligent error handling and retry logic optimized for Oracle's
+# free tier capacity constraints.
+#
+# Parameters:
+#   comp_id   Compartment OCID where instance will be created
+#   image_id  Image OCID to use for instance creation
+# Returns:
+#   0 on success (including expected capacity issues),
+#   1 on configuration/authentication errors,
+#   130 on signal interruption
+#
+# Multi-AD Strategy:
+# - Parses OCI_AD as comma-separated list of availability domains
+# - Attempts instance creation in each AD sequentially
+# - On capacity/rate limit errors: tries next AD
+# - On transient errors: tries next AD with retry logic
+# - On config/auth errors: fails immediately with notification
+# - Includes interruptible sleep between attempts for graceful shutdown
+#
+# Performance Optimizations:
+# - Uses --no-retry flag to prevent exponential backoff (5x faster)
+# - Implements connection/read timeouts for network resilience
+# - Early detection of rate limiting to skip redundant API calls
 launch_instance() {
     local comp_id="$1"
     local image_id="$2"
@@ -173,6 +254,12 @@ launch_instance() {
     local wait_time="${RETRY_WAIT_TIME:-30}"
     
     while [[ $ad_index -lt $max_attempts ]]; do
+        # Check for interruption signal
+        if [[ "$INTERRUPTED" == true ]]; then
+            log_info "Instance launch interrupted by signal - exiting gracefully"
+            return 130
+        fi
+        
         local current_ad="${ad_list[$ad_index]}"
         log_info "Attempting to launch instance '$INSTANCE_DISPLAY_NAME' in AD $current_ad (attempt $((ad_index + 1))/$max_attempts)..."
         
@@ -193,16 +280,21 @@ launch_instance() {
         echo "$output"
         
         if [[ $status -eq 0 ]]; then
-            # Success! Extract instance OCID
+            # Success! Extract instance OCID using robust parsing
             local instance_id
-            instance_id=$(echo "$output" | grep -o 'ocid1\.instance[^"]*' | head -1)
+            instance_id=$(extract_instance_ocid "$output")
             
             if [[ -z "$instance_id" ]]; then
                 log_error "Could not extract instance OCID from output"
+                log_debug "Raw output for debugging: $output"
                 return 1
             fi
             
             log_success "Instance launched successfully in AD $current_ad! OCID: $instance_id"
+            
+            # Track successful AD for performance metrics
+            log_performance_metric "AD_SUCCESS" "$current_ad" "$((ad_index + 1))" "$max_attempts"
+            
             send_telegram_notification "success" "OCI instance created in $current_ad: ${INSTANCE_DISPLAY_NAME} (OCID: ${instance_id})"
             
             return 0
@@ -214,12 +306,16 @@ launch_instance() {
         
         case "$error_type" in
             "CAPACITY"|"RATE_LIMIT")
+                # Track capacity-related failures for performance analysis
+                log_performance_metric "AD_FAILURE" "$current_ad" "$((ad_index + 1))" "$max_attempts" "$error_type"
+                
                 # Try next AD if available
                 if [[ $((ad_index + 1)) -lt $max_attempts ]]; then
                     log_info "Trying next availability domain..."
                     ((ad_index++))
                     continue
                 else
+                    log_performance_metric "AD_CYCLE_COMPLETE" "ALL_ADS" "$max_attempts" "$max_attempts" "CAPACITY_EXHAUSTED"
                     log_info "All ADs exhausted - will retry on next schedule"
                     return 0  # Not a failure, just capacity issue across all ADs
                 fi
@@ -241,19 +337,37 @@ launch_instance() {
                     return 0
                 fi
                 ;;
+            "INTERNAL_ERROR"|"NETWORK")
+                # Transient errors - try next AD or treat as capacity issue
+                if [[ $((ad_index + 1)) -lt $max_attempts ]]; then
+                    log_info "Retrying with next availability domain after transient error..."
+                    continue
+                else
+                    # All ADs attempted with transient errors - treat as temporary capacity issue
+                    # The GitHub Actions scheduler will retry the entire workflow
+                    log_info "All ADs exhausted with transient errors - will retry on next schedule"
+                    return 0
+                fi
+                ;;
             "SUCCESS"|"DUPLICATE")
                 return 0  # Not a failure
                 ;;
+            "AUTH"|"CONFIG")
+                # Configuration errors - immediate failure with notification
+                return 1
+                ;;
             *)
-                # Real error - propagate failure
+                # Unknown errors - propagate failure but don't send duplicate notifications
                 return 1
                 ;;
         esac
         
         # Add delay between AD attempts if configured
         if [[ $wait_time -gt 0 && $((ad_index + 1)) -lt $max_attempts ]]; then
-            log_info "Waiting ${wait_time}s before trying next AD..."
-            sleep "$wait_time"
+            if ! interruptible_sleep "$wait_time" "Waiting before trying next AD"; then
+                log_info "Sleep interrupted - exiting gracefully"
+                return 130  # Signal interrupted
+            fi
         fi
         
         ((ad_index++))
@@ -264,6 +378,27 @@ launch_instance() {
     return 0
 }
 
+# Handle and classify errors from instance launch attempts in multi-AD scenario
+#
+# This function analyzes OCI CLI error output and determines appropriate response
+# strategy for different error types. It classifies errors into categories that
+# guide retry logic and failure handling in the multi-AD cycling system.
+#
+# Parameters:
+#   error_output    Raw error output from OCI CLI command
+#   current_ad      Current availability domain being attempted
+#   attempt         Current attempt number (1-based)
+#   max_attempts    Total number of ADs to attempt
+# Returns:
+#   Error classification: CAPACITY, RATE_LIMIT, LIMIT_EXCEEDED, INTERNAL_ERROR,
+#   NETWORK, DUPLICATE, AUTH, CONFIG, or UNKNOWN
+#
+# Error Classification Strategy:
+# - CAPACITY/RATE_LIMIT/LIMIT_EXCEEDED: Try next AD, not a failure
+# - INTERNAL_ERROR/NETWORK: Transient issues, try next AD
+# - AUTH/CONFIG: Immediate failure with notification  
+# - DUPLICATE: Success (instance already exists)
+# - UNKNOWN: Failure with generic error notification
 handle_launch_error_with_ad() {
     local error_output="$1"
     local current_ad="$2"
@@ -309,9 +444,13 @@ handle_launch_error_with_ad() {
             echo "CONFIG"
             return 0
             ;;
+        "INTERNAL_ERROR")
+            log_warning "Internal/gateway error detected in AD $current_ad - will retry"
+            echo "INTERNAL_ERROR"
+            return 0
+            ;;
         "NETWORK")
-            log_error "Network error detected in AD $current_ad"
-            send_telegram_notification "error" "OCI network error: Check connectivity and network configuration"
+            log_warning "Network error detected in AD $current_ad - will retry"
             echo "NETWORK"
             return 0
             ;;
@@ -326,6 +465,22 @@ handle_launch_error_with_ad() {
     esac
 }
 
+# Verify that an instance was successfully created despite error responses
+#
+# Oracle Cloud sometimes returns error responses (like LimitExceeded) but 
+# successfully creates the instance anyway. This function performs multiple
+# verification attempts to check if an instance with the expected display
+# name exists in RUNNING or PROVISIONING state.
+#
+# Parameters:
+#   comp_id      Compartment OCID where instance should be created
+#   max_checks   Maximum number of verification attempts (default: 3)
+#   check_delay  Delay in seconds between attempts (default: 20)
+# Returns:
+#   0 if instance found, 1 if not found after all attempts
+#
+# This is critical for handling Oracle's inconsistent error reporting where
+# a successful instance creation may be reported as a failure.
 verify_instance_creation() {
     local comp_id="$1"
     local max_checks="${2:-3}"
@@ -358,8 +513,10 @@ verify_instance_creation() {
         fi
         
         if [[ $i -lt $max_checks ]]; then
-            log_info "Instance not found yet, waiting ${check_delay}s before next check..."
-            sleep "$check_delay"
+            if ! interruptible_sleep "$check_delay" "Instance not found yet, waiting before next check"; then
+                log_info "Verification interrupted - exiting gracefully"
+                return 130
+            fi
         fi
     done
     

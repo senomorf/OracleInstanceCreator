@@ -144,6 +144,33 @@ Enable verbose output for troubleshooting:
 gh workflow run free-tier-creation.yml --field verbose_output=true
 ```
 
+## Security & Testing (Updated 2025-08-25)
+
+### Security Features
+- **Credential Protection**: Debug logging automatically redacts sensitive information (OCIDs, SSH keys, private keys)
+- **Safe Debug Mode**: Enables troubleshooting without risk of credential exposure
+- **Configuration Validation**: Comprehensive pre-flight checks prevent common security misconfigurations
+
+### Testing Framework
+```bash
+# Run comprehensive test suite
+./scripts/test-runner.sh
+
+# Individual test components
+./tests/test_utils.sh
+```
+
+**Test Coverage**: 31 automated tests covering:
+- Error classification accuracy
+- Configuration validation
+- Parameter redaction security
+- OCID extraction reliability
+
+### Signal Handling
+- **Graceful Shutdown**: SIGTERM/SIGINT handling for clean termination
+- **Interruptible Operations**: Background processes can be safely interrupted
+- **Resource Cleanup**: Proper cleanup of temporary processes on exit
+
 ## Development
 
 See [CLAUDE.md](CLAUDE.md) for detailed development guidance, technical patterns, and lessons learned.

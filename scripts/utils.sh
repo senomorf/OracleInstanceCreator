@@ -46,23 +46,44 @@ log_debug() {
 }
 
 # Timing functions for performance monitoring
-declare -A TIMER_START_TIMES
+# Note: Using bash 4+ associative arrays if available, otherwise simple variables
+if [[ ${BASH_VERSION%%.*} -ge 4 ]]; then
+    declare -A TIMER_START_TIMES
+else
+    # Fallback for older bash versions - use simple timer variable
+    TIMER_START_TIME=""
+fi
 
 start_timer() {
     local timer_name="$1"
-    TIMER_START_TIMES[$timer_name]=$(date +%s.%N)
+    if [[ ${BASH_VERSION%%.*} -ge 4 ]]; then
+        TIMER_START_TIMES[$timer_name]=$(date +%s.%N)
+    else
+        # Fallback - only support one timer at a time
+        TIMER_START_TIME=$(date +%s.%N)
+    fi
     log_debug "Started timer: $timer_name"
 }
 
 log_elapsed() {
     local timer_name="$1"
-    local start_time="${TIMER_START_TIMES[$timer_name]:-}"
+    local start_time=""
+    
+    if [[ ${BASH_VERSION%%.*} -ge 4 ]]; then
+        start_time="${TIMER_START_TIMES[$timer_name]:-}"
+        if [[ -n "$start_time" ]]; then
+            unset TIMER_START_TIMES[$timer_name]
+        fi
+    else
+        # Fallback - use single timer
+        start_time="$TIMER_START_TIME"
+        TIMER_START_TIME=""
+    fi
     
     if [[ -n "$start_time" ]]; then
         local end_time=$(date +%s.%N)
         local elapsed=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0")
         log_info "Timer '$timer_name' elapsed: ${elapsed}s"
-        unset TIMER_START_TIMES[$timer_name]
     else
         log_warning "Timer '$timer_name' was not started"
     fi
@@ -116,6 +137,67 @@ oci_cmd_data() {
     echo "$output"
 }
 
+# Redact sensitive parameters from command arrays for secure logging
+#
+# This function processes OCI CLI command arguments and masks sensitive
+# information before logging. Essential for debug mode security to prevent
+# credential exposure in logs.
+#
+# Parameters:
+#   cmd   Array of command arguments to process
+# Returns:
+#   Space-separated string with sensitive data redacted
+#
+# Redaction Rules:
+# - OCIDs: Show first and last 4 characters (ocid1234...5678)
+# - SSH keys: Replace with [SSH_KEY_REDACTED]
+# - Private keys: Replace with [PRIVATE_KEY_REDACTED]
+# - Auth parameters: Replace values with [REDACTED]
+#
+# This prevents credential leakage while maintaining debug visibility.
+redact_sensitive_params() {
+    local cmd=("$@")
+    local redacted_cmd=()
+    local i=0
+    
+    while [[ $i -lt ${#cmd[@]} ]]; do
+        local param="${cmd[$i]}"
+        
+        # Check if this is a parameter that might contain sensitive data
+        if [[ "$param" == "--auth" || "$param" == "--private-key" || "$param" == "--key-file" ]]; then
+            redacted_cmd+=("$param")
+            ((i++))
+            if [[ $i -lt ${#cmd[@]} ]]; then
+                redacted_cmd+=("[REDACTED]")
+                ((i++))
+            fi
+        elif [[ "$param" =~ ^ocid1\. ]]; then
+            # Redact OCIDs by showing only first and last 4 characters
+            local ocid_length=${#param}
+            if [[ $ocid_length -gt 8 ]]; then
+                local redacted_ocid="${param:0:4}...${param: -4}"
+                redacted_cmd+=("$redacted_ocid")
+            else
+                redacted_cmd+=("[REDACTED]")
+            fi
+            ((i++))
+        elif [[ "$param" =~ (BEGIN|END).*PRIVATE.*KEY ]]; then
+            # Redact private key content
+            redacted_cmd+=("[PRIVATE_KEY_REDACTED]")
+            ((i++))
+        elif [[ "$param" =~ --metadata.*ssh-authorized-keys || "$param" =~ ssh-rsa || "$param" =~ ssh-ed25519 ]]; then
+            # Redact SSH keys
+            redacted_cmd+=("[SSH_KEY_REDACTED]")
+            ((i++))
+        else
+            redacted_cmd+=("$param")
+            ((i++))
+        fi
+    done
+    
+    echo "${redacted_cmd[*]}"
+}
+
 # OCI CLI command wrapper with debug support (for troubleshooting)
 oci_cmd_debug() {
     local cmd=("$@")
@@ -138,7 +220,10 @@ oci_cmd_debug() {
     oci_args+=("--connection-timeout" "5")
     oci_args+=("--read-timeout" "15")
     
-    log_debug "Executing OCI debug command: oci ${oci_args[*]} ${cmd[*]}"
+    # Create redacted command for secure logging
+    local redacted_cmd_str
+    redacted_cmd_str=$(redact_sensitive_params "${cmd[@]}")
+    log_debug "Executing OCI debug command: oci ${oci_args[*]} $redacted_cmd_str"
     
     set +e
     output=$(oci "${oci_args[@]}" "${cmd[@]}" 2>&1)
@@ -185,22 +270,74 @@ check_oci_cli() {
     log_debug "OCI CLI found: $(which oci)"
 }
 
-# Extract error type from OCI output
+# Check if jq is available for JSON parsing
+has_jq() {
+    command -v jq >/dev/null 2>&1
+}
+
+# Extract OCID from OCI CLI JSON output with fallback to regex
+extract_instance_ocid() {
+    local output="$1"
+    local instance_id=""
+    
+    # Try jq first for robust JSON parsing
+    if has_jq; then
+        log_debug "Using jq for JSON parsing to extract instance OCID"
+        instance_id=$(echo "$output" | jq -r '.data.id // empty' 2>/dev/null)
+        
+        # If jq didn't find the OCID, try alternative JSON paths
+        if [[ -z "$instance_id" ]]; then
+            instance_id=$(echo "$output" | jq -r '.id // .data."instance-id" // empty' 2>/dev/null)
+        fi
+    fi
+    
+    # Fallback to regex if jq is not available or didn't find the OCID
+    if [[ -z "$instance_id" ]]; then
+        log_debug "Using regex fallback to extract instance OCID"
+        instance_id=$(echo "$output" | grep -o 'ocid1\.instance[^"]*' | head -1)
+    fi
+    
+    echo "$instance_id"
+}
+
+# Classify OCI CLI error output into actionable categories
+#
+# Analyzes error messages and patterns to determine appropriate retry strategy.
+# Critical for intelligent multi-AD cycling and failure handling. Patterns are
+# ordered from most specific to most general to prevent misclassification.
+#
+# Parameters:
+#   error_output  Raw error text from OCI CLI
+# Returns:
+#   Error classification string
+#
+# Classifications:
+# - LIMIT_EXCEEDED: Oracle limit errors (special verification needed)
+# - RATE_LIMIT: Too many requests, throttling
+# - CAPACITY: No host capacity, service limits (expected for free tier)
+# - INTERNAL_ERROR: Gateway errors, temporary Oracle issues
+# - DUPLICATE: Instance already exists (success condition)
+# - AUTH: Authentication/authorization failures
+# - CONFIG: Invalid parameters, missing resources
+# - NETWORK: Connectivity, timeout issues  
+# - UNKNOWN: Unrecognized error patterns
+#
+# Pattern ordering is critical - more specific patterns checked first.
 get_error_type() {
     local error_output="$1"
     
-    # Check for capacity-related errors
-    if echo "$error_output" | grep -qi "capacity\|host capacity\|out of capacity\|service limit\|quota exceeded\|resource unavailable\|insufficient capacity"; then
-        log_debug "Detected CAPACITY error pattern in: $error_output"
-        echo "CAPACITY"
+    # Check for limit exceeded errors first (more specific than general service limit)
+    if echo "$error_output" | grep -qi "limitexceeded\|\"code\".*\"LimitExceeded\""; then
+        log_debug "Detected LIMIT_EXCEEDED error pattern in: $error_output"
+        echo "LIMIT_EXCEEDED"
     # Check for rate limiting (treat as capacity issue)
     elif echo "$error_output" | grep -qi "too.*many.*requests\|rate.*limit\|throttle\|429\|TooManyRequests\|\"code\".*\"TooManyRequests\"\|\"status\".*429\|'status':.*429\|'code':.*'TooManyRequests'"; then
         log_debug "Detected RATE_LIMIT error pattern in: $error_output"
         echo "RATE_LIMIT"
-    # Check for limit exceeded errors (special handling needed)
-    elif echo "$error_output" | grep -qi "limitexceeded\|limit.*exceeded\|\"code\".*\"LimitExceeded\""; then
-        log_debug "Detected LIMIT_EXCEEDED error pattern in: $error_output"
-        echo "LIMIT_EXCEEDED"
+    # Check for capacity-related errors (more general patterns)
+    elif echo "$error_output" | grep -qi "capacity\|host capacity\|out of capacity\|service limit\|quota exceeded\|resource unavailable\|insufficient capacity"; then
+        log_debug "Detected CAPACITY error pattern in: $error_output"
+        echo "CAPACITY"
     # Check for internal/gateway errors (retry-able)
     elif echo "$error_output" | grep -qi "internal.*error\|internalerror\|\"code\".*\"InternalError\"\|bad.*gateway\|502\|\"status\".*502"; then
         log_debug "Detected INTERNAL/GATEWAY error pattern in: $error_output"
@@ -306,6 +443,12 @@ validate_boot_volume_size() {
 validate_availability_domain() {
     local ad_list="$1"
     
+    # Check for empty input
+    if [[ -z "$ad_list" ]]; then
+        log_error "Availability domain cannot be empty"
+        return 1
+    fi
+    
     # Use a simple loop to split by comma
     local temp_list="$ad_list"
     
@@ -357,6 +500,14 @@ validate_configuration() {
         "INSTANCE_DISPLAY_NAME:${INSTANCE_DISPLAY_NAME:-}"
         "OCI_SUBNET_ID:${OCI_SUBNET_ID:-}"
         "OS_VERSION:${OS_VERSION:-}"
+        "BOOT_VOLUME_SIZE:${BOOT_VOLUME_SIZE:-}"
+        "RECOVERY_ACTION:${RECOVERY_ACTION:-}"
+        "LEGACY_IMDS_ENDPOINTS:${LEGACY_IMDS_ENDPOINTS:-}"
+        "RETRY_WAIT_TIME:${RETRY_WAIT_TIME:-}"
+        "OCI_IMAGE_ID:${OCI_IMAGE_ID:-}"
+        "OCI_KEY_FINGERPRINT:${OCI_KEY_FINGERPRINT:-}"
+        "TELEGRAM_TOKEN:${TELEGRAM_TOKEN:-}"
+        "TELEGRAM_USER_ID:${TELEGRAM_USER_ID:-}"
     )
     
     for var_def in "${vars_to_check[@]}"; do
@@ -371,6 +522,40 @@ validate_configuration() {
     # Validate boot volume size if set
     if [[ -n "${BOOT_VOLUME_SIZE:-}" ]]; then
         if ! validate_boot_volume_size "$BOOT_VOLUME_SIZE"; then
+            validation_failed=true
+        fi
+    fi
+    
+    # Validate boolean values
+    local boolean_vars=(
+        "LEGACY_IMDS_ENDPOINTS:${LEGACY_IMDS_ENDPOINTS:-}"
+        "DEBUG:${DEBUG:-}"
+        "ENABLE_NOTIFICATIONS:${ENABLE_NOTIFICATIONS:-}"
+        "CHECK_EXISTING_INSTANCE:${CHECK_EXISTING_INSTANCE:-}"
+    )
+    
+    for var_def in "${boolean_vars[@]}"; do
+        IFS=':' read -r var_name var_value <<< "$var_def"
+        if [[ -n "$var_value" ]]; then
+            if [[ "$var_value" != "true" && "$var_value" != "false" ]]; then
+                log_error "Boolean configuration variable $var_name must be 'true' or 'false': $var_value"
+                validation_failed=true
+            fi
+        fi
+    done
+    
+    # Validate numeric values
+    if [[ -n "${RETRY_WAIT_TIME:-}" ]]; then
+        if ! [[ "$RETRY_WAIT_TIME" =~ ^[0-9]+$ ]]; then
+            log_error "RETRY_WAIT_TIME must be a positive integer: $RETRY_WAIT_TIME"
+            validation_failed=true
+        fi
+    fi
+    
+    # Validate recovery action value
+    if [[ -n "${RECOVERY_ACTION:-}" ]]; then
+        if [[ "$RECOVERY_ACTION" != "RESTORE_INSTANCE" && "$RECOVERY_ACTION" != "STOP_INSTANCE" ]]; then
+            log_error "RECOVERY_ACTION must be 'RESTORE_INSTANCE' or 'STOP_INSTANCE': $RECOVERY_ACTION"
             validation_failed=true
         fi
     fi
@@ -408,4 +593,36 @@ validate_configuration() {
     
     log_success "Configuration validation passed"
     return 0
+}
+
+# Performance metrics logging for multi-AD optimization
+log_performance_metric() {
+    local metric_type="$1"
+    local ad_name="$2"
+    local attempt_number="$3"
+    local total_attempts="$4"
+    local additional_info="${5:-}"
+    
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    local metric_line="[$timestamp] $metric_type: AD=$ad_name, Attempt=$attempt_number/$total_attempts"
+    
+    if [[ -n "$additional_info" ]]; then
+        metric_line="$metric_line, Info=$additional_info"
+    fi
+    
+    # Log to both debug output and a performance metrics comment for future analysis
+    log_debug "PERF_METRIC: $metric_line"
+    
+    # In a production environment, these could be sent to monitoring systems
+    case "$metric_type" in
+        "AD_SUCCESS")
+            log_info "Performance: Successful instance creation in $ad_name on attempt $attempt_number"
+            ;;
+        "AD_FAILURE")
+            log_debug "Performance: Failed attempt in $ad_name ($attempt_number/$total_attempts) - $additional_info"
+            ;;
+        "AD_CYCLE_COMPLETE")
+            log_info "Performance: Completed full AD cycle ($total_attempts ADs attempted)"
+            ;;
+    esac
 }
