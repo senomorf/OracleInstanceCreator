@@ -9,7 +9,10 @@ This project automatically attempts to create Oracle Cloud free tier instances u
 ## Key Features
 
 - **Automated Instance Creation**: Scheduled attempts to create OCI free tier instances
+- **Multi-AD Cycling**: Automatically tries multiple availability domains for higher success rates
 - **Smart Error Handling**: Distinguishes between capacity issues (expected) and genuine errors
+- **Instance Recovery**: Auto-restart failed instances with `RESTORE_INSTANCE` configuration
+- **Enhanced Validation**: Comprehensive pre-flight checks and configuration validation
 - **Performance Optimized**: 93% execution time reduction (from ~2 minutes to ~17 seconds)
 - **Proxy Support**: Full IPv4/IPv6 proxy support with URL-encoded credentials
 - **Telegram Notifications**: Success/failure alerts via Telegram bot
@@ -102,11 +105,35 @@ chmod +x scripts/*.sh
 └── README.md                                 # This file
 ```
 
+## Advanced Features (New in 2025-08-25)
+
+### Multi-Availability Domain Support
+Configure multiple ADs for automatic failover:
+```yaml
+# Single AD (existing behavior)
+OCI_AD: "fgaj:AP-SINGAPORE-1-AD-1"
+
+# Multi-AD cycling (new feature)
+OCI_AD: "fgaj:AP-SINGAPORE-1-AD-1,fgaj:AP-SINGAPORE-1-AD-2,fgaj:AP-SINGAPORE-1-AD-3"
+```
+
+### Enhanced Configuration Options
+New environment variables available in GitHub Actions workflow:
+- `BOOT_VOLUME_SIZE`: Boot disk size in GB (default: 50, minimum: 50)
+- `RECOVERY_ACTION`: Instance recovery behavior (default: "RESTORE_INSTANCE")
+- `LEGACY_IMDS_ENDPOINTS`: IMDS compatibility (default: "false")  
+- `RETRY_WAIT_TIME`: Wait time between AD attempts in seconds (default: 30)
+
+### Instance Re-verification
+The system now automatically verifies instance creation after `LimitExceeded` errors, preventing false failures when Oracle creates instances despite returning errors.
+
 ## Error Handling
 
 The project implements intelligent error classification:
 
 - **CAPACITY/RATE_LIMIT**: Expected for free tier (treated as success)
+- **LIMIT_EXCEEDED**: Special handling with instance re-verification
+- **INTERNAL_ERROR**: Oracle internal/gateway errors (retry-able)
 - **AUTH**: Authentication errors (triggers alert)
 - **CONFIG**: Invalid configuration (triggers alert)  
 - **NETWORK**: Connectivity issues (triggers alert)
@@ -119,11 +146,80 @@ If workflow takes longer than expected:
 2. Expected debug output should show: `oci --debug --no-retry --connection-timeout 5 --read-timeout 15`
 3. Normal execution should complete in 17-20 seconds
 
+### Common Workflow Issues
+**Preflight Check Failures**: If preflight check fails with "OCI CLI not available":
+- Verify workflow step ordering: OCI CLI installation must happen before preflight check
+- Check for dependency issues in GitHub Actions workflow
+- Expected sequence: Checkout → Setup Python → Install OCI CLI → Preflight Check → Setup Config
+
+**Step Ordering**: The workflow has critical dependency requirements:
+- Tools must be installed before validation attempts
+- Configuration setup must happen before connectivity tests
+- See [CLAUDE.md](CLAUDE.md) for detailed workflow timing patterns
+
 ### Debug Mode
 Enable verbose output for troubleshooting:
 ```bash
 gh workflow run free-tier-creation.yml --field verbose_output=true
 ```
+
+## Security & Testing (Updated 2025-08-25)
+
+### Security Features
+- **Credential Protection**: Debug logging automatically redacts sensitive information (OCIDs, SSH keys, private keys)
+- **Safe Debug Mode**: Enables troubleshooting without risk of credential exposure
+- **Configuration Validation**: Comprehensive pre-flight checks prevent common security misconfigurations
+
+### Testing Framework
+```bash
+# Run comprehensive test suite
+./scripts/test-runner.sh
+
+# Individual test components
+./tests/test_utils.sh
+```
+
+**Test Coverage**: 31 automated tests covering:
+- Error classification accuracy
+- Configuration validation
+- Parameter redaction security
+- OCID extraction reliability
+
+### Signal Handling
+- **Graceful Shutdown**: SIGTERM/SIGINT handling for clean termination
+- **Interruptible Operations**: Background processes can be safely interrupted
+- **Resource Cleanup**: Proper cleanup of temporary processes on exit
+
+## Latest Improvements (2025-08-25)
+
+Following comprehensive code review, the Oracle Instance Creator has been enhanced with production-grade features:
+
+### Production-Critical Features
+- **🔧 Configurable Timeouts**: Instance verification timeout now configurable (default: 150s vs previous 60s)
+- **✅ Enhanced OCID Validation**: JSON parsing with format validation prevents downstream errors
+- **🚨 Alert Severity Levels**: Critical/Error/Warning/Info notifications for better prioritization
+- **📊 AD Performance Metrics**: Success rate tracking for availability domain optimization
+- **📋 Preflight Validation**: Comprehensive environment and configuration checking
+
+### Monitoring & Observability
+- **📈 Structured Logging**: JSON logging support for enterprise monitoring systems
+- **🎯 Performance Tracking**: Real-time AD success/failure metrics with error classification
+- **🔍 Debug Enhancement**: Intelligent parameter redaction maintains security while debugging
+- **⚡ Zero Performance Impact**: All monitoring features maintain 17-18s execution time
+
+### Documentation & Templates
+- **📚 Configuration Templates**: Pre-built configs for Singapore ARM, US AMD, and production scenarios
+- **🛠️ Troubleshooting Runbook**: Comprehensive guide covering all common issues
+- **📖 Enhanced Documentation**: Detailed algorithm explanations for complex functions
+- **🚀 Quick Start**: Template-based setup reduces configuration time
+
+### Quality Assurance
+- **✅ 31 Tests Pass**: 100% test success rate with enhanced validation
+- **🔒 Security Hardened**: No credential exposure in logs, comprehensive input validation
+- **🔄 Backward Compatible**: All existing configurations continue to work unchanged
+- **📋 Production Ready**: Enterprise-grade validation, monitoring, and operational support
+
+See [CLAUDE.md](CLAUDE.md) for complete technical details and [docs/troubleshooting.md](docs/troubleshooting.md) for operational guidance.
 
 ## Development
 

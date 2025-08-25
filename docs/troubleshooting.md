@@ -1,0 +1,398 @@
+# Oracle Instance Creator - Troubleshooting Guide
+
+This comprehensive runbook helps diagnose and resolve common issues with the Oracle Instance Creator.
+
+## Quick Diagnostic Checklist
+
+Before diving into specific issues, run through this checklist:
+
+1. **Run Preflight Check**: `./scripts/preflight-check.sh`
+2. **Check Recent Logs**: Look for error patterns in GitHub Actions logs
+3. **Verify Timing**: Check if execution time is within expected range (17-20 seconds)
+4. **Review Notifications**: Check Telegram for error details
+
+## Common Issues and Solutions
+
+### 🔐 Authentication & Configuration Issues
+
+#### Problem: "Invalid credentials" or "Authentication failed"
+**Symptoms:**
+- Preflight check fails on OCI connectivity test
+- Error messages containing "401 Unauthorized"
+- Critical Telegram notifications about authentication
+
+**Diagnosis:**
+```bash
+# Test OCI authentication manually
+oci iam user get --user-id $OCI_USER_OCID
+```
+
+**Solutions:**
+1. **Verify GitHub Secrets**:
+   - `OCI_USER_OCID`: Must be your user's OCID, not tenancy OCID
+   - `OCI_TENANCY_OCID`: Your tenancy OCID from OCI console
+   - `OCI_KEY_FINGERPRINT`: Must match your API key fingerprint exactly
+   - `OCI_PRIVATE_KEY`: Complete private key including header/footer
+
+2. **Check API Key Status**:
+   - Ensure API key is active in OCI Console → User Settings → API Keys
+   - Verify key hasn't expired
+   - Check if user has required permissions
+
+3. **Regional Settings**:
+   - Ensure `OCI_REGION` matches where your resources are located
+   - Some resources might be region-specific
+
+#### Problem: "Invalid OCID format"
+**Symptoms:**
+- Preflight check fails on OCID validation
+- Error messages about malformed OCIDs
+- Configuration errors in Telegram notifications
+
+**Solutions:**
+1. **Verify OCID Format**:
+   ```bash
+   # Valid OCID format: ocid1.<resource-type>.<realm>.<region>.<unique-id>
+   # Example: ocid1.user.oc1..aaaaaaaaexample123456789
+   ```
+
+2. **Common OCID Issues**:
+   - Extra spaces or newlines in GitHub secrets
+   - Mixing up user OCID with tenancy OCID
+   - Using resource names instead of OCIDs
+   - Copying OCIDs from wrong regions
+
+3. **Find Correct OCIDs**:
+   ```bash
+   # Get your user OCID
+   oci iam user list --name "your-username"
+   
+   # Get compartment OCIDs
+   oci iam compartment list --compartment-id-in-subtree true
+   
+   # Get subnet OCIDs
+   oci network subnet list --compartment-id <compartment-ocid>
+   ```
+
+### 🚀 Instance Launch Issues
+
+#### Problem: "Out of host capacity" (Most Common)
+**Symptoms:**
+- Workflow completes successfully (this is expected!)
+- No instance created
+- Log messages about trying different ADs
+- CAPACITY error classification
+
+**Understanding:**
+This is **NOT a failure** - it's Oracle's normal response when free tier capacity is unavailable.
+
+**Solutions:**
+1. **Multi-AD Configuration** (Recommended):
+   ```yaml
+   OCI_AD: "AD-1,AD-2,AD-3"  # Try multiple domains
+   ```
+
+2. **Try Different Regions**:
+   - Singapore: Often good availability
+   - US regions: Can be busier
+   - European regions: Mixed availability
+
+3. **Peak Time Avoidance**:
+   - Avoid business hours in target region
+   - Try early morning or late evening UTC
+   - Weekends sometimes have better availability
+
+4. **ARM vs AMD Strategy**:
+   ```yaml
+   # ARM instances often more available
+   OCI_SHAPE: "VM.Standard.A1.Flex"
+   OCI_OCPUS: "4"
+   OCI_MEMORY_IN_GBS: "24"
+   
+   # AMD instances - limited but sometimes available
+   OCI_SHAPE: "VM.Standard.E2.1.Micro"
+   # No OCPUS/MEMORY needed for fixed shapes
+   ```
+
+#### Problem: "Service limit exceeded" or "LimitExceeded"
+**Symptoms:**
+- Error about exceeding service limits
+- May succeed despite error (verification system handles this)
+
+**Solutions:**
+1. **Check Existing Resources**:
+   ```bash
+   # Check current instances
+   oci compute instance list --compartment-id <compartment-ocid>
+   
+   # Check resource limits
+   oci limits resource-availability get --compartment-id <compartment-ocid>
+   ```
+
+2. **Free Tier Limits**:
+   - ARM: 1 instance, 4 OCPUs total, 24 GB RAM total
+   - AMD: 2 instances, 1 OCPU each, 1 GB RAM each
+   - Block Storage: 200 GB total
+
+3. **Clean Up Resources**:
+   - Terminate unused instances
+   - Delete unused boot volumes
+   - Check compute instance pools
+
+#### Problem: "Shape not supported in availability domain"
+**Symptoms:**
+- Specific error about shape availability
+- Different ADs work with same shape
+
+**Solutions:**
+1. **Check Shape Availability**:
+   ```bash
+   oci compute shape list --compartment-id <compartment-ocid> --availability-domain <ad-name>
+   ```
+
+2. **Use Multi-AD Configuration**:
+   - Different shapes available in different ADs
+   - Multi-AD cycling finds compatible AD automatically
+
+3. **Alternative Shapes**:
+   ```yaml
+   # If A1.Flex unavailable, try:
+   OCI_SHAPE: "VM.Standard.E2.1.Micro"
+   
+   # For paid accounts:
+   OCI_SHAPE: "VM.Standard3.Flex"
+   ```
+
+### ⚡ Performance Issues
+
+#### Problem: Workflow takes too long (>30 seconds)
+**Symptoms:**
+- Execution time over 30 seconds
+- Timeouts in logs
+- Performance degradation from baseline
+
+**Diagnosis:**
+Check for these performance indicators in logs:
+```
+# Good performance (17-18 seconds):
+[INFO] Instance launch completed in 17.234 seconds
+
+# Poor performance (>30 seconds indicates issues):
+[INFO] Instance launch completed in 67.891 seconds
+```
+
+**Solutions:**
+1. **Verify OCI CLI Optimizations**:
+   ```bash
+   # Look for these flags in logs:
+   --no-retry --connection-timeout 5 --read-timeout 15
+   ```
+
+2. **Network Issues**:
+   - Check GitHub Actions service status
+   - Verify OCI service health in your region
+   - Consider different retry timing
+
+3. **Missing Optimizations**:
+   - Ensure latest version with performance flags
+   - Check if exponential backoff was re-enabled accidentally
+
+#### Problem: Instance verification timeouts
+**Symptoms:**
+- "Instance verification failed after X checks"
+- Instance exists but wasn't detected
+- Longer provisioning times
+
+**Solutions:**
+1. **Increase Timeout**:
+   ```yaml
+   INSTANCE_VERIFY_MAX_CHECKS: "10"  # More attempts
+   INSTANCE_VERIFY_DELAY: "45"       # Longer delays
+   ```
+
+2. **Check Instance State**:
+   ```bash
+   # Manual verification
+   oci compute instance list --compartment-id <compartment-ocid> --display-name <instance-name>
+   ```
+
+3. **Regional Variations**:
+   - Some regions provision slower
+   - Larger instances take more time
+   - Network connectivity affects timing
+
+### 📱 Telegram Notification Issues
+
+#### Problem: No Telegram notifications received
+**Symptoms:**
+- No messages from bot
+- Preflight check passes but no notifications during workflow
+
+**Solutions:**
+1. **Verify Bot Configuration**:
+   ```bash
+   # Test bot token
+   curl -s "https://api.telegram.org/bot<token>/getMe"
+   
+   # Get your user ID
+   curl -s "https://api.telegram.org/bot<token>/getUpdates"
+   ```
+
+2. **Common Issues**:
+   - Bot not started (send `/start` to bot)
+   - Wrong user ID (use numeric ID, not username)
+   - Bot blocked or deleted
+   - Token typos in GitHub secrets
+
+3. **Test Notifications**:
+   ```bash
+   # Manual test
+   ./scripts/notify.sh test
+   ```
+
+#### Problem: Wrong notification severity levels
+**Symptoms:**
+- All notifications show as same priority
+- Missing critical alerts
+- Too many low-priority notifications
+
+**Solutions:**
+1. **Review Severity Mapping**:
+   - 🚨 Critical: Authentication, configuration failures
+   - ❌ Error: Launch failures, system errors  
+   - ⚠️ Warning: Capacity issues, rate limits
+   - ℹ️ Info: Status updates, successes
+   - ✅ Success: Instance creation, completion
+
+2. **Adjust Notification Settings**:
+   - Use different bots for different severities
+   - Configure notification rules based on emojis
+   - Set up Telegram notification groups
+
+### 🔍 Debug Mode and Logging
+
+#### Enabling Debug Mode
+For detailed troubleshooting, enable debug logging:
+
+```yaml
+# In GitHub Actions workflow
+DEBUG: "true"
+LOG_FORMAT: "json"  # For structured logs
+```
+
+#### Reading Debug Output
+```bash
+# Key debug patterns to look for:
+[DEBUG] Executing OCI debug command: oci --no-retry...
+[DEBUG] Using jq for JSON parsing to extract instance OCID
+[DEBUG] Successfully extracted and validated instance OCID
+```
+
+#### Log Analysis Tips
+1. **Timing Analysis**:
+   ```
+   Good: [INFO] Instance launch completed in 17.234 seconds
+   Poor: [INFO] Instance launch completed in 67.891 seconds
+   ```
+
+2. **Error Pattern Recognition**:
+   ```
+   CAPACITY: Expected, will retry on schedule
+   AUTH: Critical, needs immediate attention
+   CONFIG: Critical, check configuration
+   ```
+
+3. **AD Success Tracking**:
+   ```
+   [INFO] AD-1: 100% success (2/2 attempts)
+   [INFO] AD-2: 0% success (0/3 attempts)
+   ```
+
+## Advanced Troubleshooting
+
+### Network Connectivity Issues
+```bash
+# Test OCI connectivity
+curl -I https://identity.ap-singapore-1.oraclecloud.com/
+
+# Test GitHub Actions connectivity
+# (This runs automatically in workflow)
+```
+
+### Resource Limit Analysis
+```bash
+# Check all limits
+oci limits resource-availability get --compartment-id <compartment-ocid> --service-name compute
+
+# Specific limit for free tier
+oci limits value list --compartment-id <compartment-ocid> --service-name compute | grep -i "standard-a1-core-count"
+```
+
+### Image Compatibility Issues
+```bash
+# List compatible images for your shape
+oci compute image list --compartment-id <tenancy-ocid> --operating-system "Oracle Linux" --shape <shape-name>
+
+# Check image availability in specific AD
+oci compute image list --compartment-id <tenancy-ocid> --operating-system "Oracle Linux" --sort-by TIMECREATED --sort-order DESC
+```
+
+## Performance Monitoring
+
+### Expected Metrics
+- **Total Execution Time**: 17-20 seconds
+- **OCI CLI Operations**: <2 seconds each
+- **Instance Verification**: <60 seconds total
+- **Multi-AD Cycling**: <30 seconds per AD
+
+### Warning Thresholds
+- **Execution Time >30 seconds**: Check network/config
+- **Verification >120 seconds**: Increase timeout
+- **Multiple AUTH failures**: Check credentials immediately
+
+## Getting Help
+
+### Log Collection
+When requesting help, include:
+1. **Preflight check output**
+2. **GitHub Actions logs** (last 50 lines)
+3. **Configuration template used**
+4. **Telegram notification screenshots**
+5. **Timing information from logs**
+
+### Common Log Locations
+- GitHub Actions: Repository → Actions → Workflow run
+- Local testing: Terminal output with `DEBUG=true`
+- Telegram: Bot messages with severity indicators
+
+### Support Channels
+1. **GitHub Issues**: For bugs and feature requests
+2. **Configuration Help**: Use preflight check first
+3. **Performance Issues**: Include timing logs
+4. **Authentication Problems**: Never share private keys!
+
+## Prevention
+
+### Best Practices
+1. **Always run preflight check** before deployment
+2. **Use multi-AD configuration** for better success rates
+3. **Monitor execution times** for performance regression
+4. **Test configuration changes** in non-production first
+5. **Keep image caches updated** periodically
+
+### Regular Maintenance
+- Update cached image OCIDs monthly
+- Review AD success metrics weekly  
+- Test Telegram notifications monthly
+- Check for new Oracle regions/shapes quarterly
+
+### Security Checklist
+- ✅ No private keys in logs
+- ✅ OCIDs properly redacted in debug output
+- ✅ GitHub secrets configured correctly
+- ✅ API key rotation schedule in place
+- ✅ Telegram bot security configured
+
+---
+
+*This troubleshooting guide is comprehensive but if you encounter new issues, please update this document and share with the community.*

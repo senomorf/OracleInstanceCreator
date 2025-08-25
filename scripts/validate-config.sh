@@ -55,6 +55,22 @@ validate_instance_configuration() {
     export OS_VERSION="${OS_VERSION:-9}"
     export ASSIGN_PUBLIC_IP="${ASSIGN_PUBLIC_IP:-false}"
     
+    # New configuration options with defaults
+    export BOOT_VOLUME_SIZE="${BOOT_VOLUME_SIZE:-50}"
+    export RECOVERY_ACTION="${RECOVERY_ACTION:-RESTORE_INSTANCE}"
+    export LEGACY_IMDS_ENDPOINTS="${LEGACY_IMDS_ENDPOINTS:-false}"
+    export RETRY_WAIT_TIME="${RETRY_WAIT_TIME:-30}"
+    
+    # Validate availability domain format (supports comma-separated list)
+    if ! validate_availability_domain "$OCI_AD"; then
+        die "Availability domain validation failed"
+    fi
+    
+    # Validate boot volume size
+    if ! validate_boot_volume_size "$BOOT_VOLUME_SIZE"; then
+        die "Boot volume size validation failed"
+    fi
+    
     # Flexible shape configuration
     if [[ "$OCI_SHAPE" == *"Flex" ]]; then
         export OCI_OCPUS="${OCI_OCPUS:-4}"
@@ -75,6 +91,20 @@ validate_instance_configuration() {
     # Validate boolean values
     if [[ "$ASSIGN_PUBLIC_IP" != "true" && "$ASSIGN_PUBLIC_IP" != "false" ]]; then
         die "ASSIGN_PUBLIC_IP must be 'true' or 'false', got: $ASSIGN_PUBLIC_IP"
+    fi
+    
+    if [[ "$LEGACY_IMDS_ENDPOINTS" != "true" && "$LEGACY_IMDS_ENDPOINTS" != "false" ]]; then
+        die "LEGACY_IMDS_ENDPOINTS must be 'true' or 'false', got: $LEGACY_IMDS_ENDPOINTS"
+    fi
+    
+    # Validate retry wait time
+    if ! [[ "$RETRY_WAIT_TIME" =~ ^[0-9]+$ ]] || [[ "$RETRY_WAIT_TIME" -lt 0 ]]; then
+        die "RETRY_WAIT_TIME must be a non-negative integer, got: $RETRY_WAIT_TIME"
+    fi
+    
+    # Validate recovery action
+    if [[ "$RECOVERY_ACTION" != "RESTORE_INSTANCE" && "$RECOVERY_ACTION" != "STOP_INSTANCE" ]]; then
+        die "RECOVERY_ACTION must be 'RESTORE_INSTANCE' or 'STOP_INSTANCE', got: $RECOVERY_ACTION"
     fi
     
     log_success "Instance configuration validation passed"
@@ -120,7 +150,7 @@ validate_proxy_configuration() {
 print_configuration_summary() {
     log_info "Configuration Summary:"
     echo "  Region: $OCI_REGION"
-    echo "  Availability Domain: $OCI_AD"
+    echo "  Availability Domain(s): $OCI_AD"
     echo "  Shape: $OCI_SHAPE"
     if [[ "$OCI_SHAPE" == *"Flex" ]]; then
         echo "  OCPUs: $OCI_OCPUS"
@@ -129,12 +159,21 @@ print_configuration_summary() {
     echo "  Instance Name: $INSTANCE_DISPLAY_NAME"
     echo "  Operating System: $OPERATING_SYSTEM $OS_VERSION"
     echo "  Public IP: $ASSIGN_PUBLIC_IP"
+    echo "  Boot Volume Size: ${BOOT_VOLUME_SIZE}GB"
+    echo "  Recovery Action: $RECOVERY_ACTION"
+    echo "  Legacy IMDS Endpoints: $LEGACY_IMDS_ENDPOINTS"
+    echo "  Retry Wait Time: ${RETRY_WAIT_TIME}s"
     echo "  Compartment: ${OCI_COMPARTMENT_ID:-$OCI_TENANCY_OCID (tenancy)}"
 }
 
 # Main validation function
 validate_all_configuration() {
     log_info "Starting configuration validation..."
+    
+    # Run comprehensive validation first (includes space checking and OCID validation)
+    if ! validate_configuration; then
+        die "Comprehensive configuration validation failed"
+    fi
     
     validate_oci_configuration
     validate_instance_configuration
