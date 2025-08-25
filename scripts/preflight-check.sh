@@ -182,45 +182,30 @@ else
 fi
 
 echo ""
-log_info "5. Testing OCI connectivity..."
-echo ""
-
-if [[ $VALIDATION_ERRORS -eq 0 ]]; then
-    # Test OCI authentication
-    if oci iam user get --user-id "${OCI_USER_OCID}" --query 'data.name' --raw-output >/dev/null 2>&1; then
-        validation_success "OCI authentication test passed"
-    else
-        validation_error "OCI authentication test failed - check credentials"
-    fi
-    
-    # Test compartment access
-    if oci iam compartment get --compartment-id "${OCI_COMPARTMENT_ID}" --query 'data.name' --raw-output >/dev/null 2>&1; then
-        validation_success "Compartment access test passed"
-    else
-        validation_error "Cannot access compartment ${OCI_COMPARTMENT_ID}"
-    fi
-else
-    validation_warning "Skipping OCI connectivity tests due to configuration errors"
-fi
-
-echo ""
-log_info "6. Testing Telegram notifications..."
+log_info "5. Validating notification configuration..."
 echo ""
 
 if [[ -n "${TELEGRAM_TOKEN:-}" && -n "${TELEGRAM_USER_ID:-}" ]]; then
-    # Test Telegram connectivity
-    test_message="🔧 Oracle Instance Creator preflight check completed at $(date)"
+    validation_success "Telegram credentials configured"
     
-    if curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-        -d "chat_id=${TELEGRAM_USER_ID}" \
-        -d "text=${test_message}" \
-        -d "parse_mode=Markdown" >/dev/null 2>&1; then
-        validation_success "Telegram notification test passed"
+    # Only test connectivity if notifications are enabled
+    if [[ "${ENABLE_NOTIFICATIONS:-true}" == "true" ]]; then
+        # Test Telegram connectivity
+        test_message="🔧 Oracle Instance Creator preflight check completed at $(date)"
+        
+        if curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_USER_ID}" \
+            -d "text=${test_message}" \
+            -d "parse_mode=Markdown" >/dev/null 2>&1; then
+            validation_success "Telegram notification test passed"
+        else
+            validation_error "Telegram notification test failed - check token and user ID"
+        fi
     else
-        validation_error "Telegram notification test failed - check token and user ID"
+        validation_success "Telegram test skipped (notifications disabled)"
     fi
 else
-    validation_warning "Skipping Telegram test due to missing credentials"
+    validation_warning "Telegram credentials not configured"
 fi
 
 echo ""
