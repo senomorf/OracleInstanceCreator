@@ -80,7 +80,7 @@ check_required_var "OCI_REGION" "OCI Region"
 check_required_var "OCI_PRIVATE_KEY" "OCI Private Key"
 
 # Instance Configuration
-check_required_var "OCI_COMPARTMENT_ID" "OCI Compartment ID"
+# OCI_COMPARTMENT_ID is optional - falls back to tenancy if not specified
 check_required_var "OCI_SUBNET_ID" "OCI Subnet ID"
 check_required_var "INSTANCE_SSH_PUBLIC_KEY" "SSH Public Key"
 
@@ -95,7 +95,10 @@ echo ""
 # Validate OCID formats
 validate_ocid_var "OCI_USER_OCID" "User OCID"
 validate_ocid_var "OCI_TENANCY_OCID" "Tenancy OCID"
-validate_ocid_var "OCI_COMPARTMENT_ID" "Compartment OCID"
+# Validate compartment OCID if provided (falls back to tenancy if not)
+if [[ -n "${OCI_COMPARTMENT_ID:-}" ]]; then
+    validate_ocid_var "OCI_COMPARTMENT_ID" "Compartment OCID"
+fi
 validate_ocid_var "OCI_SUBNET_ID" "Subnet OCID"
 
 # Validate image OCID if provided

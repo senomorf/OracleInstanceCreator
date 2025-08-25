@@ -296,6 +296,8 @@ launch_instance() {
     local ad_index=0
     local max_attempts=${#ad_list[@]}
     local wait_time="${RETRY_WAIT_TIME:-30}"
+    local transient_retry_max="${TRANSIENT_ERROR_MAX_RETRIES:-3}"
+    local transient_retry_delay="${TRANSIENT_ERROR_RETRY_DELAY:-15}"
     
     while [[ $ad_index -lt $max_attempts ]]; do
         # Check for interruption signal
@@ -389,19 +391,97 @@ launch_instance() {
                 fi
                 ;;
             "INTERNAL_ERROR"|"NETWORK")
-                # Record the failure
-                record_ad_result "$current_ad" "failure" "$error_type"
+                # Transient errors - retry on same AD before moving to next
+                local retry_count=0
+                local should_retry_same_ad=true
                 
-                # Transient errors - try next AD or treat as capacity issue
-                if [[ $((ad_index + 1)) -lt $max_attempts ]]; then
-                    log_info "Retrying with next availability domain after transient error..."
-                    ((ad_index++))
-                    continue
+                while [[ $should_retry_same_ad == true && $retry_count -lt $transient_retry_max ]]; do
+                    ((retry_count++))
+                    log_info "Transient $error_type error - retrying same AD attempt $retry_count/$transient_retry_max..."
+                    
+                    # Wait before retry
+                    if ! interruptible_sleep "$transient_retry_delay" "Waiting before retry on same AD"; then
+                        log_info "Sleep interrupted - exiting gracefully"
+                        return 130  # Signal interrupted
+                    fi
+                    
+                    # Retry the same launch command
+                    set +e
+                    output=$(oci_cmd "${launch_args[@]}")
+                    status=$?
+                    set -e
+                    
+                    if [[ $status -eq 0 ]]; then
+                        # Success on retry! Extract instance OCID
+                        local instance_id
+                        instance_id=$(extract_instance_ocid "$output")
+                        
+                        if [[ -z "$instance_id" ]]; then
+                            log_error "Could not extract instance OCID from retry output"
+                            log_debug "Raw retry output for debugging: $output"
+                            return 1
+                        fi
+                        
+                        local context="{\"availability_domain\":\"$current_ad\",\"instance_ocid\":\"$instance_id\",\"retry_attempt\":$retry_count,\"total_retries\":$transient_retry_max}"
+                        log_with_context "success" "Instance launched successfully after retry" "$context"
+                        
+                        # Track successful AD for performance metrics
+                        log_performance_metric "AD_SUCCESS_RETRY" "$current_ad" "$retry_count" "$transient_retry_max"
+                        record_ad_result "$current_ad" "success" "RETRY_$retry_count"
+                        
+                        send_telegram_notification "success" "OCI instance created in $current_ad after $retry_count retries: ${INSTANCE_DISPLAY_NAME} (OCID: ${instance_id})"
+                        
+                        return 0
+                    fi
+                    
+                    # Check the error type again
+                    local retry_error_type
+                    retry_error_type=$(handle_launch_error_with_ad "$output" "$current_ad" $retry_count $transient_retry_max)
+                    
+                    # If it's no longer a transient error, stop retrying same AD
+                    if [[ "$retry_error_type" != "INTERNAL_ERROR" && "$retry_error_type" != "NETWORK" ]]; then
+                        log_info "Error type changed from $error_type to $retry_error_type - stopping same-AD retries"
+                        should_retry_same_ad=false
+                        # Set the new error type for downstream processing
+                        error_type="$retry_error_type"
+                        break
+                    fi
+                done
+                
+                # Record the final failure after all retries
+                record_ad_result "$current_ad" "failure" "${error_type}_RETRIES_${retry_count}"
+                
+                # If we still have a transient error after retries, try next AD
+                if [[ "$error_type" == "INTERNAL_ERROR" || "$error_type" == "NETWORK" ]]; then
+                    if [[ $((ad_index + 1)) -lt $max_attempts ]]; then
+                        log_info "All retries exhausted for $current_ad - trying next availability domain..."
+                        ((ad_index++))
+                        continue
+                    else
+                        # All ADs attempted with transient errors - treat as temporary capacity issue
+                        log_info "All ADs and retries exhausted with transient errors - will retry on next schedule"
+                        return 0
+                    fi
                 else
-                    # All ADs attempted with transient errors - treat as temporary capacity issue
-                    # The GitHub Actions scheduler will retry the entire workflow
-                    log_info "All ADs exhausted with transient errors - will retry on next schedule"
-                    return 0
+                    # Error type changed to something else during retries - handle it
+                    case "$error_type" in
+                        "CAPACITY"|"RATE_LIMIT")
+                            if [[ $((ad_index + 1)) -lt $max_attempts ]]; then
+                                log_info "Trying next availability domain after capacity error during retry..."
+                                ((ad_index++))
+                                continue
+                            else
+                                log_info "All ADs exhausted - will retry on next schedule"
+                                return 0
+                            fi
+                            ;;
+                        "AUTH"|"CONFIG")
+                            return 1  # Configuration errors - immediate failure
+                            ;;
+                        *)
+                            return 1  # Unknown errors - propagate failure
+                            ;;
+                    esac
                 fi
                 ;;
             "SUCCESS"|"DUPLICATE")

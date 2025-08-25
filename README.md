@@ -12,7 +12,7 @@ This project automatically attempts to create **BOTH** Oracle Cloud free tier in
 - **Multi-AD Cycling**: Each shape can cycle through multiple availability domains for higher success rates
 - **GitHub Actions Billing Optimized**: Single job execution keeps billing at 1 minute per run
 - **Maximum Resource Utilization**: Creates both free tier instances when capacity allows
-- **Smart Error Handling**: Distinguishes between capacity issues (expected) and genuine errors
+- **Smart Error Handling**: Distinguishes between capacity issues (expected) and genuine errors with transient error retry
 - **Instance Recovery**: Auto-restart failed instances with `RESTORE_INSTANCE` configuration
 - **Enhanced Validation**: Comprehensive pre-flight checks and configuration validation
 - **Performance Optimized**: ~20-25 seconds execution time for both shapes in parallel (93% improvement)

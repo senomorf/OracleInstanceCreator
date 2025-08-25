@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Oracle Cloud Infrastructure (OCI) automation for **parallel free tier instance creation**. Simultaneously attempts both ARM (A1.Flex) and AMD (E2.1.Micro) shapes using GitHub Actions with billing optimization.
+Oracle Cloud Infrastructure (OCI) automation for **parallel free tier instance creation**. Simultaneously attempts both ARM (A1.Flex) and AMD (E2.1.Micro) shapes using GitHub Actions with billing optimization and transient error retry.
 
 ## Architecture
 
@@ -9,18 +9,20 @@ Oracle Cloud Infrastructure (OCI) automation for **parallel free tier instance c
 ├── .github/workflows/free-tier-creation.yml  # Single-job parallel execution
 ├── scripts/
 │   ├── launch-parallel.sh                    # Orchestrates both shapes
-│   ├── launch-instance.sh                    # Shape-agnostic creation logic
+│   ├── launch-instance.sh                    # Shape-agnostic creation logic + transient retry
 │   ├── utils.sh                              # Common functions + proxy support
 │   ├── setup-oci.sh                          # OCI CLI + proxy configuration
 │   ├── validate-config.sh                    # Configuration validation
 │   └── notify.sh                             # Telegram notifications
-└── tests/test_proxy.sh                       # Proxy validation (15 tests)
+├── tests/
+│   └── test_proxy.sh                         # Proxy validation (15 tests)
+└── config/                                   # Configuration files
 ```
 
 **Parallel Execution Flow:**
 1. `launch-parallel.sh` launches both shapes as background processes (`&`)
 2. Each calls `launch-instance.sh` with shape-specific environment variables
-3. Multi-AD cycling per shape with independent error handling
+3. Multi-AD cycling per shape with transient error retry (3 attempts per AD)
 4. 55-second timeout protection prevents 2-minute GitHub Actions billing
 
 ## Configuration
@@ -59,10 +61,17 @@ OCI_PROXY_URL: username:password@proxy.example.com:3128
 # Multi-AD Support (comma-separated)
 OCI_AD: "fgaj:AP-SINGAPORE-1-AD-1,fgaj:AP-SINGAPORE-1-AD-2,fgaj:AP-SINGAPORE-1-AD-3"
 
+# Shape Configuration (set by launch-parallel.sh)
+OCI_SHAPE: "VM.Standard.A1.Flex"         # Instance shape
+OCI_OCPUS: "4"                           # CPUs for flex shapes
+OCI_MEMORY_IN_GBS: "24"                  # Memory for flex shapes
+
 # Performance & Reliability
 BOOT_VOLUME_SIZE: "50"                    # GB, minimum enforced
 RECOVERY_ACTION: "RESTORE_INSTANCE"       # Auto-restart on failures
 RETRY_WAIT_TIME: "30"                     # Seconds between AD attempts
+TRANSIENT_ERROR_MAX_RETRIES: "3"         # Retry count per AD
+TRANSIENT_ERROR_RETRY_DELAY: "15"        # Seconds between retries
 INSTANCE_VERIFY_MAX_CHECKS: "5"          # Verification attempts
 INSTANCE_VERIFY_DELAY: "30"              # Seconds between verifications
 
@@ -89,8 +98,19 @@ oci_args+=("--read-timeout" "15")           # 15s vs 60s default
 # DUPLICATE (treated as success)  
 "display name already exists|instance.*already exists"
 
+# TRANSIENT (retry same AD 3x, then next AD)
+"internal error|network|connection|timeout"
+
 # AUTH/CONFIG (immediate Telegram alert)
 "authentication|authorization|invalid.*ocid|not found"
+```
+
+### Transient Error Retry Pattern
+```bash
+# For INTERNAL_ERROR and NETWORK errors:
+# 1. Retry same AD up to 3 times (15 second delays)
+# 2. If still failing, try next availability domain
+# 3. If all ADs exhausted, treat as capacity issue
 ```
 
 ### Parallel Execution Pattern
