@@ -40,6 +40,13 @@ lookup_image_id() {
                     log_info "Using cached Oracle Linux 9 ARM image ID"
                 fi
                 ;;
+            "Oracle Linux_9_VM.Standard.E2.1.Micro")
+                # Common Oracle Linux 9 AMD image ID - update as needed
+                image_id="${OCI_CACHED_OL9_AMD_IMAGE:-}"
+                if [[ -n "$image_id" ]]; then
+                    log_info "Using cached Oracle Linux 9 AMD image ID"
+                fi
+                ;;
         esac
         
         # Fallback to API lookup if no cached image

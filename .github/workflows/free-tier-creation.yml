@@ -37,7 +37,8 @@ jobs:
       OPERATING_SYSTEM: "Oracle Linux"
       OS_VERSION: "9"
       # Common image ID cache for Oracle Linux 9 ARM (update periodically)
-      OCI_CACHED_OL9_ARM_IMAGE: "ocid1.image.oc1.ap-singapore-1.aaaaaaaa7l5pths62jxzpqzh3mfbw6qjzrcpv6h3ek2tewqr57hbj5v4mhca"
+      OCI_CACHED_OL9_ARM_IMAGE: "ocid1.image.oc1.ap-singapore-1.aaaaaaaalp5rsngiayobfuxdurkxdnxgkxjfbfqpl2c2yebldjmrrtbrteaa"
+      OCI_CACHED_OL9_AMD_IMAGE: "ocid1.image.oc1.ap-singapore-1.aaaaaaaaejbjeklplq5qnuqlbpfszmywma2j3en3o7pjuc7jidtifmqgqxlq"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -60,14 +61,24 @@ jobs:
       - name: Create requirements file
         run: echo "oci-cli" > requirements.txt
 
-      - name: Setup Python with caching
+      - name: Setup Python
         uses: actions/setup-python@v5.6.0
         id: setup-python
         with:
           python-version: '3.x'
           check-latest: false
           update-environment: true
-          cache: 'pip'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4.2.4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.local/lib
+            ~/.local/bin
+          key: ${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-pip-
 
       - name: Install OCI CLI
         run: pip install --user -r requirements.txt
