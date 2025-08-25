@@ -347,6 +347,7 @@ validate_configuration() {
     log_info "Validating configuration values..."
     
     # Validate required variables don't have spaces
+    # NOTE: OPERATING_SYSTEM excluded because "Oracle Linux" is valid and properly quoted
     local vars_to_check=(
         "OCI_TENANCY_OCID:${OCI_TENANCY_OCID:-}"
         "OCI_USER_OCID:${OCI_USER_OCID:-}"
@@ -355,7 +356,6 @@ validate_configuration() {
         "OCI_SHAPE:${OCI_SHAPE:-}"
         "INSTANCE_DISPLAY_NAME:${INSTANCE_DISPLAY_NAME:-}"
         "OCI_SUBNET_ID:${OCI_SUBNET_ID:-}"
-        "OPERATING_SYSTEM:${OPERATING_SYSTEM:-}"
         "OS_VERSION:${OS_VERSION:-}"
     )
     
