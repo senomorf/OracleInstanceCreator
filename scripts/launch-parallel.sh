@@ -161,11 +161,17 @@ main() {
     log_debug "success_count initialized to $success_count"
     
     log_debug "Checking STATUS_A1..."
-    [[ $STATUS_A1 -eq 0 ]] && { log_debug "A1 success, incrementing"; ((success_count++)); }
+    if [[ $STATUS_A1 -eq 0 ]]; then
+        log_debug "A1 success, incrementing"
+        success_count=$((success_count + 1))
+    fi
     log_debug "After A1 check: success_count=$success_count"
     
     log_debug "Checking STATUS_E2..."
-    [[ $STATUS_E2 -eq 0 ]] && { log_debug "E2 success, incrementing"; ((success_count++)); }
+    if [[ $STATUS_E2 -eq 0 ]]; then
+        log_debug "E2 success, incrementing"
+        success_count=$((success_count + 1))
+    fi
     log_debug "Final success_count=$success_count"
     
     log_elapsed "parallel_execution"
