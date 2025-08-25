@@ -103,10 +103,11 @@ check_existing_instance() {
 build_launch_command() {
     local comp_id="$1"
     local image_id="$2"
+    local ad_name="${3:-$OCI_AD}"  # Allow override for multi-AD cycling
     
     local launch_args=(
         "compute" "instance" "launch"
-        "--availability-domain" "$OCI_AD"
+        "--availability-domain" "$ad_name"
         "--compartment-id" "$comp_id"
         "--shape" "$OCI_SHAPE"
         "--subnet-id" "$OCI_SUBNET_ID"
@@ -131,6 +132,30 @@ build_launch_command() {
         launch_args+=("--assign-public-ip" "false")
     fi
     
+    # Add availability configuration for auto-recovery
+    local recovery_action="${RECOVERY_ACTION:-RESTORE_INSTANCE}"
+    launch_args+=(
+        "--availability-config"
+        "{\"recoveryAction\": \"$recovery_action\"}"
+    )
+    
+    # Add instance options for IMDS compatibility
+    local legacy_imds="${LEGACY_IMDS_ENDPOINTS:-false}"
+    launch_args+=(
+        "--instance-options"
+        "{\"areLegacyImdsEndpointsDisabled\": $legacy_imds}"
+    )
+    
+    # Add configurable boot volume size
+    local boot_volume_size="${BOOT_VOLUME_SIZE:-50}"
+    if [[ "$boot_volume_size" -lt 50 ]]; then
+        boot_volume_size=50  # Ensure minimum 50GB
+        log_warning "Boot volume size increased to minimum 50GB"
+    fi
+    launch_args+=(
+        "--boot-volume-size-in-gbs" "$boot_volume_size"
+    )
+    
     printf '%s\n' "${launch_args[@]}"
 }
 
@@ -138,104 +163,208 @@ launch_instance() {
     local comp_id="$1"
     local image_id="$2"
     
-    log_info "Attempting to launch instance '$INSTANCE_DISPLAY_NAME' in AD $OCI_AD..."
+    # Parse availability domains (support comma-separated list)
+    local ad_list
+    IFS=',' read -ra ad_list <<< "$OCI_AD"
     
-    # Build launch command
-    local launch_args
-    readarray -t launch_args < <(build_launch_command "$comp_id" "$image_id")
+    # Try each AD until success or all ADs exhausted
+    local ad_index=0
+    local max_attempts=${#ad_list[@]}
+    local wait_time="${RETRY_WAIT_TIME:-30}"
     
-    # Execute launch command with single attempt for rate limiting
-    local output
-    local status
-    
-    set +e
-    # Use oci_cmd to get debug output when enabled
-    output=$(oci_cmd "${launch_args[@]}")
-    status=$?
-    set -e
-    
-    echo "$output"
-    
-    if [[ $status -ne 0 ]]; then
-        # Check for rate limiting first to avoid further API calls
-        log_debug "Checking for rate limiting patterns in error output"
-        log_debug "Error output length: ${#output} characters"
-        log_debug "First 500 chars of error output: ${output:0:500}"
-        if echo "$output" | grep -qi "too.*many.*requests\|rate.*limit\|throttle\|429\|TooManyRequests\|\"code\".*\"TooManyRequests\"\|\"status\".*429\|'status':.*429\|'code':.*'TooManyRequests'"; then
-            log_info "Rate limit detected - will retry on next schedule"
-            log_debug "Early detection matched rate limiting pattern"
-            log_info "Capacity issue detected - will retry on next schedule"
+    while [[ $ad_index -lt $max_attempts ]]; do
+        local current_ad="${ad_list[$ad_index]}"
+        log_info "Attempting to launch instance '$INSTANCE_DISPLAY_NAME' in AD $current_ad (attempt $((ad_index + 1))/$max_attempts)..."
+        
+        # Build launch command for current AD
+        local launch_args
+        readarray -t launch_args < <(build_launch_command "$comp_id" "$image_id" "$current_ad")
+        
+        # Execute launch command with single attempt for rate limiting
+        local output
+        local status
+        
+        set +e
+        # Use oci_cmd to get debug output when enabled
+        output=$(oci_cmd "${launch_args[@]}")
+        status=$?
+        set -e
+        
+        echo "$output"
+        
+        if [[ $status -eq 0 ]]; then
+            # Success! Extract instance OCID
+            local instance_id
+            instance_id=$(echo "$output" | grep -o 'ocid1\.instance[^"]*' | head -1)
+            
+            if [[ -z "$instance_id" ]]; then
+                log_error "Could not extract instance OCID from output"
+                return 1
+            fi
+            
+            log_success "Instance launched successfully in AD $current_ad! OCID: $instance_id"
+            send_telegram_notification "success" "OCI instance created in $current_ad: ${INSTANCE_DISPLAY_NAME} (OCID: ${instance_id})"
+            
             return 0
-        else
-            log_debug "No rate limiting patterns matched - proceeding to secondary detection"
         fi
         
-        if handle_launch_error "$output"; then
-            # Other capacity errors - log and exit successfully
-            log_info "Capacity issue detected - will retry on next schedule"
-            return 0
-        else
-            # Real error - propagate failure
-            return 1
+        # Handle launch errors
+        local error_type
+        error_type=$(handle_launch_error_with_ad "$output" "$current_ad" $((ad_index + 1)) $max_attempts)
+        
+        case "$error_type" in
+            "CAPACITY"|"RATE_LIMIT")
+                # Try next AD if available
+                if [[ $((ad_index + 1)) -lt $max_attempts ]]; then
+                    log_info "Trying next availability domain..."
+                    ((ad_index++))
+                    continue
+                else
+                    log_info "All ADs exhausted - will retry on next schedule"
+                    return 0  # Not a failure, just capacity issue across all ADs
+                fi
+                ;;
+            "LIMIT_EXCEEDED")
+                # Special case: check if instance was created despite error
+                log_info "LimitExceeded error - checking if instance was created anyway..."
+                if verify_instance_creation "$comp_id" 3; then
+                    return 0  # Instance was created successfully
+                fi
+                
+                # Try next AD if available
+                if [[ $((ad_index + 1)) -lt $max_attempts ]]; then
+                    log_info "Trying next availability domain after LimitExceeded..."
+                    ((ad_index++))
+                    continue
+                else
+                    log_info "All ADs exhausted after LimitExceeded errors"
+                    return 0
+                fi
+                ;;
+            "SUCCESS"|"DUPLICATE")
+                return 0  # Not a failure
+                ;;
+            *)
+                # Real error - propagate failure
+                return 1
+                ;;
+        esac
+        
+        # Add delay between AD attempts if configured
+        if [[ $wait_time -gt 0 && $((ad_index + 1)) -lt $max_attempts ]]; then
+            log_info "Waiting ${wait_time}s before trying next AD..."
+            sleep "$wait_time"
         fi
-    fi
+        
+        ((ad_index++))
+    done
     
-    # Extract instance OCID from successful output
-    local instance_id
-    instance_id=$(echo "$output" | grep -o 'ocid1\.instance[^"]*' | head -1)
-    
-    if [[ -z "$instance_id" ]]; then
-        log_error "Could not extract instance OCID from output"
-        return 1
-    fi
-    
-    log_success "Instance launched successfully! OCID: $instance_id"
-    send_telegram_notification "success" "OCI instance created: ${INSTANCE_DISPLAY_NAME} (OCID: ${instance_id})"
-    
+    # Should not reach here, but handle gracefully
+    log_info "All availability domains attempted - will retry on next schedule"
     return 0
 }
 
-handle_launch_error() {
+handle_launch_error_with_ad() {
     local error_output="$1"
+    local current_ad="$2"
+    local attempt="$3"
+    local max_attempts="$4"
     local error_type
     
     error_type=$(get_error_type "$error_output")
     
     case "$error_type" in
         "CAPACITY")
-            log_info "No capacity available for shape at this time. Will retry on next schedule."
-            return 0  # Not a failure, just capacity issue
+            log_info "No capacity available for shape in AD $current_ad (attempt $attempt/$max_attempts)"
+            echo "CAPACITY"
+            return 0
+            ;;
+        "RATE_LIMIT")
+            log_info "Rate limit detected in AD $current_ad (attempt $attempt/$max_attempts)"
+            echo "RATE_LIMIT"
+            return 0
+            ;;
+        "LIMIT_EXCEEDED")
+            log_info "LimitExceeded error in AD $current_ad (attempt $attempt/$max_attempts)"
+            echo "LIMIT_EXCEEDED"
+            return 0
             ;;
         "DUPLICATE")
             log_info "Instance with this name already exists. Skipping creation."
             send_telegram_notification "info" "OCI instance already exists: ${INSTANCE_DISPLAY_NAME}"
-            return 0  # Not a failure, instance exists
+            echo "DUPLICATE"
+            return 0
             ;;
         "AUTH")
-            log_error "Authentication/authorization error"
+            log_error "Authentication/authorization error in AD $current_ad"
             send_telegram_notification "error" "OCI authentication error: Check credentials and permissions"
-            return 1
+            echo "AUTH"
+            return 0
             ;;
         "CONFIG")
-            log_error "Configuration error detected"
+            log_error "Configuration error detected in AD $current_ad"
             local error_line
             error_line=$(echo "$error_output" | head -1)
             send_telegram_notification "error" "OCI configuration error: ${error_line}"
-            return 1
+            echo "CONFIG"
+            return 0
             ;;
         "NETWORK")
-            log_error "Network error detected"
+            log_error "Network error detected in AD $current_ad"
             send_telegram_notification "error" "OCI network error: Check connectivity and network configuration"
-            return 1
+            echo "NETWORK"
+            return 0
             ;;
         *)
-            log_error "Unexpected error during instance launch"
+            log_error "Unexpected error during instance launch in AD $current_ad"
             local error_line
             error_line=$(echo "$error_output" | head -1)
-            send_telegram_notification "error" "OCI instance launch failed: ${error_line}"
-            return 1
+            send_telegram_notification "error" "OCI instance launch failed in $current_ad: ${error_line}"
+            echo "UNKNOWN"
+            return 0
             ;;
     esac
+}
+
+verify_instance_creation() {
+    local comp_id="$1"
+    local max_checks="${2:-3}"
+    local check_delay="${3:-20}"
+    
+    log_info "Verifying instance creation with $max_checks checks..."
+    
+    for ((i=1; i<=max_checks; i++)); do
+        log_info "Instance verification check $i/$max_checks..."
+        
+        local instance_id
+        instance_id=$(oci_cmd compute instance list \
+            --compartment-id "$comp_id" \
+            --display-name "$INSTANCE_DISPLAY_NAME" \
+            --lifecycle-state "RUNNING,PROVISIONING" \
+            --limit 1 \
+            --query 'data[0].id' \
+            --raw-output 2>/dev/null || echo "")
+        
+        if [[ -n "$instance_id" && "$instance_id" != "null" ]]; then
+            local state
+            state=$(oci_cmd compute instance get \
+                --instance-id "$instance_id" \
+                --query 'data."lifecycle-state"' \
+                --raw-output 2>/dev/null || echo "")
+            
+            log_success "Instance found: $instance_id (state: $state)"
+            send_telegram_notification "success" "OCI instance verified: ${INSTANCE_DISPLAY_NAME} (OCID: ${instance_id}, State: ${state})"
+            return 0
+        fi
+        
+        if [[ $i -lt $max_checks ]]; then
+            log_info "Instance not found yet, waiting ${check_delay}s before next check..."
+            sleep "$check_delay"
+        fi
+    done
+    
+    log_warning "Instance verification failed after $max_checks checks"
+    return 1
 }
 
 # Main function
@@ -285,6 +414,6 @@ launch_oci_instance() {
 }
 
 # Run launch if called directly
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
     launch_oci_instance
 fi

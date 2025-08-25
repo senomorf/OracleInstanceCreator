@@ -228,7 +228,7 @@ send_notification() {
 }
 
 # Run test if called directly with 'test' argument
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
     if [[ "${1:-}" == "test" ]]; then
         test_telegram_config
     else

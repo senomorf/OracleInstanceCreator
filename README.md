@@ -9,7 +9,10 @@ This project automatically attempts to create Oracle Cloud free tier instances u
 ## Key Features
 
 - **Automated Instance Creation**: Scheduled attempts to create OCI free tier instances
+- **Multi-AD Cycling**: Automatically tries multiple availability domains for higher success rates
 - **Smart Error Handling**: Distinguishes between capacity issues (expected) and genuine errors
+- **Instance Recovery**: Auto-restart failed instances with `RESTORE_INSTANCE` configuration
+- **Enhanced Validation**: Comprehensive pre-flight checks and configuration validation
 - **Performance Optimized**: 93% execution time reduction (from ~2 minutes to ~17 seconds)
 - **Telegram Notifications**: Success/failure alerts via Telegram bot
 - **Modular Architecture**: Separate scripts for different functions (validation, setup, launch)
@@ -94,11 +97,35 @@ chmod +x scripts/*.sh
 └── README.md                                 # This file
 ```
 
+## Advanced Features (New in 2025-08-25)
+
+### Multi-Availability Domain Support
+Configure multiple ADs for automatic failover:
+```yaml
+# Single AD (existing behavior)
+OCI_AD: "fgaj:AP-SINGAPORE-1-AD-1"
+
+# Multi-AD cycling (new feature)
+OCI_AD: "fgaj:AP-SINGAPORE-1-AD-1,fgaj:AP-SINGAPORE-1-AD-2,fgaj:AP-SINGAPORE-1-AD-3"
+```
+
+### Enhanced Configuration Options
+New environment variables available in GitHub Actions workflow:
+- `BOOT_VOLUME_SIZE`: Boot disk size in GB (default: 50, minimum: 50)
+- `RECOVERY_ACTION`: Instance recovery behavior (default: "RESTORE_INSTANCE")
+- `LEGACY_IMDS_ENDPOINTS`: IMDS compatibility (default: "false")  
+- `RETRY_WAIT_TIME`: Wait time between AD attempts in seconds (default: 30)
+
+### Instance Re-verification
+The system now automatically verifies instance creation after `LimitExceeded` errors, preventing false failures when Oracle creates instances despite returning errors.
+
 ## Error Handling
 
 The project implements intelligent error classification:
 
 - **CAPACITY/RATE_LIMIT**: Expected for free tier (treated as success)
+- **LIMIT_EXCEEDED**: Special handling with instance re-verification
+- **INTERNAL_ERROR**: Oracle internal/gateway errors (retry-able)
 - **AUTH**: Authentication errors (triggers alert)
 - **CONFIG**: Invalid configuration (triggers alert)  
 - **NETWORK**: Connectivity issues (triggers alert)

@@ -189,22 +189,40 @@ check_oci_cli() {
 get_error_type() {
     local error_output="$1"
     
+    # Check for capacity-related errors
     if echo "$error_output" | grep -qi "capacity\|host capacity\|out of capacity\|service limit\|quota exceeded\|resource unavailable\|insufficient capacity"; then
         log_debug "Detected CAPACITY error pattern in: $error_output"
         echo "CAPACITY"
+    # Check for rate limiting (treat as capacity issue)
     elif echo "$error_output" | grep -qi "too.*many.*requests\|rate.*limit\|throttle\|429\|TooManyRequests\|\"code\".*\"TooManyRequests\"\|\"status\".*429\|'status':.*429\|'code':.*'TooManyRequests'"; then
         log_debug "Detected RATE_LIMIT error pattern in: $error_output"
-        echo "CAPACITY"  # Treat rate limiting as capacity issue
+        echo "RATE_LIMIT"
+    # Check for limit exceeded errors (special handling needed)
+    elif echo "$error_output" | grep -qi "limitexceeded\|limit.*exceeded\|\"code\".*\"LimitExceeded\""; then
+        log_debug "Detected LIMIT_EXCEEDED error pattern in: $error_output"
+        echo "LIMIT_EXCEEDED"
+    # Check for internal/gateway errors (retry-able)
+    elif echo "$error_output" | grep -qi "internal.*error\|internalerror\|\"code\".*\"InternalError\"\|bad.*gateway\|502\|\"status\".*502"; then
+        log_debug "Detected INTERNAL/GATEWAY error pattern in: $error_output"
+        echo "INTERNAL_ERROR"
+    # Check for duplicate instances
     elif echo "$error_output" | grep -qi "display name already exists\|instance.*already exists\|duplicate.*name"; then
         log_debug "Detected DUPLICATE error pattern in: $error_output"
-        echo "DUPLICATE"  # Instance already exists - treat as success
-    elif echo "$error_output" | grep -qi "authentication\|authorization\|unauthorized"; then
+        echo "DUPLICATE"
+    # Check for authentication/authorization errors
+    elif echo "$error_output" | grep -qi "authentication\|authorization\|unauthorized\|forbidden\|401\|403"; then
+        log_debug "Detected AUTH error pattern in: $error_output"
         echo "AUTH"
-    elif echo "$error_output" | grep -qi "network\|timeout\|connection"; then
+    # Check for network/connectivity errors
+    elif echo "$error_output" | grep -qi "network\|timeout\|connection\|unreachable\|dns"; then
+        log_debug "Detected NETWORK error pattern in: $error_output"
         echo "NETWORK"
-    elif echo "$error_output" | grep -qi "not found\|invalid.*id\|does not exist"; then
+    # Check for configuration errors
+    elif echo "$error_output" | grep -qi "not found\|invalid.*id\|does not exist\|bad.*request\|400\|parameter"; then
+        log_debug "Detected CONFIG error pattern in: $error_output"
         echo "CONFIG"
     else
+        log_debug "No specific error pattern matched in: $error_output"
         echo "UNKNOWN"
     fi
 }
@@ -245,4 +263,149 @@ is_valid_ocid() {
     else
         return 1
     fi
+}
+
+# Validate configuration values don't contain spaces
+validate_no_spaces() {
+    local var_name="$1"
+    local var_value="$2"
+    
+    if [[ "$var_value" =~ [[:space:]] ]]; then
+        log_error "Configuration variable $var_name contains spaces: '$var_value'"
+        log_error "Spaces in configuration values can cause command parsing issues"
+        return 1
+    fi
+    return 0
+}
+
+# Validate boot volume size constraints
+validate_boot_volume_size() {
+    local size="$1"
+    
+    # Check if it's a number
+    if ! [[ "$size" =~ ^[0-9]+$ ]]; then
+        log_error "Boot volume size must be a number: $size"
+        return 1
+    fi
+    
+    # Check minimum size (Oracle requirement)
+    if [[ "$size" -lt 50 ]]; then
+        log_error "Boot volume size must be at least 50GB: $size"
+        return 1
+    fi
+    
+    # Check reasonable maximum (10TB)
+    if [[ "$size" -gt 10000 ]]; then
+        log_warning "Boot volume size seems very large: ${size}GB"
+    fi
+    
+    return 0
+}
+
+# Validate availability domain format
+validate_availability_domain() {
+    local ad_list="$1"
+    
+    # Use a simple loop to split by comma
+    local temp_list="$ad_list"
+    
+    # Process each AD separated by comma
+    while [[ "$temp_list" == *","* ]]; do
+        # Extract first AD
+        local ad="${temp_list%%,*}"
+        # Remove leading/trailing spaces
+        ad=$(echo "$ad" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        
+        # Validate this AD
+        if [[ -n "$ad" ]] && ! [[ "$ad" =~ ^[a-zA-Z0-9-]+:[A-Z0-9-]+-[A-Z]+-[0-9]+-AD-[0-9]+$ ]]; then
+            log_error "Invalid availability domain format: $ad"
+            log_error "Expected format: tenancy_prefix:REGION-AD-N (e.g., 'fgaj:AP-SINGAPORE-1-AD-1')"
+            return 1
+        fi
+        
+        # Remove processed AD from temp_list
+        temp_list="${temp_list#*,}"
+    done
+    
+    # Process the last (or only) AD
+    if [[ -n "$temp_list" ]]; then
+        local ad=$(echo "$temp_list" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if ! [[ "$ad" =~ ^[a-zA-Z0-9-]+:[A-Z0-9-]+-[A-Z]+-[0-9]+-AD-[0-9]+$ ]]; then
+            log_error "Invalid availability domain format: $ad"
+            log_error "Expected format: tenancy_prefix:REGION-AD-N (e.g., 'fgaj:AP-SINGAPORE-1-AD-1')"
+            return 1
+        fi
+    fi
+    
+    return 0
+}
+
+# Validate all configuration values for common issues
+validate_configuration() {
+    local validation_failed=false
+    
+    log_info "Validating configuration values..."
+    
+    # Validate required variables don't have spaces
+    local vars_to_check=(
+        "OCI_TENANCY_OCID:${OCI_TENANCY_OCID:-}"
+        "OCI_USER_OCID:${OCI_USER_OCID:-}"
+        "OCI_REGION:${OCI_REGION:-}"
+        "OCI_AD:${OCI_AD:-}"
+        "OCI_SHAPE:${OCI_SHAPE:-}"
+        "INSTANCE_DISPLAY_NAME:${INSTANCE_DISPLAY_NAME:-}"
+        "OCI_SUBNET_ID:${OCI_SUBNET_ID:-}"
+        "OPERATING_SYSTEM:${OPERATING_SYSTEM:-}"
+        "OS_VERSION:${OS_VERSION:-}"
+    )
+    
+    for var_def in "${vars_to_check[@]}"; do
+        IFS=':' read -r var_name var_value <<< "$var_def"
+        if [[ -n "$var_value" ]]; then
+            if ! validate_no_spaces "$var_name" "$var_value"; then
+                validation_failed=true
+            fi
+        fi
+    done
+    
+    # Validate boot volume size if set
+    if [[ -n "${BOOT_VOLUME_SIZE:-}" ]]; then
+        if ! validate_boot_volume_size "$BOOT_VOLUME_SIZE"; then
+            validation_failed=true
+        fi
+    fi
+    
+    # Validate availability domain format
+    if [[ -n "${OCI_AD:-}" ]]; then
+        if ! validate_availability_domain "$OCI_AD"; then
+            validation_failed=true
+        fi
+    fi
+    
+    # Validate OCIDs if present
+    local ocid_vars=(
+        "OCI_TENANCY_OCID:${OCI_TENANCY_OCID:-}"
+        "OCI_USER_OCID:${OCI_USER_OCID:-}"
+        "OCI_COMPARTMENT_ID:${OCI_COMPARTMENT_ID:-}"
+        "OCI_SUBNET_ID:${OCI_SUBNET_ID:-}"
+        "OCI_IMAGE_ID:${OCI_IMAGE_ID:-}"
+    )
+    
+    for ocid_def in "${ocid_vars[@]}"; do
+        IFS=':' read -r var_name var_value <<< "$ocid_def"
+        if [[ -n "$var_value" ]]; then
+            if ! is_valid_ocid "$var_value"; then
+                log_error "Invalid OCID format for $var_name: $var_value"
+                validation_failed=true
+            fi
+        fi
+    done
+    
+    if [[ "$validation_failed" == true ]]; then
+        log_error "Configuration validation failed"
+        return 1
+    fi
+    
+    log_success "Configuration validation passed"
+    return 0
 }
