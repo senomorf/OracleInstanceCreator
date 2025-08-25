@@ -102,7 +102,7 @@ oci_cmd_data() {
     log_debug "Executing OCI data command: oci ${cmd[*]}"
     
     set +e
-    output=$(oci --no-retry "${cmd[@]}" 2>&1)
+    output=$(oci --no-retry --connection-timeout 5 --read-timeout 15 "${cmd[@]}" 2>&1)
     status=$?
     set -e
     
@@ -131,6 +131,12 @@ oci_cmd_debug() {
     # Add no-retry flag for performance optimization
     # Disables exponential backoff retry logic since we handle errors gracefully
     oci_args+=("--no-retry")
+    
+    # Add timeout flags for faster failure on network issues
+    # Connection timeout: 5s (down from 10s default)
+    # Read timeout: 15s (down from 60s default) 
+    oci_args+=("--connection-timeout" "5")
+    oci_args+=("--read-timeout" "15")
     
     log_debug "Executing OCI debug command: oci ${oci_args[*]} ${cmd[*]}"
     
