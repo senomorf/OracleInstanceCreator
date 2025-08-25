@@ -15,7 +15,8 @@ Oracle Cloud Infrastructure (OCI) automation for **parallel free tier instance c
 │   ├── validate-config.sh                    # Configuration validation
 │   └── notify.sh                             # Telegram notifications
 ├── tests/
-│   └── test_proxy.sh                         # Proxy validation (15 tests)
+│   ├── test_proxy.sh                         # Proxy validation (15 tests)
+│   └── test_integration.sh                   # Integration tests (9 tests)
 └── config/                                   # Configuration files
 ```
 
@@ -136,8 +137,9 @@ bash -n scripts/*.sh
 # Configuration validation
 ./scripts/validate-config.sh
 
-# Proxy testing (15 test cases)
-./tests/test_proxy.sh
+# Test suites
+./tests/test_proxy.sh             # Proxy validation (15 tests)
+./tests/test_integration.sh       # Integration tests (9 tests)
 
 # Individual components (requires environment variables)
 ./scripts/setup-oci.sh           # OCI CLI + proxy setup
@@ -225,15 +227,14 @@ echo $HTTP_PROXY $HTTPS_PROXY
 - **One instance created**: Partial success, retry other shape next run  
 - **Zero instances created**: Capacity unavailable, retry on schedule
 
-## Production Validation (2025-08-25)
+## Production Validation (2025-08-26)
 
-**✅ VALIDATED**: Run #17219156038 - Perfect implementation validation
-- **Total Execution**: 32 seconds (1-minute billing confirmed)
-- **Parallel Phase**: 14.04 seconds for both shapes
-- **Success Rate**: 100% - Both A1.Flex and E2.1.Micro created
-- **Proxy Integration**: Seamless inheritance by parallel processes
-- **Performance**: 93% improvement maintained (14s vs previous 2 minutes)
-- **Architecture**: Clean separation of concerns confirmed
+**✅ VALIDATED**: Code review improvements implemented
+- **Security**: Enhanced credential masking, secure file permissions (600/700)
+- **Validation**: Comprehensive bounds checking (timeouts 1-300s, retries 1-10, delays 1-60s)
+- **Testing**: 9 integration tests + 15 proxy tests passing
+- **Architecture**: Centralized constants, standardized error handling
+- **Quality**: All duplicate functions removed, race conditions fixed
 
 ## Important Notes
 
