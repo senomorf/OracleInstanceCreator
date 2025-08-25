@@ -89,12 +89,15 @@ main() {
     local STATUS_A1=1
     local STATUS_E2=1
     
-    # Simple timeout implementation
+    # Wait for both processes with timeout protection
     local elapsed=0
     local sleep_interval=1
+    
+    # Keep checking until timeout or both processes complete
     while [[ $elapsed -lt $timeout_seconds ]]; do
         # Check if both processes have finished
         if ! kill -0 $PID_A1 2>/dev/null && ! kill -0 $PID_E2 2>/dev/null; then
+            log_debug "Both processes completed after ${elapsed}s"
             break
         fi
         sleep $sleep_interval
@@ -105,18 +108,32 @@ main() {
     if [[ $elapsed -ge $timeout_seconds ]]; then
         log_warning "Execution timeout reached (${timeout_seconds}s) - terminating background processes"
         kill $PID_A1 $PID_E2 2>/dev/null || true
-        sleep 2  # Give processes time to terminate
+        sleep 2  # Give processes time to terminate gracefully
         kill -9 $PID_A1 $PID_E2 2>/dev/null || true
         STATUS_A1=124  # timeout exit code
         STATUS_E2=124  # timeout exit code
+    fi
+    
+    # Always wait for processes to fully complete and flush their output
+    wait $PID_A1 2>/dev/null || true
+    wait $PID_E2 2>/dev/null || true
+    
+    # Give a moment for result files to be written (race condition protection)
+    sleep 1
+    
+    # Read results from files if they exist, otherwise use default failure status
+    if [[ -f "$a1_result" ]]; then
+        STATUS_A1=$(cat "$a1_result")
+        log_debug "A1 result file found with status: $STATUS_A1"
     else
-        # Wait for processes to finish and collect results
-        wait $PID_A1 2>/dev/null || true
-        wait $PID_E2 2>/dev/null || true
-        
-        # Read results from files if they exist
-        [[ -f "$a1_result" ]] && STATUS_A1=$(cat "$a1_result")
-        [[ -f "$e2_result" ]] && STATUS_E2=$(cat "$e2_result")
+        log_warning "A1 result file not found - using default failure status"
+    fi
+    
+    if [[ -f "$e2_result" ]]; then
+        STATUS_E2=$(cat "$e2_result")
+        log_debug "E2 result file found with status: $STATUS_E2"
+    else
+        log_warning "E2 result file not found - using default failure status"
     fi
     
     # Cleanup temporary files
