@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an Oracle Cloud Infrastructure (OCI) automation project that uses GitHub Actions to automatically attempt creating free tier instances. The project is designed to periodically retry instance creation when Oracle's free tier capacity is available.
+This is an Oracle Cloud Infrastructure (OCI) automation project that uses GitHub Actions to automatically attempt creating **BOTH** Oracle Cloud free tier instances simultaneously. The project is designed to periodically retry instance creation for both ARM (A1.Flex) and AMD (E2.1.Micro) shapes when Oracle's free tier capacity is available, maximizing your chances of securing free tier resources.
 
 ## Architecture
 
@@ -12,12 +12,13 @@ The project has been refactored into a modular architecture with the following c
 
 ### File Structure
 ```
-├── .github/workflows/free-tier-creation.yml  # GitHub Actions workflow (refactored)
+├── .github/workflows/free-tier-creation.yml  # GitHub Actions workflow (parallel execution)
 ├── scripts/
 │   ├── setup-oci.sh                          # OCI CLI configuration
 │   ├── setup-ssh.sh                          # SSH key setup  
 │   ├── validate-config.sh                    # Configuration validation
-│   ├── launch-instance.sh                    # Instance creation logic
+│   ├── launch-parallel.sh                    # Parallel launcher for both shapes
+│   ├── launch-instance.sh                    # Shape-agnostic instance creation logic
 │   ├── notify.sh                             # Telegram notifications
 │   └── utils.sh                              # Common utility functions
 ├── config/
@@ -30,24 +31,41 @@ The project has been refactored into a modular architecture with the following c
 
 ### Workflow Jobs
 
-The GitHub Actions workflow consists of two secure jobs:
+The GitHub Actions workflow consists of two secure jobs optimized for billing efficiency:
 
-1. **create-instance**: Validates configuration, sets up environment, and creates OCI instance (consolidated for security)
-2. **notify-on-failure**: Sends failure notifications if the main job fails
+1. **create-instances** (Both Shapes): Validates configuration, sets up environment, and attempts to create BOTH free tier instance shapes in parallel within a single job to minimize GitHub Actions billing
+2. **notify-on-failure**: Sends failure notifications if both instance creation attempts fail
 
-**Security Enhancement**: All credential operations occur within a single job to prevent exposure through artifacts.
+**Key Features:**
+- **Parallel Execution**: Both ARM (A1.Flex) and AMD (E2.1.Micro) shapes attempted simultaneously
+- **Billing Optimization**: Single job execution stays under 60 seconds to avoid 2-minute billing
+- **Security Enhancement**: All credential operations occur within a single job to prevent exposure through artifacts
+- **Timeout Protection**: 55-second timeout ensures billing stays at 1 minute per run
 
 ## Key Configuration
 
-The workflow is configured via environment variables in the GitHub Actions file:
+### Parallel Shape Configuration
+
+The workflow automatically attempts to create BOTH free tier instance shapes:
+
+**A1.Flex (ARM) Configuration:**
+- **Shape**: VM.Standard.A1.Flex
+- **OCPUs**: 4
+- **Memory**: 24GB
+- **Instance Name**: a1-flex-sg
+
+**E2.1.Micro (AMD) Configuration:**
+- **Shape**: VM.Standard.E2.1.Micro  
+- **OCPUs**: 1 (fixed shape)
+- **Memory**: 1GB (fixed shape)
+- **Instance Name**: e2-micro-sg
+
+### Common Environment Variables
 
 - **OCI_AD**: Availability Domain (e.g., "fgaj:AP-SINGAPORE-1-AD-1")
-- **OCI_SHAPE**: Instance shape (e.g., "VM.Standard.A1.Flex")
-- **OCI_OCPUS**: Number of OCPUs for flexible shapes
-- **OCI_MEMORY_IN_GBS**: Memory in GB for flexible shapes
-- **INSTANCE_DISPLAY_NAME**: Display name for the instance
-- **OPERATING_SYSTEM**: OS name (e.g., "Oracle Linux")
+- **OPERATING_SYSTEM**: OS name (e.g., "Oracle Linux") 
 - **OS_VERSION**: OS version (e.g., "9")
+- **ASSIGN_PUBLIC_IP**: Public IP assignment ("false" by default)
 
 ## Required GitHub Secrets
 
@@ -70,7 +88,32 @@ The workflow requires these secrets to be configured in the GitHub repository:
 The workflow can be triggered:
 
 - **Manually**: Via workflow_dispatch with optional verbose output
-- **Scheduled**: Currently commented out, but supports cron scheduling
+- **Scheduled**: Every 6 minutes (`*/6 * * * *`) to maximize free tier opportunities
+
+### Parallel Execution Behavior
+
+**Success Scenarios:**
+- **Both instances created**: Maximum free tier utilization achieved
+- **One instance created**: Partial success - will retry for the other shape on next run
+- **Zero instances created**: Capacity unavailable - will retry on next scheduled run
+
+**Timing Optimization:**
+- **Target execution time**: 17-25 seconds (both shapes in parallel)
+- **Timeout safety**: 55-second hard limit to prevent 2-minute billing
+- **GitHub Actions billing**: 1 minute per run (instead of 2 minutes with matrix jobs)
+
+### Billing Efficiency
+
+**Monthly Usage Calculation** (every 6 minutes):
+- **Runs per day**: 240 (every 6 minutes)
+- **Runs per month**: ~7,200
+- **Billing per run**: 1 minute (single job under 60 seconds)
+- **Total monthly usage**: 7,200 minutes (exceeds GitHub free tier of 2,000 minutes)
+
+**Cost Optimization Options:**
+1. **Accept billing**: ~$52/month for maximum attempts
+2. **Reduce frequency**: Every 15 minutes = 2,880 minutes/month (near free tier)
+3. **Reduce frequency**: Every 20 minutes = 2,160 minutes/month (within free tier buffer)
 
 ## Error Handling
 
@@ -100,7 +143,8 @@ chmod +x scripts/*.sh
 ./scripts/validate-config.sh      # Validate configuration
 ./scripts/setup-oci.sh           # Setup OCI authentication
 ./scripts/setup-ssh.sh           # Setup SSH keys
-./scripts/launch-instance.sh     # Launch instance
+./scripts/launch-parallel.sh     # Launch both shapes in parallel
+./scripts/launch-instance.sh     # Launch single shape (with env vars set)
 ./scripts/notify.sh test         # Test Telegram notifications
 
 # Check script syntax
@@ -121,15 +165,36 @@ cat config/regions.yml
 
 ## Important Notes
 
-- **Refactored Architecture**: The project has been transformed from a monolithic workflow into a modular system with separate scripts for different functions
-- **Enhanced Testability**: Individual scripts can now be tested locally without GitHub Actions
+- **Parallel Free Tier Maximization**: Simultaneously attempts both ARM (A1.Flex) and AMD (E2.1.Micro) free tier shapes to maximize Oracle Cloud resource acquisition
+- **GitHub Actions Billing Optimization**: Single-job architecture keeps billing at 1 minute per run, avoiding the 2x cost of matrix jobs
+- **Timeout Protection**: Built-in 55-second timeout prevents accidental 2-minute billing charges
+- **Enhanced Testability**: Individual scripts can be tested locally without GitHub Actions
 - **Improved Error Handling**: Comprehensive error classification with intelligent retry logic and notifications  
-- **Configuration Management**: Structured configuration files support multiple deployment scenarios
+- **Shape-Agnostic Architecture**: Core instance creation logic works with any OCI shape configuration
 - **Backward Compatibility**: All existing GitHub secrets and functionality are preserved
 - **Better Maintainability**: Clear separation of concerns makes the system easier to understand and modify
-- **Comprehensive Documentation**: Detailed documentation available in `docs/configuration.md`
 
 ## Critical Technical Patterns (Lessons Learned)
+
+### Parallel Execution Implementation (Added 2025-08-25)
+
+**Key Decision: Single Job vs Matrix Strategy**
+- **Chosen**: Single job with background processes (`&` and `wait`)
+- **Avoided**: GitHub Actions matrix strategy due to billing implications
+- **Reasoning**: Matrix jobs are billed separately (2 jobs × 1 min = 2 minutes vs 1 job × 1 min = 1 minute)
+- **Implementation**: `scripts/launch-parallel.sh` orchestrates parallel execution within single job
+
+**Timeout Strategy for Billing Control**
+- **Critical insight**: GitHub Actions rounds each job UP to nearest minute
+- **Solution**: 55-second hard timeout to prevent 2-minute billing
+- **Method**: `timeout` command with process cleanup on exceed
+- **Result**: Guaranteed 1-minute billing regardless of execution time
+
+**Shape-Agnostic Architecture Pattern**
+- **Problem**: Needed to support both A1.Flex and E2.1.Micro with different configurations
+- **Solution**: Environment variable injection per shape via subshells
+- **Benefits**: Single `launch-instance.sh` handles all shapes, easy to add new shapes
+- **Pattern**: `(export VAR=value; ./script.sh) &` for parallel execution
 
 ### Command Substitution + Logging Anti-Pattern
 - **NEVER** use stdout in logging functions when called via `$()`

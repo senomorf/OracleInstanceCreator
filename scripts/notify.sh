@@ -44,7 +44,7 @@ send_telegram_notification() {
     formatted_message="$formatted_message
 
 *Time*: $timestamp
-*Workflow*: Oracle Instance Creator"
+*Workflow*: Oracle Instance Creator (Parallel)"
     
     log_debug "Sending Telegram notification: $notification_type"
     

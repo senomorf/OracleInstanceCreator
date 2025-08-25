@@ -26,12 +26,16 @@ lookup_image_id() {
     local comp_id="$1"
     local image_id
     
+    # Set defaults for OS configuration if not provided
+    local operating_system="${OPERATING_SYSTEM:-Oracle Linux}"
+    local os_version="${OS_VERSION:-9}"
+    
     if [[ -n "${OCI_IMAGE_ID:-}" ]]; then
         image_id="$OCI_IMAGE_ID"
         log_info "Using specified image ID"
     else
         # Try common cached image IDs first
-        local cache_key="${OPERATING_SYSTEM}_${OS_VERSION}_${OCI_SHAPE}"
+        local cache_key="${operating_system}_${os_version}_${OCI_SHAPE}"
         case "$cache_key" in
             "Oracle Linux_9_VM.Standard.A1.Flex")
                 # Common Oracle Linux 9 ARM image ID - update as needed
@@ -51,13 +55,13 @@ lookup_image_id() {
         
         # Fallback to API lookup if no cached image
         if [[ -z "$image_id" ]]; then
-            log_info "Looking up latest image for OS $OPERATING_SYSTEM $OS_VERSION..."
+            log_info "Looking up latest image for OS $operating_system $os_version..."
             
             image_id=$(oci_cmd compute image list \
                 --compartment-id "$comp_id" \
                 --shape "$OCI_SHAPE" \
-                --operating-system "$OPERATING_SYSTEM" \
-                --operating-system-version "$OS_VERSION" \
+                --operating-system "$operating_system" \
+                --operating-system-version "$os_version" \
                 --limit 1 \
                 --sort-by TIMECREATED \
                 --sort-order DESC \
@@ -65,7 +69,7 @@ lookup_image_id() {
                 --raw-output)
                 
             if [[ -z "$image_id" || "$image_id" == "null" ]]; then
-                local error_msg="No image found for $OPERATING_SYSTEM $OS_VERSION"
+                local error_msg="No image found for $operating_system $os_version"
                 log_error "$error_msg"
                 send_telegram_notification "error" "OCI poller error: $error_msg"
                 die "$error_msg"
@@ -138,7 +142,7 @@ launch_instance() {
     local comp_id="$1"
     local image_id="$2"
     
-    log_info "Attempting to launch instance '$INSTANCE_DISPLAY_NAME' in AD $OCI_AD..."
+    log_info "Attempting to launch instance '$INSTANCE_DISPLAY_NAME' (shape: $OCI_SHAPE) in AD $OCI_AD..."
     
     # Build launch command
     local launch_args
@@ -241,7 +245,7 @@ handle_launch_error() {
 # Main function
 launch_oci_instance() {
     start_timer "total_execution"
-    log_info "Starting OCI instance launch process..."
+    log_info "Starting OCI instance launch process for shape: ${OCI_SHAPE:-<not set>}"
     
     # Check OCI CLI availability
     start_timer "oci_cli_check"
