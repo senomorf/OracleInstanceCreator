@@ -17,6 +17,7 @@ This project automatically attempts to create **BOTH** Oracle Cloud free tier in
 - **Enhanced Validation**: Comprehensive pre-flight checks and configuration validation
 - **Performance Optimized**: ~20-25 seconds execution time for both shapes in parallel (93% improvement)
 - **Timeout Protection**: 55-second safety limit prevents 2-minute billing charges
+- **Proxy Support**: Full IPv4/IPv6 proxy support with URL-encoded credentials
 - **Telegram Notifications**: Success/failure alerts with shape-specific details
 - **Modular Architecture**: Shape-agnostic scripts support any OCI configuration
 
@@ -115,6 +116,13 @@ Configure these secrets in your GitHub repository:
 **Notifications:**
 - `TELEGRAM_TOKEN`: Telegram bot token
 - `TELEGRAM_USER_ID`: Your Telegram user ID
+
+**Proxy Support (Optional):**
+- `OCI_PROXY_URL`: Authenticated proxy server URL
+  - IPv4: `username:password@proxy.example.com:3128`
+  - IPv6: `username:password@[::1]:3128`
+  - Supports URL-encoded credentials for special characters
+  - Example: `myuser:mypass@proxy.company.com:8080`
 
 ### Manual Execution
 ```bash

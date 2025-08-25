@@ -63,6 +63,10 @@ interruptible_sleep() {
     fi
 }
 
+# Ensure proxy configuration is applied if needed (fallback)
+# Note: Proxy should already be configured by setup-oci.sh, but this ensures it's available
+parse_and_configure_proxy false
+
 determine_compartment() {
     local comp_id
     

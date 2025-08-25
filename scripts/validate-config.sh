@@ -142,6 +142,11 @@ validate_notification_configuration() {
     log_success "Notification configuration validation passed"
 }
 
+validate_proxy_configuration() {
+    log_info "Validating proxy configuration..."
+    parse_and_configure_proxy true
+}
+
 print_configuration_summary() {
     log_info "Configuration Summary:"
     echo "  Region: $OCI_REGION"
@@ -174,6 +179,7 @@ validate_all_configuration() {
     validate_instance_configuration
     validate_ssh_configuration
     validate_notification_configuration
+    validate_proxy_configuration
     
     print_configuration_summary
     
