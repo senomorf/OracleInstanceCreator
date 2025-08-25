@@ -10,7 +10,7 @@ This project automatically attempts to create Oracle Cloud free tier instances u
 
 - **Automated Instance Creation**: Scheduled attempts to create OCI free tier instances
 - **Multi-AD Cycling**: Automatically tries multiple availability domains for higher success rates
-- **Smart Error Handling**: Distinguishes between capacity issues (expected) and genuine errors
+- **Smart Error Handling**: Distinguishes between capacity issues (expected) and genuine errors with transient error retry
 - **Instance Recovery**: Auto-restart failed instances with `RESTORE_INSTANCE` configuration
 - **Enhanced Validation**: Comprehensive pre-flight checks and configuration validation
 - **Performance Optimized**: 93% execution time reduction (from ~2 minutes to ~17 seconds)
