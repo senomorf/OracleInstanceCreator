@@ -63,22 +63,20 @@ main() {
     # Launch A1.Flex in background
     log_info "Launching A1.Flex (ARM) instance in background..."
     (
-        if launch_shape "A1.Flex" A1_FLEX_CONFIG; then
-            echo "0" > "$a1_result"
-        else
-            echo "$?" > "$a1_result"
-        fi
+        launch_shape "A1.Flex" A1_FLEX_CONFIG
+        local exit_code=$?
+        echo "$exit_code" > "$a1_result"
+        exit $exit_code
     ) &
     PID_A1=$!
     
     # Launch E2.Micro in background  
     log_info "Launching E2.1.Micro (AMD) instance in background..."
     (
-        if launch_shape "E2.1.Micro" E2_MICRO_CONFIG; then
-            echo "0" > "$e2_result"
-        else
-            echo "$?" > "$e2_result"
-        fi
+        launch_shape "E2.1.Micro" E2_MICRO_CONFIG
+        local exit_code=$?
+        echo "$exit_code" > "$e2_result"
+        exit $exit_code
     ) &
     PID_E2=$!
     
