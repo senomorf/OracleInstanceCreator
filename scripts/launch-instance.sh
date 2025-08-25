@@ -158,8 +158,10 @@ launch_instance() {
     
     if [[ $status -ne 0 ]]; then
         # Check for rate limiting first to avoid further API calls
-        if echo "$output" | grep -qi "too many requests\|rate limit\|throttle\|429"; then
+        log_debug "Checking for rate limiting patterns in error output"
+        if echo "$output" | grep -qi "too.*many.*requests\|rate.*limit\|throttle\|429\|TooManyRequests\|\"code\".*\"TooManyRequests\"\|\"status\".*429"; then
             log_info "Rate limit detected - will retry on next schedule"
+            log_debug "Early detection matched rate limiting pattern in: $output"
             log_info "Capacity issue detected - will retry on next schedule"
             return 0
         fi
