@@ -182,7 +182,7 @@ get_error_type() {
     if echo "$error_output" | grep -qi "capacity\|host capacity\|out of capacity\|service limit\|quota exceeded\|resource unavailable\|insufficient capacity"; then
         log_debug "Detected CAPACITY error pattern in: $error_output"
         echo "CAPACITY"
-    elif echo "$error_output" | grep -qi "too.*many.*requests\|rate.*limit\|throttle\|429\|TooManyRequests\|\"code\".*\"TooManyRequests\"\|\"status\".*429"; then
+    elif echo "$error_output" | grep -qi "too.*many.*requests\|rate.*limit\|throttle\|429\|TooManyRequests\|\"code\".*\"TooManyRequests\"\|\"status\".*429\|'status':.*429\|'code':.*'TooManyRequests'"; then
         log_debug "Detected RATE_LIMIT error pattern in: $error_output"
         echo "CAPACITY"  # Treat rate limiting as capacity issue
     elif echo "$error_output" | grep -qi "display name already exists\|instance.*already exists\|duplicate.*name"; then
