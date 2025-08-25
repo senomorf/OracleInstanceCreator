@@ -54,46 +54,73 @@ main() {
     local timeout_seconds=55
     log_debug "Setting execution timeout to ${timeout_seconds}s to avoid 2-minute billing"
     
+    # Create temporary files for process communication
+    local temp_dir
+    temp_dir=$(mktemp -d)
+    local a1_result="${temp_dir}/a1_result"
+    local e2_result="${temp_dir}/e2_result"
+    
     # Launch A1.Flex in background
     log_info "Launching A1.Flex (ARM) instance in background..."
     (
-        launch_shape "A1.Flex" A1_FLEX_CONFIG
+        if launch_shape "A1.Flex" A1_FLEX_CONFIG; then
+            echo "0" > "$a1_result"
+        else
+            echo "$?" > "$a1_result"
+        fi
     ) &
     PID_A1=$!
     
     # Launch E2.Micro in background  
     log_info "Launching E2.1.Micro (AMD) instance in background..."
     (
-        launch_shape "E2.1.Micro" E2_MICRO_CONFIG
+        if launch_shape "E2.1.Micro" E2_MICRO_CONFIG; then
+            echo "0" > "$e2_result"
+        else
+            echo "$?" > "$e2_result"
+        fi
     ) &
     PID_E2=$!
     
     # Wait for both processes to complete with timeout
     log_info "Waiting for both shape attempts to complete (timeout: ${timeout_seconds}s)..."
     
-    # Use timeout command to enforce time limit
-    {
-        wait $PID_A1
-        STATUS_A1=$?
-        
-        wait $PID_E2
-        STATUS_E2=$?
-    } &
-    WAIT_PID=$!
+    # Initialize status variables
+    local STATUS_A1=1
+    local STATUS_E2=1
     
-    # Implement timeout
-    if timeout "$timeout_seconds" bash -c "wait $WAIT_PID" 2>/dev/null; then
-        # Both processes completed within timeout
-        wait $WAIT_PID 2>/dev/null || true
-    else
-        # Timeout exceeded - kill background processes
+    # Simple timeout implementation
+    local elapsed=0
+    local sleep_interval=1
+    while [[ $elapsed -lt $timeout_seconds ]]; do
+        # Check if both processes have finished
+        if ! kill -0 $PID_A1 2>/dev/null && ! kill -0 $PID_E2 2>/dev/null; then
+            break
+        fi
+        sleep $sleep_interval
+        ((elapsed += sleep_interval))
+    done
+    
+    # Handle timeout case
+    if [[ $elapsed -ge $timeout_seconds ]]; then
         log_warning "Execution timeout reached (${timeout_seconds}s) - terminating background processes"
         kill $PID_A1 $PID_E2 2>/dev/null || true
-        wait $PID_A1 2>/dev/null || true
-        wait $PID_E2 2>/dev/null || true
+        sleep 2  # Give processes time to terminate
+        kill -9 $PID_A1 $PID_E2 2>/dev/null || true
         STATUS_A1=124  # timeout exit code
         STATUS_E2=124  # timeout exit code
+    else
+        # Wait for processes to finish and collect results
+        wait $PID_A1 2>/dev/null || true
+        wait $PID_E2 2>/dev/null || true
+        
+        # Read results from files if they exist
+        [[ -f "$a1_result" ]] && STATUS_A1=$(cat "$a1_result")
+        [[ -f "$e2_result" ]] && STATUS_E2=$(cat "$e2_result")
     fi
+    
+    # Cleanup temporary files
+    rm -rf "$temp_dir" 2>/dev/null || true
     
     # Log results
     if [[ $STATUS_A1 -eq 0 ]]; then
