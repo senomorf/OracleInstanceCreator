@@ -774,3 +774,35 @@ body {
     text-align: center;
   }
 }
+
+/* Security Warning Banner */
+.security-warning-banner {
+    background: #fffbe5;
+    border: 1px solid #f59e0b;
+    border-left-width: 4px;
+    border-radius: var(--border-radius);
+    padding: 20px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.security-warning-banner .warning-icon {
+    font-size: 1.5rem;
+    color: #f59e0b;
+    padding-top: 4px;
+}
+
+.security-warning-banner .warning-content h4 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #b45309;
+    margin-bottom: 8px;
+}
+
+.security-warning-banner .warning-content p {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: #78350f;
+}

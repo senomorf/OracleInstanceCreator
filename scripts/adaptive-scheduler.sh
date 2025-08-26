@@ -61,17 +61,30 @@ record_attempt_context() {
     if [[ -z "$existing_data" ]]; then
         updated_data="[$new_entry]"
     else
-        # Add new entry and keep last 100 entries
-        updated_data=$(echo "$existing_data" | jq --arg entry "$new_entry" '. + [($entry | fromjson)] | .[-100:]' 2>/dev/null || echo "[$new_entry]")
+        # Add new entry and keep last 50 entries
+        updated_data=$(echo "$existing_data" | jq --arg entry "$new_entry" '. + [($entry | fromjson)] | .[-50:]' 2>/dev/null || echo "[$new_entry]")
     fi
     
-    # Store updated pattern data
+    # Store updated pattern data with retry logic
     if command -v gh >/dev/null 2>&1 && [[ -n "${GITHUB_TOKEN:-}" ]]; then
-        if echo "$updated_data" | gh variable set SUCCESS_PATTERN_DATA --body-file - 2>/dev/null; then
-            log_debug "Updated success pattern tracking data"
-        else
-            log_warning "Failed to update pattern tracking data"
-        fi
+        local max_retries=3
+        local retry_count=0
+        local success=false
+        
+        while [[ $retry_count -lt $max_retries && "$success" != "true" ]]; do
+            if echo "$updated_data" | gh variable set SUCCESS_PATTERN_DATA --body-file - 2>/dev/null; then
+                log_debug "Updated success pattern tracking data"
+                success=true
+            else
+                retry_count=$((retry_count + 1))
+                if [[ $retry_count -lt $max_retries ]]; then
+                    log_info "Failed to update pattern tracking data, retrying... ($retry_count/$max_retries)"
+                    sleep $((2 * retry_count))  # Exponential backoff
+                else
+                    log_error "Failed to update pattern tracking data after $max_retries attempts - this may affect scheduling optimization"
+                fi
+            fi
+        done
     else
         log_debug "GitHub CLI or token not available - pattern tracking disabled"
     fi
@@ -189,12 +202,33 @@ should_skip_attempt() {
     if [[ "$PATTERN_ANALYSIS_ENABLED" != "true" ]]; then
         return 1  # Don't skip if analysis disabled
     fi
-    
-    # Get current context
+
+    # Get pattern data
+    local pattern_data=""
+    if command -v gh >/dev/null 2>&1 && [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        pattern_data=$(gh variable get SUCCESS_PATTERN_DATA 2>/dev/null || echo "[]")
+    fi
+
+    if [[ -z "$pattern_data" || "$pattern_data" == "[]" ]]; then
+        return 1 # Not enough data to make a decision
+    fi
+
+    # Skip logic: Skip if the last 5 attempts in this hour have failed
+    if command -v jq >/dev/null 2>&1; then
+        local current_hour_utc=$(date -u '+%H')
+        local recent_attempts_in_hour=$(echo "$pattern_data" | jq --arg hour "$current_hour_utc" '[.[] | select(.timestamp[11:13] == $hour)] | .[-5:]')
+        local failure_count=$(echo "$recent_attempts_in_hour" | jq '[.[] | select(.type == "capacity_failure")] | length')
+        local success_count=$(echo "$recent_attempts_in_hour" | jq '[.[] | select(.type == "success")] | length')
+
+        if [[ $(echo "$recent_attempts_in_hour" | jq 'length') -ge 5 && "$failure_count" -ge 5 && "$success_count" -eq 0 ]]; then
+            log_info "Adaptive Skip: The last 5 attempts in hour $current_hour_utc UTC have failed. Skipping this attempt."
+            return 0 # Skip this attempt
+        fi
+    fi
+
+    # Get current context for logging
     local current_context=$(get_current_context)
     local schedule_type=$(echo "$current_context" | cut -d'|' -f1)
-    
-    # For now, never skip attempts - but this could be enhanced with ML-based predictions
     log_debug "Schedule context: $schedule_type - proceeding with attempt"
     return 1  # Don't skip
 }

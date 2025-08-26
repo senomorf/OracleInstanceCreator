@@ -966,7 +966,7 @@ record_success_pattern() {
         if [[ -z "$existing_data" || "$existing_data" == "[]" ]]; then
             updated_data="[$success_entry]"
         else
-            updated_data=$(echo "$existing_data" | jq --arg entry "$success_entry" '. + [($entry | fromjson)] | .[-100:]' 2>/dev/null || echo "[$success_entry]")
+            updated_data=$(echo "$existing_data" | jq --arg entry "$success_entry" '. + [($entry | fromjson)] | .[-50:]' 2>/dev/null || echo "[$success_entry]")
         fi
         
         # Store updated data
@@ -1004,7 +1004,7 @@ record_failure_pattern() {
         if [[ -z "$existing_data" || "$existing_data" == "[]" ]]; then
             updated_data="[$failure_entry]"
         else
-            updated_data=$(echo "$existing_data" | jq --arg entry "$failure_entry" '. + [($entry | fromjson)] | .[-100:]' 2>/dev/null || echo "[$failure_entry]")
+            updated_data=$(echo "$existing_data" | jq --arg entry "$failure_entry" '. + [($entry | fromjson)] | .[-50:]' 2>/dev/null || echo "[$failure_entry]")
         fi
         
         # Store updated data
