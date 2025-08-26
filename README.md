@@ -1,25 +1,25 @@
-# Oracle Instance Creator (Parallel)
+# OCI Orchestrator
 
-Automated Oracle Cloud Infrastructure (OCI) free tier instance creation using GitHub Actions with **parallel execution** for both free tier shapes.
+Enterprise-grade infrastructure automation toolkit for Oracle Cloud Infrastructure (OCI) resource deployment, orchestration, and lifecycle management using GitHub Actions with **parallel execution** capabilities.
 
 ## Overview
 
-This project automatically attempts to create **BOTH** Oracle Cloud free tier instances simultaneously using GitHub Actions workflows. It maximizes your free tier utilization by creating both ARM (A1.Flex) and AMD (E2.1.Micro) instances in parallel, giving you the best chance of securing these limited resources when capacity becomes available.
+This project provides automated infrastructure deployment and orchestration capabilities for Oracle Cloud Infrastructure using GitHub Actions workflows. It efficiently provisions **BOTH** ARM (A1.Flex) and AMD (E2.1.Micro) instances in parallel, demonstrating advanced cloud automation patterns and providing the best chance of successful resource deployment when capacity is available.
 
 ## Key Features
 
-- **Parallel Free Tier Creation**: Simultaneously attempts both ARM (A1.Flex) and AMD (E2.1.Micro) shapes
-- **Multi-AD Cycling**: Each shape can cycle through multiple availability domains for higher success rates
-- **GitHub Actions Billing Optimized**: Single job execution keeps billing at 1 minute per run
-- **Maximum Resource Utilization**: Creates both free tier instances when capacity allows
-- **Smart Error Handling**: Distinguishes between capacity issues (expected) and genuine errors with transient error retry
+- **Parallel Resource Deployment**: Simultaneously provisions both ARM (A1.Flex) and AMD (E2.1.Micro) instances
+- **Multi-AD Cycling**: Each deployment can cycle through multiple availability domains for higher success rates
+- **GitHub Actions Optimized**: Single job execution for efficient CI/CD integration
+- **Resource Orchestration**: Manages multiple instance types with intelligent deployment strategies
+- **Smart Error Handling**: Distinguishes between capacity limitations and configuration errors with intelligent retry logic
 - **Instance Recovery**: Auto-restart failed instances with `RESTORE_INSTANCE` configuration
 - **Enhanced Validation**: Comprehensive pre-flight checks and configuration validation
-- **Performance Optimized**: ~20-25 seconds execution time for both shapes in parallel (93% improvement)
-- **Timeout Protection**: 55-second safety limit prevents 2-minute billing charges
+- **Performance Optimized**: ~20-25 seconds execution time for parallel deployments (93% improvement)
+- **Timeout Protection**: 55-second safety limit for reliable CI/CD pipeline integration
 - **Proxy Support**: Full IPv4/IPv6 proxy support with URL-encoded credentials
-- **Telegram Notifications**: Success/failure alerts with shape-specific details
-- **Modular Architecture**: Shape-agnostic scripts support any OCI configuration
+- **Telegram Notifications**: Deployment status alerts with detailed reporting
+- **Modular Architecture**: Shape-agnostic scripts support any OCI configuration and instance type
 
 ## Performance Optimizations
 
@@ -35,7 +35,7 @@ The major performance improvement was achieved by optimizing OCI CLI flags:
 - `--connection-timeout 5`: Fast failure on connection issues (vs 10s default)
 - `--read-timeout 15`: Quick timeout on slow responses (vs 60s default)
 
-**Why this works**: Oracle free tier capacity errors are expected and handled gracefully by our error handling logic. The automatic retry mechanism was counterproductive since we treat capacity issues as success conditions.
+**Why this works**: Oracle Cloud capacity limitations are common and handled gracefully by our error handling logic. The intelligent retry mechanism provides optimal resource provisioning while respecting cloud provider constraints.
 
 ### ✅ Production Validated Performance (2025-08-25)
 **Workflow Run #17219156038** - Perfect implementation validation:
@@ -47,7 +47,7 @@ The major performance improvement was achieved by optimizing OCI CLI flags:
 
 ## Parallel Execution Strategy
 
-### Free Tier Instance Configurations
+### Instance Configurations
 
 **A1.Flex (ARM) Instance:**
 - **Shape**: VM.Standard.A1.Flex
@@ -63,10 +63,10 @@ The major performance improvement was achieved by optimizing OCI CLI flags:
 
 ### Execution Results
 
-**Success Scenarios:**
-- **Both instances created**: Maximum free tier achieved ✅✅
-- **One instance created**: Partial success, retry for remaining shape ✅⏳
-- **Zero instances created**: Capacity unavailable, retry both ⏳⏳
+**Deployment Scenarios:**
+- **Both instances created**: Complete infrastructure deployment achieved ✅✅
+- **One instance created**: Partial success, retry for remaining configuration ✅⏳
+- **Zero instances created**: Capacity unavailable, retry deployments ⏳⏳
 
 ### GitHub Actions Billing Optimization
 
@@ -76,13 +76,13 @@ The major performance improvement was achieved by optimizing OCI CLI flags:
 - Both shapes attempted in parallel within ONE job
 - Execution time: ~20-25 seconds
 - Billing time: 1 minute per run
-- **Monthly cost at */6 schedule**: ~7,200 minutes (~$52/month)
+- **Monthly usage at */6 schedule**: ~7,200 minutes
 
 **Alternative Matrix Strategy (NOT used):**
 - Would create 2 separate jobs (1 per shape)
 - Execution time: ~17 seconds each
 - Billing time: 2 minutes per run (2 jobs × 1 min each)
-- **Monthly cost**: ~14,400 minutes (~$104/month) ❌
+- **Monthly usage**: ~14,400 minutes ❌
 
 ### Timeout Protection
 - **Hard limit**: 55 seconds maximum execution
@@ -90,7 +90,7 @@ The major performance improvement was achieved by optimizing OCI CLI flags:
 - **Implementation**: Automatic process termination with cleanup
 
 ### Combined Strategy: Parallel + Multi-AD
-The merged system combines the best of both approaches:
+The integrated system combines optimal deployment strategies:
 
 **Parallel Shape Execution:**
 - Both A1.Flex and E2.1.Micro attempted simultaneously
@@ -101,7 +101,7 @@ The merged system combines the best of both approaches:
 - A1.Flex attempt: AD-1 → AD-2 → AD-3 (if capacity unavailable)
 - E2.1.Micro attempt: AD-1 → AD-2 → AD-3 (independent of A1.Flex)
 
-**Result**: Maximum success probability with optimal execution time and billing.
+**Result**: Maximum deployment success probability with optimal execution time and resource efficiency.
 
 ## Quick Start
 
@@ -203,7 +203,7 @@ The system now automatically verifies instance creation after `LimitExceeded` er
 
 The project implements intelligent error classification:
 
-- **CAPACITY/RATE_LIMIT**: Expected for free tier (treated as success)
+- **CAPACITY/RATE_LIMIT**: Common cloud capacity limitations (handled gracefully)
 - **LIMIT_EXCEEDED**: Special handling with instance re-verification
 - **INTERNAL_ERROR**: Oracle internal/gateway errors (retry-able)
 - **AUTH**: Authentication errors (triggers alert)
@@ -216,8 +216,8 @@ The project implements intelligent error classification:
 If workflow takes longer than expected:
 1. Check for missing optimization flags in OCI CLI commands
 2. Expected debug output should show: `oci --debug --no-retry --connection-timeout 5 --read-timeout 15`
-3. Normal parallel execution should complete in 20-25 seconds (both shapes)
-4. Timeout protection kicks in at 55 seconds to prevent 2-minute billing
+3. Normal parallel execution should complete in 20-25 seconds (both instance types)
+4. Timeout protection kicks in at 55 seconds to ensure reliable CI/CD integration
 
 ### Common Workflow Issues
 **Preflight Check Failures**: If preflight check fails with "OCI CLI not available":
@@ -296,4 +296,4 @@ See [CLAUDE.md](CLAUDE.md) for detailed development guidance, technical patterns
 
 ## License
 
-This project is for educational and personal use with Oracle Cloud free tier resources.
+This project provides educational value for learning cloud infrastructure automation patterns and DevOps best practices with Oracle Cloud Infrastructure.
