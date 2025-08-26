@@ -10,7 +10,41 @@
 
 set -euo pipefail
 
-source "$(dirname "$0")/utils.sh"
+# Try to source utils.sh with fallback functions
+UTILS_PATH="$(dirname "$0")/utils.sh"
+if [[ -f "$UTILS_PATH" ]]; then
+    source "$UTILS_PATH"
+else
+    # Fallback functions when utils.sh is not available (e.g., in GitHub Actions notification job)
+    log_debug() { echo "[DEBUG] $*" >&2; }
+    log_info() { echo "[INFO] $*" >&2; }
+    log_warning() { echo "[WARNING] $*" >&2; }
+    log_error() { echo "[ERROR] $*" >&2; }
+    
+    # Simple retry implementation as fallback
+    retry_with_backoff() {
+        local max_attempts="$1"
+        local delay="$2"
+        shift 2
+        
+        local attempt=1
+        while [[ $attempt -le $max_attempts ]]; do
+            if "$@"; then
+                return 0
+            fi
+            
+            if [[ $attempt -eq $max_attempts ]]; then
+                return 1
+            fi
+            
+            echo "[DEBUG] Retry attempt $attempt failed, waiting ${delay}s..." >&2
+            sleep "$delay"
+            ((attempt++))
+            delay=$((delay * 2))  # Exponential backoff
+        done
+        return 1
+    }
+fi
 
 # Send Telegram notification
 send_telegram_notification() {
