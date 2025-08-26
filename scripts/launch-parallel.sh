@@ -15,6 +15,39 @@ PID_A1=""
 PID_E2=""
 temp_dir=""
 
+# Performance monitoring functions
+get_memory_usage() {
+    if command -v free >/dev/null 2>&1; then
+        # Linux - get used memory in MB
+        free -m | awk 'NR==2{printf "%.1f", $3}'
+    elif command -v vm_stat >/dev/null 2>&1; then
+        # macOS - get used memory in MB
+        vm_stat | awk '
+        /Pages free/ { free = $3 + 0 }
+        /Pages active/ { active = $3 + 0 }
+        /Pages inactive/ { inactive = $3 + 0 }
+        /Pages wired down/ { wired = $4 + 0 }
+        END { printf "%.1f", (active + inactive + wired) * 4096 / 1024 / 1024 }'
+    else
+        echo "0"
+    fi
+}
+
+# Track resource contention during parallel execution
+track_resource_usage() {
+    local phase="$1"  # "start", "peak", "end"
+    local memory_usage
+    memory_usage=$(get_memory_usage)
+    
+    # Log resource usage for monitoring
+    log_performance_metric "RESOURCE_USAGE" "parallel_execution" "$phase" "1" "Memory=${memory_usage}MB"
+    
+    # Store peak usage for analysis
+    if [[ "$phase" == "peak" ]]; then
+        echo "$memory_usage" > "${temp_dir}/peak_memory_usage" 2>/dev/null || true
+    fi
+}
+
 # Signal handler for graceful shutdown
 cleanup_handler() {
     log_warning "Received interrupt signal - cleaning up background processes"
@@ -102,6 +135,9 @@ main() {
     touch "$a1_result" "$e2_result"
     chmod 600 "$a1_result" "$e2_result"
     
+    # Track resource usage at start of parallel execution
+    track_resource_usage "start"
+    
     # Launch A1.Flex in background
     log_info "Launching A1.Flex (ARM) instance in background..."
     (
@@ -122,6 +158,9 @@ main() {
     ) &
     PID_E2=$!
     
+    # Log concurrent execution start
+    log_performance_metric "CONCURRENT_START" "parallel_execution" "1" "2" "A1_PID=$PID_A1,E2_PID=$PID_E2"
+    
     # Wait for both processes to complete with timeout
     log_info "Waiting for both shape attempts to complete (timeout: ${timeout_seconds}s)..."
     
@@ -141,6 +180,12 @@ main() {
             log_debug "Both processes completed after ${elapsed}s"
             break
         fi
+        
+        # Track peak resource usage during execution (every 5 seconds to avoid overhead)
+        if [[ $((elapsed % 5)) -eq 0 ]] && [[ $elapsed -gt 0 ]]; then
+            track_resource_usage "peak"
+        fi
+        
         sleep $sleep_interval
         ((elapsed += sleep_interval))
     done
@@ -151,7 +196,7 @@ main() {
         # Fix: Add process existence checks before kill commands
         [[ -n "$PID_A1" ]] && kill "$PID_A1" 2>/dev/null || true
         [[ -n "$PID_E2" ]] && kill "$PID_E2" 2>/dev/null || true
-        sleep $GRACEFUL_TERMINATION_DELAY  # Give processes time to terminate gracefully before force kill
+        sleep $GRACEFUL_TERMINATION_DELAY  # 2-second grace period allows processes to cleanup before SIGKILL
         [[ -n "$PID_A1" ]] && kill -9 "$PID_A1" 2>/dev/null || true
         [[ -n "$PID_E2" ]] && kill -9 "$PID_E2" 2>/dev/null || true
         STATUS_A1=$EXIT_TIMEOUT_ERROR  # Standard timeout exit code (GNU timeout compatibility)
@@ -203,6 +248,10 @@ main() {
     [[ $STATUS_E2 -eq 0 ]] && success_count=$((success_count + 1))
     
     log_elapsed "parallel_execution"
+    
+    # Track final resource usage and log execution summary
+    track_resource_usage "end"
+    log_performance_metric "CONCURRENT_END" "parallel_execution" "$success_count" "2" "ExecutionTime=${elapsed}s"
     
     if [[ $success_count -gt 0 ]]; then
         log_success "Parallel execution completed: $success_count of 2 instances created successfully"

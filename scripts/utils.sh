@@ -613,6 +613,29 @@ mask_credentials() {
     echo "$input" | sed -E 's|([^/@]+):([^/@]+)@|[MASKED]:[MASKED]@|g'
 }
 
+# Secure debug logging wrapper that automatically redacts sensitive information
+log_debug_secure() {
+    local message="$1"
+    
+    # Apply credential masking to the entire message
+    local masked_message
+    masked_message=$(mask_credentials "$message")
+    
+    # Additional redaction patterns for OCIDs (show only first/last 4 chars)
+    masked_message=$(echo "$masked_message" | sed -E 's/ocid1\.[^.]+\.[^.]+\.[^.]+\.([^.]{4})[^.]*([^.]{4})/ocid1.***.\1...\2/g')
+    
+    # Redact SSH keys
+    masked_message=$(echo "$masked_message" | sed -E 's/ssh-(rsa|ed25519|dss) [A-Za-z0-9+/=]+ .*/[SSH_KEY_REDACTED]/g')
+    
+    # Redact private key content
+    masked_message=$(echo "$masked_message" | sed -E 's/-----BEGIN [A-Z ]*PRIVATE KEY-----.*/[PRIVATE_KEY_REDACTED]/g')
+    
+    # Redact Telegram tokens
+    masked_message=$(echo "$masked_message" | sed -E 's/[0-9]{8,10}:[A-Za-z0-9_-]{35}/[TELEGRAM_TOKEN_REDACTED]/g')
+    
+    log_debug "$masked_message"
+}
+
 # Get appropriate exit code for error type
 get_exit_code_for_error_type() {
     local error_type="$1"
