@@ -165,11 +165,20 @@ class OracleInstanceDashboard {
         // Load saved config
         this.loadConfig();
         
+        // Check if this is first-time setup
+        const isFirstTime = !this.config.owner || !this.config.repo;
+        
         // Initialize UI
         this.initializeUI();
         
         // Setup event listeners
         this.setupEventListeners();
+        
+        // Show first-time setup if needed
+        if (isFirstTime) {
+            console.log('👋 First-time setup detected');
+            setTimeout(() => this.showFirstTimeSetup(), 1000);
+        }
         
         // Load initial data
         await this.refreshData();
@@ -180,6 +189,22 @@ class OracleInstanceDashboard {
         }
         
         console.log('✅ Dashboard initialized successfully');
+    }
+
+    showFirstTimeSetup() {
+        // Show welcome message and settings modal
+        this.showNotification('Welcome! Please configure your repository settings to get started.', 'info');
+        
+        // Pre-fill detected values
+        if (this.config.owner) {
+            document.getElementById('repo-owner').value = this.config.owner;
+        }
+        if (this.config.repo) {
+            document.getElementById('repo-name').value = this.config.repo;
+        }
+        
+        // Open settings modal automatically
+        this.openModal('settings-modal');
     }
 
     loadConfig() {
@@ -208,10 +233,21 @@ class OracleInstanceDashboard {
                 // Try to detect repo from pathname
                 const path = window.location.pathname;
                 const pathParts = path.split('/').filter(p => p);
+                
+                // Handle GitHub Pages URL structure: username.github.io/repo-name/path
+                // For https://senomorf.github.io/OracleInstanceCreator/dashboard/
+                // pathParts = ['OracleInstanceCreator', 'dashboard']
                 if (pathParts.length > 0) {
+                    // First path segment is the repository name
                     this.config.repo = pathParts[0];
+                    console.log(`🔍 Auto-detected repository: ${this.config.owner}/${this.config.repo}`);
                 }
             }
+        }
+        
+        // If not GitHub Pages, try to detect from other hosting patterns
+        if (!this.config.owner || !this.config.repo) {
+            console.warn('⚠️ Could not auto-detect repository from URL. Please configure manually.');
         }
     }
 
@@ -227,66 +263,101 @@ class OracleInstanceDashboard {
     }
 
     initCharts() {
-        // Success Pattern Chart
-        const successCtx = document.getElementById('success-pattern-chart');
-        this.charts.successPattern = new Chart(successCtx, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: 'Success Rate %',
-                    data: [],
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100,
-                        ticks: {
-                            callback: function(value) {
-                                return value + '%';
+        // Check if Chart.js is available
+        if (typeof Chart === 'undefined' || this.cdnFallbacks.chartjs) {
+            console.warn('⚠️ Chart.js not available - using fallback visualization');
+            this.initFallbackCharts();
+            return;
+        }
+
+        try {
+            // Success Pattern Chart
+            const successCtx = document.getElementById('success-pattern-chart');
+            if (successCtx) {
+                this.charts.successPattern = new Chart(successCtx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Success Rate %',
+                            data: [],
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100,
+                                ticks: {
+                                    callback: function(value) {
+                                        return value + '%';
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
                             }
                         }
                     }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                }
+                });
             }
-        });
 
-        // Usage Chart
-        const usageCtx = document.getElementById('usage-chart');
-        this.charts.usage = new Chart(usageCtx, {
-            type: 'doughnut',
-            data: {
-                labels: ['Used', 'Remaining'],
-                datasets: [{
-                    data: [0, 2000],
-                    backgroundColor: ['#f59e0b', '#e5e7eb'],
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom'
+            // Usage Chart
+            const usageCtx = document.getElementById('usage-chart');
+            if (usageCtx) {
+                this.charts.usage = new Chart(usageCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Used', 'Remaining'],
+                        datasets: [{
+                            data: [0, 2000],
+                            backgroundColor: ['#f59e0b', '#e5e7eb'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            }
+                        }
                     }
-                }
+                });
             }
-        });
+
+            console.log('✅ Charts initialized successfully');
+        } catch (error) {
+            console.error('❌ Error initializing charts:', error);
+            this.cdnFallbacks.chartjs = true;
+            this.initFallbackCharts();
+        }
+    }
+
+    initFallbackCharts() {
+        // Initialize fallback visualization when Chart.js is not available
+        const successCanvas = document.getElementById('success-pattern-chart');
+        const usageCanvas = document.getElementById('usage-chart');
+        
+        if (successCanvas) {
+            this.renderFallbackChart('success-pattern-chart', [], 'line');
+        }
+        
+        if (usageCanvas) {
+            this.renderFallbackChart('usage-chart', [0, 2000], 'doughnut');
+        }
+        
+        console.log('📊 Fallback charts initialized');
     }
 
     setupEventListeners() {
@@ -352,6 +423,13 @@ class OracleInstanceDashboard {
     async refreshData() {
         console.log('🔄 Refreshing dashboard data...');
         
+        // Check if basic configuration is available
+        if (!this.config.owner || !this.config.repo) {
+            console.warn('⚠️ Repository not configured. Showing setup prompt.');
+            this.showConfigurationPrompt();
+            return;
+        }
+        
         // If offline, use cached data instead of making API calls
         if (this.offlineMode.enabled) {
             console.log('📵 Offline mode - using cached data');
@@ -367,21 +445,68 @@ class OracleInstanceDashboard {
                 <span>${this.formatTime(this.lastUpdate)}</span>
             `;
 
-            // Fetch all data in parallel
-            await Promise.all([
-                this.updateInstanceStatus(),
+            // Always try to load public data (workflow runs)
+            const publicDataPromises = [
                 this.updateWorkflowRuns(),
-                this.updateSuccessMetrics(),
                 this.updateUsageMetrics(),
-                this.updateADPerformance(),
                 this.updateScheduleInfo()
-            ]);
+            ];
+
+            // Only load authenticated data if token is available
+            const authenticatedDataPromises = [];
+            if (this.config.token) {
+                authenticatedDataPromises.push(
+                    this.updateInstanceStatus(),
+                    this.updateSuccessMetrics(),
+                    this.updateADPerformance()
+                );
+            } else {
+                // Show limited data message for authenticated features
+                this.showAuthenticationPrompt();
+            }
+
+            // Fetch all available data in parallel
+            await Promise.all([...publicDataPromises, ...authenticatedDataPromises]);
 
             // Cache the successful data fetch for offline mode
             this.cacheCurrentData();
 
         } catch (error) {
             console.error('Error refreshing data:', error);
+            this.handleDataLoadError(error);
+        }
+    }
+
+    showConfigurationPrompt() {
+        // Show message for missing repository configuration
+        document.getElementById('instance-status').textContent = 'Not Configured';
+        document.getElementById('instance-trend').innerHTML = 
+            '⚙️ <a href="#" onclick="document.getElementById(\'settings-btn\').click()">Configure repository settings</a>';
+        
+        document.getElementById('workflow-runs').innerHTML = `
+            <div class="loading">
+                <i class="fas fa-cog"></i>
+                Repository not configured. Click settings to get started.
+            </div>
+        `;
+    }
+
+    showAuthenticationPrompt() {
+        // Show limited access message for features requiring authentication
+        document.getElementById('instance-status').textContent = 'Limited Access';
+        document.getElementById('instance-trend').innerHTML = 
+            '🔒 <a href="#" onclick="document.getElementById(\'settings-btn\').click()">Add GitHub token for full access</a>';
+        
+        document.getElementById('success-rate').textContent = '---%';
+        document.getElementById('success-trend').textContent = 'Token required';
+    }
+
+    handleDataLoadError(error) {
+        if (error.message.includes('GitHub token not configured')) {
+            this.showAuthenticationPrompt();
+        } else if (error.message.includes('Not Found')) {
+            this.showError('Repository not found. Please check your configuration.');
+        } else {
             this.showError('Failed to refresh data: ' + error.message);
         }
     }
@@ -424,7 +549,8 @@ class OracleInstanceDashboard {
 
     async updateWorkflowRuns() {
         try {
-            const runs = await this.githubAPI(`/repos/${this.config.owner}/${this.config.repo}/actions/runs?per_page=10`);
+            // Use public API for workflow runs - no authentication required
+            const runs = await this.githubPublicAPI(`/repos/${this.config.owner}/${this.config.repo}/actions/runs?per_page=10`);
             
             const container = document.getElementById('workflow-runs');
             
@@ -452,8 +578,15 @@ class OracleInstanceDashboard {
             }).join('');
             
         } catch (error) {
-            document.getElementById('workflow-runs').innerHTML = 
-                '<div class="loading">Error loading workflow runs</div>';
+            const container = document.getElementById('workflow-runs');
+            if (error.message.includes('rate limit')) {
+                container.innerHTML = '<div class="loading">⏳ Rate limited - please wait and refresh</div>';
+            } else if (error.message.includes('not found')) {
+                container.innerHTML = '<div class="loading">❌ Repository not found or not public</div>';
+            } else {
+                container.innerHTML = '<div class="loading">❌ Error loading workflow runs</div>';
+            }
+            console.error('Error loading workflow runs:', error);
         }
     }
 
@@ -1060,6 +1193,30 @@ class OracleInstanceDashboard {
         });
         
         if (!response.ok) {
+            throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+        }
+        
+        return response.json();
+    }
+
+    async githubPublicAPI(endpoint, options = {}) {
+        // Public API calls that don't require authentication
+        const url = `https://api.github.com${endpoint}`;
+        const response = await fetch(url, {
+            headers: {
+                'Accept': 'application/vnd.github.v3+json',
+                ...options.headers
+            },
+            ...options
+        });
+        
+        if (!response.ok) {
+            if (response.status === 403) {
+                // Rate limited on public API
+                throw new Error('GitHub API rate limit exceeded. Please try again later.');
+            } else if (response.status === 404) {
+                throw new Error('Repository not found or not public');
+            }
             throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
         }
         
