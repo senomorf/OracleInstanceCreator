@@ -1,0 +1,27 @@
+version: 2
+updates:
+  # GitHub Actions dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+      time: "02:00"
+    # Limit PRs to manage Actions usage (each Dependabot PR triggers workflows)
+    open-pull-requests-limit: 5
+    # Group all action updates into single PR when possible
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    # Assign PRs to maintainer
+    assignees:
+      - "senomorf"
+    reviewers:
+      - "senomorf"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "deps"
+      include: "scope"

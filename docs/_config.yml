@@ -1,0 +1,32 @@
+# GitHub Pages configuration for Oracle Instance Creator Dashboard
+title: Oracle Instance Creator Dashboard
+description: Real-time monitoring and analytics for Oracle Cloud Infrastructure free tier instance creation
+
+# Theme
+theme: minima
+
+# Custom settings
+baseurl: "/OracleInstanceCreator"
+url: "https://senomorf.github.io"
+
+# Plugins
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+
+# Build settings
+markdown: kramdown
+highlighter: rouge
+
+# Exclude from processing
+exclude:
+  - README.md
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
+  - _site
+
+# Include dashboard files
+include:
+  - dashboard
