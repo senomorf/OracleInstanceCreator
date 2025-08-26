@@ -95,9 +95,10 @@ jobs:
           claude_args: |
             --max-turns 15
             --model claude-opus-4-1-20250805
-            --allowedTools "mcp__github__create_pending_pull_request_review,mcp__github__add_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,Edit,Read,Write,Bash(git:*)"
-            --disallowedTools WebSearch
             --system-prompt "You are a senior engineer focused on code quality"
+          # claude_args: |
+          #   --allowedTools "mcp__github__create_pending_pull_request_review,mcp__github__add_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,Edit,Read,Write,Bash(git:*)"
+          #   --disallowedTools WebSearch
           prompt: |
             Please review this pull request with comprehensive analysis covering both general software engineering principles and OCI automation specifics:
 
