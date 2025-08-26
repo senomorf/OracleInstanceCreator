@@ -81,12 +81,15 @@ jobs:
           BUN_INSTALL_CACHE_DIR: ~/.bun/install/cache
           NPM_CONFIG_MAXSOCKETS: "15"
           NPM_CONFIG_NETWORK_CONCURRENCY: "1"
+          ALLOWED_TOOLS: "Edit,Read,Write,Bash,mcp__*"
         # Optional: Skip review for certain conditions
         if: |
           !contains(github.event.pull_request.title, '[skip-review]') &&
           !contains(github.event.pull_request.title, '[WIP]')
         with:
-          # github_token not needed - uses default GITHUB_TOKEN for GitHub operations
+          # github_token should not be needed - uses default GITHUB_TOKEN for GitHub operations
+          # setting it for now as a fix to HttpError: Resource not accessible by integration - https://docs.github.com
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           additional_permissions: |
             actions: read
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -96,7 +99,7 @@ jobs:
             --max-turns 15
             --model claude-opus-4-1-20250805
             --system-prompt "You are a senior engineer focused on code quality"
-            --allowedTools Edit,Read,Write,Bash
+            --allowedTools "Edit,Read,Write,Bash,mcp__github_comment__update_claude_comment,mcp__github_ci__get_ci_status,mcp__github__create_pending_pull_request_review,mcp__github__add_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__*"
             --disallowedTools WebSearch
           # claude_args: |
           #   --allowedTools "mcp__github__create_pending_pull_request_review,mcp__github__add_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,Edit,Read,Write,Bash(git:*)"
