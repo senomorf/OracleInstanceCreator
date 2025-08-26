@@ -42,17 +42,55 @@ jobs:
 
           # Direct prompt for automated review (no @claude mention needed)
           direct_prompt: |
-            Please review this pull request and provide feedback on:
-            - Code quality and best practices
-            - Potential bugs or issues
-            - Performance considerations
-            - Security concerns
-            - Test coverage
-            
-            Be constructive and helpful in your feedback.
+            Please review this pull request with comprehensive analysis covering both general software engineering principles and OCI automation specifics:
 
-          # Optional: Use sticky comments to make Claude reuse the same comment on subsequent pushes to the same PR
-          # use_sticky_comment: true
+            **General Code Quality & Best Practices:**
+            - Code structure, readability, and maintainability
+            - Proper error handling and input validation
+            - Logic bugs, edge cases, and null checks
+            - Algorithm efficiency and resource usage
+            - Documentation quality and code comments
+            - Adherence to coding standards and conventions
+
+            **Security Analysis (General & OCI-Specific):**
+            - Input validation and injection vulnerabilities
+            - Authentication and authorization patterns
+            - **OCI Credential Safety**: Check for exposed credentials (OCI OCIDs, keys, SSH keys, tokens)
+            - **Parameter redaction**: OCIDs should show as ocid1234...5678, keys as [REDACTED]
+            - Verify secrets are only used in GitHub Actions, never in artifacts
+            - Distinguish capacity issues from real security failures
+
+            **Performance Considerations:**
+            - Algorithm complexity and optimization opportunities
+            - Memory usage and resource efficiency
+            - **OCI Performance**: Target <1 minute execution time
+            - **GitHub Actions**: Monitor usage to stay under 1,800 minutes/month target
+            - Caching strategies and optimization patterns
+
+            **Test Coverage & Quality:**
+            - Test completeness and edge case coverage
+            - Test quality, clarity, and maintainability
+            - Integration test scenarios
+            - Error condition testing
+
+            **OCI-Specific Automation Patterns:**
+            - Validate OCID format: ^ocid1\\.type\\.[a-z0-9-]*\\.[a-z0-9-]*\\..+
+            - Check flexible shape configurations include --shape-config
+            - Verify capacity errors return 0 (expected) vs 1 (real failure)
+            - Confirm transient errors retry properly before AD cycling
+            - Multi-AD cycling logic and retry mechanisms
+            - Bash script validation and OCI CLI optimization
+
+            **Potential Bugs & Issues:**
+            - Race conditions and concurrency issues
+            - Boundary conditions and error states
+            - Configuration and environment dependencies
+            - Workflow and automation reliability
+
+            Be constructive, thorough, and provide specific actionable feedback.
+
+          # Use sticky comments to make Claude reuse the same comment on subsequent pushes to the same PR
+          use_sticky_comment: true
           
           # Optional: Customize review based on file types
           # direct_prompt: |
@@ -68,8 +106,8 @@ jobs:
           #   'Welcome! Please review this PR from a first-time contributor. Be encouraging and provide detailed explanations for any suggestions.' ||
           #   'Please provide a thorough code review focusing on our coding standards and best practices.' }}
           
-          # Optional: Add specific tools for running tests or linting
-          # allowed_tools: "Bash(npm run test),Bash(npm run lint),Bash(npm run typecheck)"
+          # Allow specific tools for validation and testing
+          allowed_tools: "Bash(bash -n scripts/*.sh),Bash(./tests/test_*.sh),Bash(yamllint .github/workflows/*.yml)"
           
           # Optional: Skip review for certain conditions
           # if: |

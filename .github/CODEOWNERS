@@ -1,0 +1,16 @@
+# Global ownership - all changes require review
+* @senomorf
+
+# Critical security files require extra attention
+SECURITY.md @senomorf
+.github/workflows/ @senomorf
+.github/dependabot.yml @senomorf
+.github/copilot-instructions.md @senomorf
+
+# OCI automation scripts - security critical
+scripts/ @senomorf
+config/ @senomorf
+
+# Core workflow files
+.github/workflows/free-tier-creation.yml @senomorf
+.github/workflows/claude*.yml @senomorf
