@@ -224,7 +224,7 @@ oci_cmd_data() {
     log_debug "Executing OCI data command: oci ${cmd[*]}"
     
     set +e
-    output=$(oci --no-retry --connection-timeout $OCI_CONNECTION_TIMEOUT_SECONDS --read-timeout $OCI_READ_TIMEOUT_SECONDS "${cmd[@]}" 2>&1)
+    output=$(oci --no-retry --connection-timeout "$OCI_CONNECTION_TIMEOUT_SECONDS" --read-timeout "$OCI_READ_TIMEOUT_SECONDS" "${cmd[@]}" 2>&1)
     status=$?
     set -e
     
@@ -669,19 +669,19 @@ get_exit_code_for_error_type() {
     
     case "$error_type" in
         "CAPACITY"|"RATE_LIMIT"|"LIMIT_EXCEEDED")
-            echo $OCI_EXIT_CAPACITY_ERROR
+            echo "$OCI_EXIT_CAPACITY_ERROR"
             ;;
         "AUTH"|"CONFIG"|"DUPLICATE")
-            echo $OCI_EXIT_CONFIG_ERROR
+            echo "$OCI_EXIT_CONFIG_ERROR"
             ;;
         "NETWORK"|"INTERNAL_ERROR")
-            echo $OCI_EXIT_NETWORK_ERROR
+            echo "$OCI_EXIT_NETWORK_ERROR"
             ;;
         "TIMEOUT")
-            echo $OCI_EXIT_TIMEOUT
+            echo "$OCI_EXIT_TIMEOUT"
             ;;
         *)
-            echo $OCI_EXIT_GENERAL_ERROR
+            echo "$OCI_EXIT_GENERAL_ERROR"
             ;;
     esac
 }
@@ -795,7 +795,8 @@ parse_and_configure_proxy() {
     fi
     
     # Re-encode credentials to handle special characters in final URL
-    local encoded_user=$(url_encode "$proxy_user")
+    local encoded_user
+    encoded_user=$(url_encode "$proxy_user")
     local encoded_pass=$(url_encode "$proxy_pass")
     
     # Construct proxy URL with authentication and proper IPv6 bracketing

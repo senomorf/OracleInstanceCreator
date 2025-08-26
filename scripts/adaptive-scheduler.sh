@@ -64,7 +64,8 @@ record_attempt_context() {
     fi
     
     # Prepare new entry
-    local new_entry="{\"context\":\"$context_info\",\"timestamp\":\"$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')\",\"type\":\"attempt\"}"
+    local new_entry
+    new_entry="{\"context\":\"$context_info\",\"timestamp\":\"$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')\",\"type\":\"attempt\"}"
     
     # Update pattern data with size management and validation
     # GitHub repository variables have a 64KB limit, so we maintain a rolling window

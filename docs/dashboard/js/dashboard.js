@@ -46,7 +46,17 @@ class OracleInstanceDashboard {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    // CDN Fallback Management
+    // CDN Fallback Management with retry mechanism
+    async checkCDNWithRetry(retries = 3) {
+        for (let i = 0; i < retries; i++) {
+            if (await this.checkCDNAvailability()) {
+                return true;
+            }
+            await this.delay(1000 * Math.pow(2, i)); // Exponential backoff: 1s, 2s, 4s
+        }
+        return false;
+    }
+
     checkCDNAvailability() {
         console.log('🔍 Checking CDN availability...');
         
@@ -588,10 +598,14 @@ class OracleInstanceDashboard {
             // Load public data with staggered requests to avoid rate limiting
             console.log('📊 Loading public data...');
             await this.updateWorkflowRuns();
-            await this.delay(800); // 800ms delay between requests
+            // Dynamic backoff based on rate limit state
+            const backoff = this.rateLimitState.remaining < 100 ? 2000 : 800;
+            await this.delay(backoff);
             
             await this.updateUsageMetrics();
-            await this.delay(800);
+            // Dynamic backoff based on rate limit state
+            const backoff2 = this.rateLimitState.remaining < 100 ? 2000 : 800;
+            await this.delay(backoff2);
             
             await this.updateScheduleInfo();
 
@@ -601,10 +615,14 @@ class OracleInstanceDashboard {
                 await this.delay(1000); // Longer delay before authenticated calls
                 
                 await this.updateInstanceStatus();
-                await this.delay(800);
+                // Dynamic backoff based on rate limit state
+                const backoff3 = this.rateLimitState.remaining < 100 ? 2000 : 800;
+                await this.delay(backoff3);
                 
                 await this.updateSuccessMetrics();
-                await this.delay(800);
+                // Dynamic backoff based on rate limit state
+                const backoff4 = this.rateLimitState.remaining < 100 ? 2000 : 800;
+                await this.delay(backoff4);
                 
                 await this.updateADPerformance();
             } else {
@@ -1130,13 +1148,34 @@ class OracleInstanceDashboard {
                 timestamp: new Date().toISOString(),
                 data: data
             };
-            localStorage.setItem('oic-dashboard-cache', JSON.stringify(cacheData));
+            const cacheString = JSON.stringify(cacheData);
+            // Check cache size and prune if necessary (50KB limit)
+            if (cacheString.length > 50000) {
+                console.warn('Cache data exceeding 50KB, pruning old data...');
+                this.pruneOldCacheData(cacheData);
+                localStorage.setItem('oic-dashboard-cache', JSON.stringify(cacheData));
+            } else {
+                localStorage.setItem('oic-dashboard-cache', cacheString);
+            }
             this.offlineMode.lastDataCache = data;
             this.offlineMode.cacheTimestamp = new Date();
             console.log('💾 Dashboard data cached successfully');
         } catch (error) {
             console.warn('Failed to cache data:', error);
         }
+    }
+
+    pruneOldCacheData(cacheData) {
+        // Remove oldest entries to reduce cache size
+        if (cacheData.data && Array.isArray(cacheData.data.workflowRuns)) {
+            // Keep only the last 20 workflow runs instead of all
+            cacheData.data.workflowRuns = cacheData.data.workflowRuns.slice(-20);
+        }
+        if (cacheData.data && Array.isArray(cacheData.data.adPerformance)) {
+            // Keep only the last 10 AD performance entries  
+            cacheData.data.adPerformance = cacheData.data.adPerformance.slice(-10);
+        }
+        console.log('🗂️ Cache data pruned to reduce size');
     }
 
     loadCachedData() {
