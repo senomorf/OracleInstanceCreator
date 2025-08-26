@@ -6,7 +6,7 @@ class OracleInstanceDashboard {
             repo: '',
             token: '',
             autoRefresh: true,
-            refreshInterval: 30000
+            refreshInterval: 120000  // Increased to 2 minutes to reduce API load
         };
         
         this.charts = {};
@@ -22,8 +22,19 @@ class OracleInstanceDashboard {
             lastDataCache: null,
             cacheTimestamp: null
         };
+        this.rateLimitState = {
+            exceeded: false,
+            resetTime: null,
+            remaining: null,
+            retryAfter: null
+        };
         
         this.init();
+    }
+
+    // Utility function to add delays between API calls
+    delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     // CDN Fallback Management
@@ -445,28 +456,32 @@ class OracleInstanceDashboard {
                 <span>${this.formatTime(this.lastUpdate)}</span>
             `;
 
-            // Always try to load public data (workflow runs)
-            const publicDataPromises = [
-                this.updateWorkflowRuns(),
-                this.updateUsageMetrics(),
-                this.updateScheduleInfo()
-            ];
+            // Load public data with staggered requests to avoid rate limiting
+            console.log('📊 Loading public data...');
+            await this.updateWorkflowRuns();
+            await this.delay(800); // 800ms delay between requests
+            
+            await this.updateUsageMetrics();
+            await this.delay(800);
+            
+            await this.updateScheduleInfo();
 
             // Only load authenticated data if token is available
-            const authenticatedDataPromises = [];
             if (this.config.token) {
-                authenticatedDataPromises.push(
-                    this.updateInstanceStatus(),
-                    this.updateSuccessMetrics(),
-                    this.updateADPerformance()
-                );
+                console.log('🔐 Loading authenticated data...');
+                await this.delay(1000); // Longer delay before authenticated calls
+                
+                await this.updateInstanceStatus();
+                await this.delay(800);
+                
+                await this.updateSuccessMetrics();
+                await this.delay(800);
+                
+                await this.updateADPerformance();
             } else {
                 // Show limited data message for authenticated features
                 this.showAuthenticationPrompt();
             }
-
-            // Fetch all available data in parallel
-            await Promise.all([...publicDataPromises, ...authenticatedDataPromises]);
 
             // Cache the successful data fetch for offline mode
             this.cacheCurrentData();
@@ -650,13 +665,18 @@ class OracleInstanceDashboard {
             document.getElementById('usage-trend').textContent = 
                 `${currentMonthMinutes}/${estimatedMonthlyMinutes} min projected`;
             
-            // Update usage chart
-            this.charts.usage.data.datasets[0].data = [currentMonthMinutes, Math.max(0, remainingMinutes)];
-            this.charts.usage.data.datasets[0].backgroundColor = [
-                usagePercentage > 80 ? '#ef4444' : usagePercentage > 60 ? '#f59e0b' : '#10b981',
-                '#e5e7eb'
-            ];
-            this.charts.usage.update();
+            // Update usage chart if available
+            if (this.charts.usage && !this.cdnFallbacks.chartjs) {
+                this.charts.usage.data.datasets[0].data = [currentMonthMinutes, Math.max(0, remainingMinutes)];
+                this.charts.usage.data.datasets[0].backgroundColor = [
+                    usagePercentage > 80 ? '#ef4444' : usagePercentage > 60 ? '#f59e0b' : '#10b981',
+                    '#e5e7eb'
+                ];
+                this.charts.usage.update();
+            } else {
+                // Use fallback chart rendering
+                this.renderFallbackChart('usage-chart', [currentMonthMinutes, Math.max(0, remainingMinutes)], 'doughnut');
+            }
             
         } catch (error) {
             document.getElementById('usage-percentage').textContent = '---%';
@@ -729,10 +749,10 @@ class OracleInstanceDashboard {
     }
 
     updateSuccessPatternChart(days, data = null) {
-        // Use fallback rendering if Chart.js is unavailable
-        if (this.cdnFallbacks.chartjs) {
+        // Use fallback rendering if Chart.js is unavailable or charts not initialized
+        if (this.cdnFallbacks.chartjs || !this.charts.successPattern) {
             const chartData = data ? this.processChartData(data, days) : this.generateMockChartData(days);
-            this.renderFallbackChart('successPatternChart', chartData, 'line');
+            this.renderFallbackChart('success-pattern-chart', chartData, 'line');
             return;
         }
         
@@ -1200,6 +1220,18 @@ class OracleInstanceDashboard {
     }
 
     async githubPublicAPI(endpoint, options = {}) {
+        // Check if we're currently rate limited
+        if (this.rateLimitState.exceeded) {
+            const now = new Date();
+            if (this.rateLimitState.resetTime && now < this.rateLimitState.resetTime) {
+                const minutesRemaining = Math.ceil((this.rateLimitState.resetTime - now) / 60000);
+                throw new Error(`Rate limit exceeded. Try again in ${minutesRemaining} minute(s).`);
+            }
+            // Reset state if time has passed
+            this.rateLimitState.exceeded = false;
+            this.rateLimitState.resetTime = null;
+        }
+
         // Public API calls that don't require authentication
         const url = `https://api.github.com${endpoint}`;
         const response = await fetch(url, {
@@ -1210,10 +1242,24 @@ class OracleInstanceDashboard {
             ...options
         });
         
+        // Update rate limit information from response headers
+        this.updateRateLimitState(response.headers);
+        
         if (!response.ok) {
             if (response.status === 403) {
-                // Rate limited on public API
-                throw new Error('GitHub API rate limit exceeded. Please try again later.');
+                // Check if it's rate limiting or forbidden access
+                const rateLimitRemaining = response.headers.get('X-RateLimit-Remaining');
+                if (rateLimitRemaining === '0') {
+                    this.rateLimitState.exceeded = true;
+                    const resetTime = response.headers.get('X-RateLimit-Reset');
+                    if (resetTime) {
+                        this.rateLimitState.resetTime = new Date(parseInt(resetTime) * 1000);
+                    }
+                    const minutesRemaining = Math.ceil((this.rateLimitState.resetTime - new Date()) / 60000);
+                    throw new Error(`Rate limit exceeded. Try again in ${minutesRemaining} minute(s).`);
+                } else {
+                    throw new Error('GitHub API access forbidden. Repository may be private.');
+                }
             } else if (response.status === 404) {
                 throw new Error('Repository not found or not public');
             }
@@ -1221,6 +1267,24 @@ class OracleInstanceDashboard {
         }
         
         return response.json();
+    }
+
+    updateRateLimitState(headers) {
+        // Update rate limit tracking from response headers
+        const remaining = headers.get('X-RateLimit-Remaining');
+        const reset = headers.get('X-RateLimit-Reset');
+        
+        if (remaining !== null) {
+            this.rateLimitState.remaining = parseInt(remaining);
+        }
+        if (reset !== null) {
+            this.rateLimitState.resetTime = new Date(parseInt(reset) * 1000);
+        }
+        
+        // Log rate limit status for debugging
+        if (this.rateLimitState.remaining < 100) {
+            console.warn(`⚠️ GitHub API rate limit low: ${this.rateLimitState.remaining} requests remaining`);
+        }
     }
 
     getRunStatus(run) {
@@ -1306,7 +1370,7 @@ class OracleInstanceDashboard {
         
         this.refreshTimer = setInterval(() => {
             this.refreshData();
-        }, this.refreshInterval);
+        }, this.config.refreshInterval);
     }
 
     async triggerWorkflow() {
