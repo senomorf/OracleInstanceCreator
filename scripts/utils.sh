@@ -5,6 +5,9 @@
 
 set -euo pipefail
 
+# Source centralized constants
+source "$(dirname "${BASH_SOURCE[0]:-$0}")/constants.sh"
+
 # Colors for logging (if terminal supports it)
 if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
     RED=$(tput setaf 1)
@@ -106,7 +109,7 @@ log_with_context() {
 
 # Timing functions for performance monitoring
 # Note: Using bash 4+ associative arrays if available, otherwise simple variables
-if [[ ${BASH_VERSION%%.*} -ge 4 ]]; then
+if [[ -n "${BASH_VERSION:-}" ]] && [[ ${BASH_VERSION%%.*} -ge 4 ]]; then
     declare -A TIMER_START_TIMES
 else
     # Fallback for older bash versions - use simple timer variable
@@ -115,7 +118,7 @@ fi
 
 start_timer() {
     local timer_name="$1"
-    if [[ ${BASH_VERSION%%.*} -ge 4 ]]; then
+    if [[ -n "${BASH_VERSION:-}" ]] && [[ ${BASH_VERSION%%.*} -ge 4 ]]; then
         TIMER_START_TIMES[$timer_name]=$(date +%s.%N)
     else
         # Fallback - only support one timer at a time
@@ -128,7 +131,7 @@ log_elapsed() {
     local timer_name="$1"
     local start_time=""
     
-    if [[ ${BASH_VERSION%%.*} -ge 4 ]]; then
+    if [[ -n "${BASH_VERSION:-}" ]] && [[ ${BASH_VERSION%%.*} -ge 4 ]]; then
         start_time="${TIMER_START_TIMES[$timer_name]:-}"
         if [[ -n "$start_time" ]]; then
             unset TIMER_START_TIMES[$timer_name]
@@ -150,8 +153,45 @@ log_elapsed() {
 
 # Error handling
 die() {
-    log_error "$*"
-    exit 1
+    local message="$1"
+    local exit_code="${2:-1}"  # Default to general error
+    log_error "$message"
+    exit "$exit_code"
+}
+
+# Standardized error handling functions using OCI constants
+die_config_error() {
+    die "$1" "$OCI_EXIT_CONFIG_ERROR"
+}
+
+die_capacity_error() {
+    die "$1" "$OCI_EXIT_CAPACITY_ERROR"
+}
+
+die_timeout_error() {
+    die "$1" "$TIMEOUT_EXIT_CODE"
+}
+
+# Return standardized exit codes based on error type
+handle_error_by_type() {
+    local error_message="$1"
+    local error_type
+    error_type=$(get_error_type "$error_message")
+    
+    case "$error_type" in
+        "CAPACITY"|"RATE_LIMIT"|"LIMIT_EXCEEDED")
+            return "$OCI_EXIT_CAPACITY_ERROR"
+            ;;
+        "AUTH"|"CONFIG"|"DUPLICATE")
+            return "$OCI_EXIT_CONFIG_ERROR"
+            ;;
+        "NETWORK"|"INTERNAL_ERROR")
+            return "$OCI_EXIT_GENERAL_ERROR"
+            ;;
+        *)
+            return "$OCI_EXIT_GENERAL_ERROR"
+            ;;
+    esac
 }
 
 # Environment variable validation
@@ -182,7 +222,7 @@ oci_cmd_data() {
     log_debug "Executing OCI data command: oci ${cmd[*]}"
     
     set +e
-    output=$(oci --no-retry --connection-timeout 5 --read-timeout 15 "${cmd[@]}" 2>&1)
+    output=$(oci --no-retry --connection-timeout $OCI_CONNECTION_TIMEOUT_SECONDS --read-timeout $OCI_READ_TIMEOUT_SECONDS "${cmd[@]}" 2>&1)
     status=$?
     set -e
     
@@ -243,6 +283,12 @@ redact_sensitive_params() {
         elif [[ "$param" =~ (BEGIN|END).*PRIVATE.*KEY ]]; then
             # Redact private key content
             redacted_cmd+=("[PRIVATE_KEY_REDACTED]")
+            ((i++))
+        elif [[ "$param" =~ .*@.*:.* ]]; then
+            # Mask proxy URLs or credentials in the format user:pass@host:port
+            local masked_param
+            masked_param=$(mask_credentials "$param")
+            redacted_cmd+=("$masked_param")
             ((i++))
         elif [[ "$param" =~ --metadata.*ssh-authorized-keys || "$param" =~ ssh-rsa || "$param" =~ ssh-ed25519 ]]; then
             # Redact SSH keys
@@ -487,6 +533,31 @@ get_error_type() {
     fi
 }
 
+# Calculate exponential backoff delay for retry attempts
+# Used for transient error retry scenarios where we need smart delay calculation
+#
+# Parameters:
+#   attempt     Current attempt number (1-based)
+#   base_delay  Base delay in seconds (default: 5)
+#   max_delay   Maximum delay cap in seconds (default: 40)
+# Returns:
+#   Calculated delay in seconds
+calculate_exponential_backoff() {
+    local attempt="$1"
+    local base_delay="${2:-5}"
+    local max_delay="${3:-40}"
+    
+    # Calculate 2^(attempt-1) * base_delay
+    local delay=$((base_delay * (2 ** (attempt - 1))))
+    
+    # Cap at maximum delay
+    if [[ $delay -gt $max_delay ]]; then
+        delay=$max_delay
+    fi
+    
+    echo "$delay"
+}
+
 # Retry function with exponential backoff
 retry_with_backoff() {
     local max_attempts="$1"
@@ -513,6 +584,104 @@ retry_with_backoff() {
     
     log_error "Command failed after $max_attempts attempts"
     return 1
+}
+
+# Error handling standards for all scripts
+# Return codes convention:
+# 0 = Success/Continue
+# 1 = General error/failure
+# 2 = Capacity/rate limit (expected, retry later)
+# 3 = Configuration error (fix required)
+# 4 = Network/connectivity error (may resolve)
+# 124 = Timeout (GNU timeout standard)
+
+# Only define constants if not already defined (avoid readonly conflicts)
+if [[ -z "${OCI_EXIT_SUCCESS:-}" ]]; then
+    readonly OCI_EXIT_SUCCESS=0
+    readonly OCI_EXIT_GENERAL_ERROR=1
+    readonly OCI_EXIT_CAPACITY_ERROR=2
+    readonly OCI_EXIT_CONFIG_ERROR=3
+    readonly OCI_EXIT_NETWORK_ERROR=4
+    readonly OCI_EXIT_TIMEOUT=124
+fi
+
+# Constants are now centralized in constants.sh - sourced in init_script()
+
+# Wait for result file with polling and timeout
+wait_for_result_file() {
+    local file_path="$1"
+    local timeout="${2:-$RESULT_FILE_WAIT_TIMEOUT}"
+    local elapsed=0
+    local poll_interval="$RESULT_FILE_POLL_INTERVAL"
+    
+    log_debug "Waiting for result file: $file_path (timeout: ${timeout}s)"
+    
+    while [[ $elapsed -lt $timeout ]]; do
+        if [[ -f "$file_path" && -s "$file_path" ]]; then
+            log_debug "Result file found and non-empty after ${elapsed}s"
+            return 0
+        fi
+        sleep "$poll_interval"
+        elapsed=$((elapsed + 1))
+    done
+    
+    log_warning "Result file not found within ${timeout}s timeout: $file_path"
+    return 1
+}
+
+# Mask credentials in proxy URLs for safe logging
+mask_credentials() {
+    local input="$1"
+    
+    # Pattern matches: user:pass@host or user:pass@[host]
+    # Replace credentials with [MASKED]:[MASKED]
+    echo "$input" | sed -E 's|([^/@]+):([^/@]+)@|[MASKED]:[MASKED]@|g'
+}
+
+# Secure debug logging wrapper that automatically redacts sensitive information
+log_debug_secure() {
+    local message="$1"
+    
+    # Apply credential masking to the entire message
+    local masked_message
+    masked_message=$(mask_credentials "$message")
+    
+    # Additional redaction patterns for OCIDs (show only first/last 4 chars)
+    masked_message=$(echo "$masked_message" | sed -E 's/ocid1\.[^.]+\.[^.]+\.[^.]+\.([^.]{4})[^.]*([^.]{4})/ocid1.***.\1...\2/g')
+    
+    # Redact SSH keys
+    masked_message=$(echo "$masked_message" | sed -E 's/ssh-(rsa|ed25519|dss) [A-Za-z0-9+/=]+ .*/[SSH_KEY_REDACTED]/g')
+    
+    # Redact private key content
+    masked_message=$(echo "$masked_message" | sed -E 's/-----BEGIN [A-Z ]*PRIVATE KEY-----.*/[PRIVATE_KEY_REDACTED]/g')
+    
+    # Redact Telegram tokens
+    masked_message=$(echo "$masked_message" | sed -E 's/[0-9]{8,10}:[A-Za-z0-9_-]{35}/[TELEGRAM_TOKEN_REDACTED]/g')
+    
+    log_debug "$masked_message"
+}
+
+# Get appropriate exit code for error type
+get_exit_code_for_error_type() {
+    local error_type="$1"
+    
+    case "$error_type" in
+        "CAPACITY"|"RATE_LIMIT"|"LIMIT_EXCEEDED")
+            echo $OCI_EXIT_CAPACITY_ERROR
+            ;;
+        "AUTH"|"CONFIG"|"DUPLICATE")
+            echo $OCI_EXIT_CONFIG_ERROR
+            ;;
+        "NETWORK"|"INTERNAL_ERROR")
+            echo $OCI_EXIT_NETWORK_ERROR
+            ;;
+        "TIMEOUT")
+            echo $OCI_EXIT_TIMEOUT
+            ;;
+        *)
+            echo $OCI_EXIT_GENERAL_ERROR
+            ;;
+    esac
 }
 
 # URL encoding/decoding functions for proxy credentials
@@ -704,6 +873,20 @@ validate_availability_domain() {
         return 1
     fi
     
+    # Check for leading/trailing commas or spaces
+    if [[ "$ad_list" =~ ^[[:space:]]*,|,[[:space:]]*$ ]]; then
+        log_error "Invalid AD format: leading or trailing commas not allowed"
+        log_error "Found: '$ad_list'"
+        return 1
+    fi
+    
+    # Check for consecutive commas
+    if [[ "$ad_list" =~ ,, ]]; then
+        log_error "Invalid AD format: consecutive commas not allowed"
+        log_error "Found: '$ad_list'"
+        return 1
+    fi
+    
     # Use a simple loop to split by comma
     local temp_list="$ad_list"
     
@@ -715,8 +898,13 @@ validate_availability_domain() {
         ad=$(echo "$ad" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         
         # Validate this AD
-        if [[ -n "$ad" ]] && ! [[ "$ad" =~ ^[a-zA-Z0-9-]+:[A-Z0-9-]+-[A-Z]+-[0-9]+-AD-[0-9]+$ ]]; then
-            log_error "Invalid availability domain format: $ad"
+        if [[ -z "$ad" ]]; then
+            log_error "Empty availability domain found in comma-separated list"
+            return 1
+        fi
+        
+        if ! [[ "$ad" =~ ^[a-zA-Z0-9-]+:[A-Z0-9-]+-[A-Z]+-[0-9]+-AD-[0-9]+$ ]]; then
+            log_error "Invalid availability domain format: '$ad'"
             log_error "Expected format: tenancy_prefix:REGION-AD-N (e.g., 'fgaj:AP-SINGAPORE-1-AD-1')"
             return 1
         fi
@@ -728,13 +916,40 @@ validate_availability_domain() {
     # Process the last (or only) AD
     if [[ -n "$temp_list" ]]; then
         local ad=$(echo "$temp_list" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        
+        if [[ -z "$ad" ]]; then
+            log_error "Empty availability domain found at end of list"
+            return 1
+        fi
+        
         if ! [[ "$ad" =~ ^[a-zA-Z0-9-]+:[A-Z0-9-]+-[A-Z]+-[0-9]+-AD-[0-9]+$ ]]; then
-            log_error "Invalid availability domain format: $ad"
+            log_error "Invalid availability domain format: '$ad'"
             log_error "Expected format: tenancy_prefix:REGION-AD-N (e.g., 'fgaj:AP-SINGAPORE-1-AD-1')"
             return 1
         fi
     fi
     
+    return 0
+}
+
+# Validate timeout values are within reasonable bounds
+validate_timeout_value() {
+    local var_name="$1"
+    local value="$2"
+    local min_val="$3"
+    local max_val="$4"
+    
+    if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+        log_error "$var_name must be a positive integer, got: $value"
+        return 1
+    fi
+    
+    if [[ "$value" -lt "$min_val" || "$value" -gt "$max_val" ]]; then
+        log_error "$var_name must be between $min_val-${max_val} seconds, got: $value"
+        return 1
+    fi
+    
+    log_debug "$var_name validation passed: ${value}s (range: $min_val-${max_val}s)"
     return 0
 }
 
@@ -882,31 +1097,6 @@ log_performance_metric() {
     esac
 }
 
-# URL encode function for proxy credentials
-url_encode() {
-    local string="$1"
-    local encoded=""
-    local i
-    
-    for ((i = 0; i < ${#string}; i++)); do
-        local char="${string:$i:1}"
-        case "$char" in
-            [a-zA-Z0-9._~-]) encoded+="$char" ;;
-            *) 
-                # Convert character to hex
-                printf -v encoded "%s%%%02X" "$encoded" "'$char"
-                ;;
-        esac
-    done
-    
-    echo "$encoded"
-}
-
-# URL decode function for proxy credentials
-url_decode() {
-    local string="$1"
-    printf '%b\n' "${string//%/\\x}"
-}
 
 # Set GitHub repository variable to mark successful instance creation
 set_success_variable() {

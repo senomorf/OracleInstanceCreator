@@ -61,6 +61,19 @@ validate_instance_configuration() {
     export LEGACY_IMDS_ENDPOINTS="${LEGACY_IMDS_ENDPOINTS:-false}"
     export RETRY_WAIT_TIME="${RETRY_WAIT_TIME:-30}"
     
+    # Validate timeout values are within reasonable bounds
+    validate_timeout_value "RETRY_WAIT_TIME" "$RETRY_WAIT_TIME" 5 300
+    
+    if [[ -n "${INSTANCE_VERIFY_DELAY:-}" ]]; then
+        validate_timeout_value "INSTANCE_VERIFY_DELAY" "$INSTANCE_VERIFY_DELAY" 5 120
+    fi
+    
+    if [[ -n "${INSTANCE_VERIFY_MAX_CHECKS:-}" ]]; then
+        if ! [[ "$INSTANCE_VERIFY_MAX_CHECKS" =~ ^[0-9]+$ ]] || [[ "$INSTANCE_VERIFY_MAX_CHECKS" -lt 1 || "$INSTANCE_VERIFY_MAX_CHECKS" -gt 20 ]]; then
+            die "Invalid INSTANCE_VERIFY_MAX_CHECKS: $INSTANCE_VERIFY_MAX_CHECKS (must be between 1-20)"
+        fi
+    fi
+    
     # Validate availability domain format (supports comma-separated list)
     if ! validate_availability_domain "$OCI_AD"; then
         die "Availability domain validation failed"
@@ -97,9 +110,29 @@ validate_instance_configuration() {
         die "LEGACY_IMDS_ENDPOINTS must be 'true' or 'false', got: $LEGACY_IMDS_ENDPOINTS"
     fi
     
-    # Validate retry wait time
-    if ! [[ "$RETRY_WAIT_TIME" =~ ^[0-9]+$ ]] || [[ "$RETRY_WAIT_TIME" -lt 0 ]]; then
-        die "RETRY_WAIT_TIME must be a non-negative integer, got: $RETRY_WAIT_TIME"
+    # Validate timeout configurations with bounds checking
+    if ! [[ "$RETRY_WAIT_TIME" =~ ^[0-9]+$ ]] || [[ "$RETRY_WAIT_TIME" -lt 1 || "$RETRY_WAIT_TIME" -gt 300 ]]; then
+        die "RETRY_WAIT_TIME must be between 1-300 seconds, got: $RETRY_WAIT_TIME"
+    fi
+    
+    # Validate transient error retry configuration
+    local max_retries="${TRANSIENT_ERROR_MAX_RETRIES:-3}"
+    local retry_delay="${TRANSIENT_ERROR_RETRY_DELAY:-15}"
+    
+    if ! [[ "$max_retries" =~ ^[0-9]+$ ]] || [[ "$max_retries" -lt 1 || "$max_retries" -gt 10 ]]; then
+        die "TRANSIENT_ERROR_MAX_RETRIES must be between 1-10, got: $max_retries"
+    fi
+    
+    if ! [[ "$retry_delay" =~ ^[0-9]+$ ]] || [[ "$retry_delay" -lt 1 || "$retry_delay" -gt 60 ]]; then
+        die "TRANSIENT_ERROR_RETRY_DELAY must be between 1-60 seconds, got: $retry_delay"
+    fi
+    
+    # Validate AD format (comma-separated OCID-like values)
+    if [[ -n "${OCI_AD:-}" ]]; then
+        if ! [[ "$OCI_AD" =~ ^[a-zA-Z0-9:._-]+(,[a-zA-Z0-9:._-]+)*$ ]]; then
+            die "OCI_AD format invalid. Expected comma-separated AD names, got: $OCI_AD"
+        fi
+        log_debug "AD format validation passed for: $OCI_AD"
     fi
     
     # Validate recovery action
@@ -144,6 +177,35 @@ validate_notification_configuration() {
 
 validate_proxy_configuration() {
     log_info "Validating proxy configuration..."
+    
+    if [[ -z "${OCI_PROXY_URL:-}" ]]; then
+        log_debug "No proxy URL provided - skipping proxy validation"
+        return 0
+    fi
+    
+    # Enhanced proxy URL validation with comprehensive regex
+    local proxy_url_regex='^(https?://)?([^:@]+):([^:@]+)@(\[([0-9a-fA-F:]+)\]|([^:@]+)):[0-9]+/?$'
+    
+    if ! [[ "$OCI_PROXY_URL" =~ $proxy_url_regex ]]; then
+        die "Invalid OCI_PROXY_URL format. Expected formats:
+  IPv4: [http://]user:pass@host:port[/]
+  IPv6: [http://]user:pass@[host]:port[/]
+  URL encoding supported for special characters"
+    fi
+    
+    # Validate port range
+    local port
+    if [[ "$OCI_PROXY_URL" =~ @\[([^]]+)\]:([0-9]+) ]]; then
+        port="${BASH_REMATCH[2]}"  # IPv6 format
+    elif [[ "$OCI_PROXY_URL" =~ @([^:]+):([0-9]+) ]]; then
+        port="${BASH_REMATCH[2]}"  # IPv4 format
+    fi
+    
+    if [[ -n "$port" ]] && (( port < 1 || port > 65535 )); then
+        die "Invalid proxy port: $port (must be between 1-65535)"
+    fi
+    
+    log_success "Proxy URL format validation passed"
     parse_and_configure_proxy true
 }
 
@@ -166,11 +228,42 @@ print_configuration_summary() {
     echo "  Compartment: ${OCI_COMPARTMENT_ID:-$OCI_TENANCY_OCID (tenancy)}"
 }
 
+# Validate constants from constants.sh are within acceptable ranges
+validate_constants_configuration() {
+    log_info "Validating centralized constants..."
+    
+    # Validate GitHub Actions timeout is within billing boundary
+    if [[ "$GITHUB_ACTIONS_BILLING_TIMEOUT" -ge "$GITHUB_ACTIONS_BILLING_BOUNDARY" ]]; then
+        die "GITHUB_ACTIONS_BILLING_TIMEOUT ($GITHUB_ACTIONS_BILLING_TIMEOUT) must be less than boundary ($GITHUB_ACTIONS_BILLING_BOUNDARY)"
+    fi
+    
+    # Validate OCI timeout configuration
+    if [[ "$OCI_CONNECTION_TIMEOUT_SECONDS" -ge "$OCI_READ_TIMEOUT_SECONDS" ]]; then
+        die "OCI_CONNECTION_TIMEOUT_SECONDS ($OCI_CONNECTION_TIMEOUT_SECONDS) should be less than OCI_READ_TIMEOUT_SECONDS ($OCI_READ_TIMEOUT_SECONDS)"
+    fi
+    
+    # Validate retry configuration bounds
+    if [[ "$TRANSIENT_ERROR_MAX_RETRIES_DEFAULT" -lt "$TRANSIENT_ERROR_MAX_RETRIES_MIN" ]] || 
+       [[ "$TRANSIENT_ERROR_MAX_RETRIES_DEFAULT" -gt "$TRANSIENT_ERROR_MAX_RETRIES_MAX" ]]; then
+        die "TRANSIENT_ERROR_MAX_RETRIES_DEFAULT ($TRANSIENT_ERROR_MAX_RETRIES_DEFAULT) must be between $TRANSIENT_ERROR_MAX_RETRIES_MIN-$TRANSIENT_ERROR_MAX_RETRIES_MAX"
+    fi
+    
+    # Validate boot volume size bounds
+    if [[ "$BOOT_VOLUME_SIZE_DEFAULT" -lt "$BOOT_VOLUME_SIZE_MIN" ]]; then
+        die "BOOT_VOLUME_SIZE_DEFAULT ($BOOT_VOLUME_SIZE_DEFAULT) cannot be less than minimum ($BOOT_VOLUME_SIZE_MIN)"
+    fi
+    
+    log_success "Constants configuration validation passed"
+}
+
 # Main validation function
 validate_all_configuration() {
     log_info "Starting configuration validation..."
     
-    # Run comprehensive validation first (includes space checking and OCID validation)
+    # Validate centralized constants first
+    validate_constants_configuration
+    
+    # Run comprehensive validation (includes space checking and OCID validation)
     if ! validate_configuration; then
         die "Comprehensive configuration validation failed"
     fi

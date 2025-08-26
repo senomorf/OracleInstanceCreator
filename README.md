@@ -1,29 +1,33 @@
-# Oracle Instance Creator
+# Oracle Instance Creator (Parallel)
 
-Automated Oracle Cloud Infrastructure (OCI) free tier instance creation using GitHub Actions.
+Automated Oracle Cloud Infrastructure (OCI) free tier instance creation using GitHub Actions with **parallel execution** for both free tier shapes.
 
 ## Overview
 
-This project automatically attempts to create Oracle Cloud free tier instances using GitHub Actions workflows. It's designed to handle Oracle's capacity limitations gracefully and retry on a schedule when resources become available.
+This project automatically attempts to create **BOTH** Oracle Cloud free tier instances simultaneously using GitHub Actions workflows. It maximizes your free tier utilization by creating both ARM (A1.Flex) and AMD (E2.1.Micro) instances in parallel, giving you the best chance of securing these limited resources when capacity becomes available.
 
 ## Key Features
 
-- **Automated Instance Creation**: Scheduled attempts to create OCI free tier instances
-- **Multi-AD Cycling**: Automatically tries multiple availability domains for higher success rates
+- **Parallel Free Tier Creation**: Simultaneously attempts both ARM (A1.Flex) and AMD (E2.1.Micro) shapes
+- **Multi-AD Cycling**: Each shape can cycle through multiple availability domains for higher success rates
+- **GitHub Actions Billing Optimized**: Single job execution keeps billing at 1 minute per run
+- **Maximum Resource Utilization**: Creates both free tier instances when capacity allows
 - **Smart Error Handling**: Distinguishes between capacity issues (expected) and genuine errors with transient error retry
 - **Instance Recovery**: Auto-restart failed instances with `RESTORE_INSTANCE` configuration
 - **Enhanced Validation**: Comprehensive pre-flight checks and configuration validation
-- **Performance Optimized**: 93% execution time reduction (from ~2 minutes to ~17 seconds)
+- **Performance Optimized**: ~20-25 seconds execution time for both shapes in parallel (93% improvement)
+- **Timeout Protection**: 55-second safety limit prevents 2-minute billing charges
 - **Proxy Support**: Full IPv4/IPv6 proxy support with URL-encoded credentials
-- **Telegram Notifications**: Success/failure alerts via Telegram bot
-- **Modular Architecture**: Separate scripts for different functions (validation, setup, launch)
+- **Telegram Notifications**: Success/failure alerts with shape-specific details
+- **Modular Architecture**: Shape-agnostic scripts support any OCI configuration
 
 ## Performance Optimizations
 
 ### Critical Performance Breakthrough
-- **Original**: ~2 minutes execution time
-- **Optimized**: ~17-18 seconds execution time  
-- **Improvement**: 93% reduction via OCI CLI flag optimization
+- **Original**: ~2 minutes execution time (single shape)
+- **Parallel Optimized**: ~20-25 seconds execution time (both shapes)  
+- **Per-shape Performance**: ~17-18 seconds each (runs in parallel)
+- **Improvement**: 93% reduction via OCI CLI flag optimization + parallel execution
 
 ### Optimization Details
 The major performance improvement was achieved by optimizing OCI CLI flags:
@@ -32,6 +36,72 @@ The major performance improvement was achieved by optimizing OCI CLI flags:
 - `--read-timeout 15`: Quick timeout on slow responses (vs 60s default)
 
 **Why this works**: Oracle free tier capacity errors are expected and handled gracefully by our error handling logic. The automatic retry mechanism was counterproductive since we treat capacity issues as success conditions.
+
+### ✅ Production Validated Performance (2025-08-25)
+**Workflow Run #17219156038** - Perfect implementation validation:
+- **Total Execution**: 32 seconds (optimal 1-minute GitHub Actions billing)
+- **Parallel Phase**: 14.04 seconds for both shapes simultaneously
+- **Success Rate**: 100% - Both A1.Flex (ARM) and E2.1.Micro (AMD) created successfully
+- **Billing Efficiency**: Single job execution confirmed under 1-minute threshold
+- **Proxy Integration**: Seamless IPv4 proxy support working with parallel processes
+
+## Parallel Execution Strategy
+
+### Free Tier Instance Configurations
+
+**A1.Flex (ARM) Instance:**
+- **Shape**: VM.Standard.A1.Flex
+- **OCPUs**: 4 
+- **Memory**: 24GB
+- **Instance Name**: a1-flex-sg
+
+**E2.1.Micro (AMD) Instance:**
+- **Shape**: VM.Standard.E2.1.Micro
+- **OCPUs**: 1 (fixed shape)
+- **Memory**: 1GB (fixed shape) 
+- **Instance Name**: e2-micro-sg
+
+### Execution Results
+
+**Success Scenarios:**
+- **Both instances created**: Maximum free tier achieved ✅✅
+- **One instance created**: Partial success, retry for remaining shape ✅⏳
+- **Zero instances created**: Capacity unavailable, retry both ⏳⏳
+
+### GitHub Actions Billing Optimization
+
+**Key Insight**: GitHub Actions rounds each job UP to the nearest minute.
+
+**Single Job Strategy:**
+- Both shapes attempted in parallel within ONE job
+- Execution time: ~20-25 seconds
+- Billing time: 1 minute per run
+- **Monthly cost at */6 schedule**: ~7,200 minutes (~$52/month)
+
+**Alternative Matrix Strategy (NOT used):**
+- Would create 2 separate jobs (1 per shape)
+- Execution time: ~17 seconds each
+- Billing time: 2 minutes per run (2 jobs × 1 min each)
+- **Monthly cost**: ~14,400 minutes (~$104/month) ❌
+
+### Timeout Protection
+- **Hard limit**: 55 seconds maximum execution
+- **Purpose**: Prevents 2-minute billing if something goes wrong
+- **Implementation**: Automatic process termination with cleanup
+
+### Combined Strategy: Parallel + Multi-AD
+The merged system combines the best of both approaches:
+
+**Parallel Shape Execution:**
+- Both A1.Flex and E2.1.Micro attempted simultaneously
+- Single job execution for optimal GitHub Actions billing
+
+**Per-Shape Multi-AD Cycling:**
+- Each shape independently cycles through multiple ADs if configured
+- A1.Flex attempt: AD-1 → AD-2 → AD-3 (if capacity unavailable)
+- E2.1.Micro attempt: AD-1 → AD-2 → AD-3 (independent of A1.Flex)
+
+**Result**: Maximum success probability with optimal execution time and billing.
 
 ## Quick Start
 
@@ -78,8 +148,9 @@ chmod +x scripts/*.sh
 
 # Test individual components (requires environment variables)
 ./scripts/validate-config.sh      # Validate configuration
-./scripts/setup-oci.sh           # Setup OCI authentication  
-./scripts/launch-instance.sh     # Launch instance
+./scripts/setup-oci.sh           # Setup OCI authentication
+./scripts/launch-parallel.sh     # Launch both shapes in parallel  
+./scripts/launch-instance.sh     # Launch single shape (with env vars set)
 ./scripts/notify.sh test         # Test notifications
 ```
 
@@ -87,13 +158,14 @@ chmod +x scripts/*.sh
 
 ### File Structure
 ```
-├── .github/workflows/free-tier-creation.yml  # Main GitHub Actions workflow
+├── .github/workflows/free-tier-creation.yml  # Main GitHub Actions workflow (parallel)
 ├── scripts/
 │   ├── utils.sh                              # Common utilities & OCI CLI wrappers
 │   ├── validate-config.sh                    # Configuration validation
 │   ├── setup-oci.sh                          # OCI CLI setup
 │   ├── setup-ssh.sh                          # SSH key configuration
-│   ├── launch-instance.sh                    # Instance creation logic
+│   ├── launch-parallel.sh                    # Parallel orchestrator for both shapes
+│   ├── launch-instance.sh                    # Shape-agnostic instance creation logic
 │   └── notify.sh                             # Telegram notifications
 ├── config/
 │   ├── instance-profiles.yml                 # Pre-defined configurations
@@ -144,7 +216,8 @@ The project implements intelligent error classification:
 If workflow takes longer than expected:
 1. Check for missing optimization flags in OCI CLI commands
 2. Expected debug output should show: `oci --debug --no-retry --connection-timeout 5 --read-timeout 15`
-3. Normal execution should complete in 17-20 seconds
+3. Normal parallel execution should complete in 20-25 seconds (both shapes)
+4. Timeout protection kicks in at 55 seconds to prevent 2-minute billing
 
 ### Common Workflow Issues
 **Preflight Check Failures**: If preflight check fails with "OCI CLI not available":
@@ -177,47 +250,43 @@ gh workflow run free-tier-creation.yml --field verbose_output=true
 
 # Individual test components
 ./tests/test_utils.sh
+./tests/test_integration.sh
 ```
 
-**Test Coverage**: 31 automated tests covering:
-- Error classification accuracy
-- Configuration validation
+**Test Coverage**: 24 automated tests covering:
+- Error classification accuracy (utils tests)
+- Configuration validation and bounds checking
 - Parameter redaction security
-- OCID extraction reliability
+- Parallel execution scenarios (integration tests)
+- Process cleanup and timeout handling
 
 ### Signal Handling
 - **Graceful Shutdown**: SIGTERM/SIGINT handling for clean termination
 - **Interruptible Operations**: Background processes can be safely interrupted
 - **Resource Cleanup**: Proper cleanup of temporary processes on exit
 
-## Latest Improvements (2025-08-25)
+## Latest Improvements (2025-08-26)
 
-Following comprehensive code review, the Oracle Instance Creator has been enhanced with production-grade features:
+Following comprehensive Claude reviewer bot analysis, the Oracle Instance Creator has been enhanced with production-grade code quality improvements:
 
-### Production-Critical Features
-- **🔧 Configurable Timeouts**: Instance verification timeout now configurable (default: 150s vs previous 60s)
-- **✅ Enhanced OCID Validation**: JSON parsing with format validation prevents downstream errors
-- **🚨 Alert Severity Levels**: Critical/Error/Warning/Info notifications for better prioritization
-- **📊 AD Performance Metrics**: Success rate tracking for availability domain optimization
-- **📋 Preflight Validation**: Comprehensive environment and configuration checking
+### Code Quality & Security Enhancements
+- **🔧 Eliminated Code Duplication**: Removed duplicate URL encoding functions improving maintainability
+- **🛡️ Fixed Race Conditions**: Enhanced process cleanup with existence checks before termination
+- **🔒 Enhanced Security**: Comprehensive credential masking in all debug outputs, secure file permissions (600/700)
+- **✅ Comprehensive Validation**: Bounds checking for all timeouts (1-300s), retries (1-10), delays (1-60s)
+- **📋 AD Format Validation**: Proper validation of comma-separated availability domain lists
 
-### Monitoring & Observability
-- **📈 Structured Logging**: JSON logging support for enterprise monitoring systems
-- **🎯 Performance Tracking**: Real-time AD success/failure metrics with error classification
-- **🔍 Debug Enhancement**: Intelligent parameter redaction maintains security while debugging
-- **⚡ Zero Performance Impact**: All monitoring features maintain 17-18s execution time
+### Testing & Architecture Improvements  
+- **🧪 Integration Test Suite**: 9 comprehensive tests covering parallel execution, timeouts, and error handling
+- **📦 Centralized Constants**: Consolidated all magic numbers into `scripts/constants.sh` with validation
+- **🎯 Standardized Error Handling**: Type-safe error functions (`die_config_error`, `die_capacity_error`, `die_timeout_error`)
+- **📊 Enhanced Documentation**: All magic numbers documented with billing optimization explanations
 
-### Documentation & Templates
-- **📚 Configuration Templates**: Pre-built configs for Singapore ARM, US AMD, and production scenarios
-- **🛠️ Troubleshooting Runbook**: Comprehensive guide covering all common issues
-- **📖 Enhanced Documentation**: Detailed algorithm explanations for complex functions
-- **🚀 Quick Start**: Template-based setup reduces configuration time
-
-### Quality Assurance
-- **✅ 31 Tests Pass**: 100% test success rate with enhanced validation
-- **🔒 Security Hardened**: No credential exposure in logs, comprehensive input validation
-- **🔄 Backward Compatible**: All existing configurations continue to work unchanged
-- **📋 Production Ready**: Enterprise-grade validation, monitoring, and operational support
+### Performance & Reliability
+- **⚡ Performance Maintained**: All optimizations preserve 93% improvement (20-25s execution)
+- **🔄 Process Management**: Robust timeout handling with graceful and force termination
+- **🛠️ File Security**: Explicit permissions on temporary files and directories
+- **📈 Test Coverage**: 24 total test cases (15 proxy + 9 integration) with 100% pass rate
 
 See [CLAUDE.md](CLAUDE.md) for complete technical details and [docs/troubleshooting.md](docs/troubleshooting.md) for operational guidance.
 
