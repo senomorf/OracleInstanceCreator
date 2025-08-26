@@ -227,4 +227,4 @@ See [CLAUDE.md](CLAUDE.md) for detailed development guidance, technical patterns
 
 ## License
 
-This project is for educational and personal use with Oracle Cloud free tier resources.# Test trigger for enhanced-scheduler-dashboard branch
+This project is for educational and personal use with Oracle Cloud free tier resources.
