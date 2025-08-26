@@ -61,7 +61,7 @@ record_attempt_context() {
     # Prepare new entry
     local new_entry="{\"context\":\"$context_info\",\"timestamp\":\"$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')\",\"type\":\"attempt\"}"
     
-    # Update pattern data with size management
+    # Update pattern data with size management and validation
     # GitHub repository variables have a 64KB limit, so we maintain a rolling window
     # of the last 50 entries (~10KB), leaving ample buffer for growth
     local updated_data
@@ -71,6 +71,16 @@ record_attempt_context() {
         # Add new entry and keep last 50 entries (prevents size limit issues)
         # Each entry is ~200 bytes, so 50 entries ≈ 10KB << 64KB limit
         updated_data=$(echo "$existing_data" | jq --arg entry "$new_entry" '. + [($entry | fromjson)] | .[-50:]' 2>/dev/null || echo "[$new_entry]")
+        
+        # Validate data size to ensure we stay well under GitHub's 64KB limit
+        local data_size=${#updated_data}
+        if [[ $data_size -gt 60000 ]]; then
+            log_warning "Pattern data approaching size limit (${data_size}/64KB) - reducing to 40 entries for safety"
+            updated_data=$(echo "$updated_data" | jq '.[-40:]' 2>/dev/null || echo "[$new_entry]")
+            data_size=${#updated_data}
+        fi
+        
+        log_debug "Pattern data size: ${data_size} bytes ($(echo "$updated_data" | jq 'length' 2>/dev/null || echo "0") entries)"
     fi
     
     # Store updated pattern data with robust error handling
@@ -92,12 +102,16 @@ record_attempt_context() {
                     log_info "GitHub API failure, retrying... ($retry_count/$max_retries)"
                     sleep $((2 * retry_count))  # Exponential backoff: 2s, 4s, 6s
                 else
-                    log_error "Failed to update pattern tracking data after $max_retries attempts - this may affect scheduling optimization"
+                    log_error "Failed to update pattern tracking data after $max_retries attempts"
+                    log_error "REMEDIATION: Check GitHub token permissions (needs 'variables: write' scope) and network connectivity"
+                    log_error "IMPACT: Scheduling optimization will continue with existing data, but pattern learning is disabled"
+                    log_warning "Consider verifying: 1) GitHub token is valid, 2) Repository has Actions enabled, 3) No API rate limits exceeded"
                 fi
             fi
         done
     else
         log_debug "GitHub CLI or token not available - pattern tracking disabled"
+        log_debug "REMEDIATION: Install 'gh' CLI and set GITHUB_TOKEN environment variable to enable adaptive scheduling"
     fi
 }
 
@@ -137,6 +151,8 @@ analyze_success_patterns() {
         fi
     else
         log_warning "jq not available - skipping detailed pattern analysis"
+        log_warning "REMEDIATION: Install 'jq' package to enable detailed scheduling pattern analysis and recommendations"
+        log_info "Basic pattern tracking will continue without detailed analytics"
     fi
 }
 
