@@ -89,7 +89,7 @@ jobs:
         with:
           # github_token should not be needed - uses default GITHUB_TOKEN for GitHub operations
           # setting it for now as a fix to HttpError: Resource not accessible by integration - https://docs.github.com
-          github_token: ${{ secrets.PAT_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           additional_permissions: |
             actions: read
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
