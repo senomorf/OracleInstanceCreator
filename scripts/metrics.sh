@@ -145,5 +145,130 @@ cleanup_metrics() {
 # Trap to ensure cleanup on exit
 trap cleanup_metrics EXIT
 
-# Export functions for use by other scripts
+# Record structured performance metrics
+record_performance_metric() {
+    local metric_type="$1"
+    local metric_value="$2"
+    local additional_info="${3:-}"
+    local timestamp
+    
+    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    
+    # Structured format for monitoring systems
+    local metric_line="PERF_METRIC|${timestamp}|${metric_type}|${metric_value}|${additional_info}"
+    
+    # Log to both debug and metrics file
+    log_debug "$metric_line"
+    echo "$metric_line" >> "${METRICS_FILE}_perf"
+    
+    # Output structured logs for monitoring systems
+    if [[ "${LOG_FORMAT:-}" == "json" ]]; then
+        local json_context="{\"metric_type\":\"$metric_type\",\"value\":\"$metric_value\""
+        [[ -n "$additional_info" ]] && json_context+=",\"info\":\"$additional_info\""
+        json_context+="}"
+        log_json "performance" "$metric_line" "$json_context"
+    fi
+}
+
+# Record API response time
+record_api_response_time() {
+    local operation="$1"
+    local response_time_ms="$2"
+    local status="${3:-success}"
+    
+    record_performance_metric "API_RESPONSE_TIME" "$response_time_ms" "$operation:$status"
+    
+    # Alert on slow responses (>5000ms)
+    if [[ "$response_time_ms" -gt 5000 ]]; then
+        log_warning "Slow API response detected: $operation took ${response_time_ms}ms"
+    fi
+}
+
+# Record execution phase timing
+record_execution_phase() {
+    local phase_name="$1"
+    local duration_seconds="$2"
+    local status="${3:-completed}"
+    
+    record_performance_metric "EXECUTION_PHASE" "$duration_seconds" "$phase_name:$status"
+    
+    case "$phase_name" in
+        "parallel_execution")
+            if [[ "$duration_seconds" -gt 30 ]]; then
+                log_warning "Parallel execution took ${duration_seconds}s (>30s may indicate issues)"
+            fi
+            ;;
+        "setup")
+            if [[ "$duration_seconds" -gt 10 ]]; then
+                log_warning "Setup phase took ${duration_seconds}s (>10s may indicate network issues)"
+            fi
+            ;;
+    esac
+}
+
+# Generate performance dashboard template
+generate_dashboard_template() {
+    local output_file="${1:-dashboard_template.yml}"
+    
+    cat > "$output_file" << 'EOF'
+# GitHub Actions Performance Dashboard Template
+# Use with monitoring systems like Grafana, DataDog, etc.
+
+metrics:
+  parallel_execution_time:
+    query: "PERF_METRIC.*parallel_execution"
+    alert_threshold: 30  # seconds
+    description: "Time taken for parallel instance creation"
+    
+  api_response_times:
+    query: "PERF_METRIC.*API_RESPONSE_TIME"
+    alert_threshold: 5000  # milliseconds
+    description: "OCI API response times"
+    
+  ad_success_rates:
+    query: "success.*AD-[0-9]+"
+    description: "Success rates by availability domain"
+    group_by: "availability_domain"
+    
+  capacity_errors:
+    query: "CAPACITY.*error"
+    description: "Frequency of capacity errors by time of day"
+    group_by: "hour_of_day"
+
+alerts:
+  - name: "Slow Execution"
+    condition: "parallel_execution_time > 30"
+    message: "Parallel execution taking >30s may indicate performance issues"
+    
+  - name: "High API Latency"
+    condition: "api_response_times > 5000"
+    message: "OCI API responding slowly (>5s)"
+    
+  - name: "Low Success Rate"
+    condition: "ad_success_rate < 10"
+    message: "Very low success rate in availability domain"
+
+dashboard_queries:
+  execution_timing:
+    title: "Execution Time Trends"
+    query: "PERF_METRIC.*EXECUTION_PHASE"
+    visualization: "time_series"
+    
+  error_distribution:
+    title: "Error Types Distribution"
+    query: "error_type"
+    visualization: "pie_chart"
+    
+  success_rate_by_ad:
+    title: "Success Rate by Availability Domain"
+    query: "success.*|failure.*"
+    group_by: "availability_domain"
+    visualization: "bar_chart"
+EOF
+
+    log_info "Performance dashboard template generated: $output_file"
+}
+
+# Export all functions for use by other scripts
 export -f init_metrics record_ad_result show_ad_metrics get_optimal_ad cleanup_metrics
+export -f record_performance_metric record_api_response_time record_execution_phase generate_dashboard_template
