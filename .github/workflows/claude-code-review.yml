@@ -81,7 +81,8 @@ jobs:
           BUN_INSTALL_CACHE_DIR: ~/.bun/install/cache
           NPM_CONFIG_MAXSOCKETS: "15"
           NPM_CONFIG_NETWORK_CONCURRENCY: "1"
-          #ALLOWED_TOOLS: "Edit,Read,Write,Bash,mcp__*"
+          # increase from default 25000 to allow reading PR files from MCP (otherwise reads them anyway using gh command)
+          MAX_MCP_OUTPUT_TOKENS: "100000"
         # Optional: Skip review for certain conditions
         if: |
           !contains(github.event.pull_request.title, '[skip-review]') &&
