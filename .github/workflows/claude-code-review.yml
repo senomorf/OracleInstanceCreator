@@ -96,6 +96,8 @@ jobs:
             --max-turns 15
             --model claude-opus-4-1-20250805
             --system-prompt "You are a senior engineer focused on code quality"
+            --allowedTools Edit,Read,Write,Bash
+            --disallowedTools WebSearch
           # claude_args: |
           #   --allowedTools "mcp__github__create_pending_pull_request_review,mcp__github__add_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,Edit,Read,Write,Bash(git:*)"
           #   --disallowedTools WebSearch
