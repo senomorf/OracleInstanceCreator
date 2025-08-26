@@ -340,6 +340,12 @@ launch_instance() {
             log_performance_metric "AD_SUCCESS" "$current_ad" "$((ad_index + 1))" "$max_attempts"
             record_ad_result "$current_ad" "success" ""
             
+            # Set GitHub repository variable to prevent future runs
+            set_success_variable "$instance_id" "$current_ad"
+            
+            # Record success pattern for adaptive scheduling
+            record_success_pattern "$current_ad" "$((ad_index + 1))" "$max_attempts"
+            
             send_telegram_notification "success" "OCI instance created in $current_ad: ${INSTANCE_DISPLAY_NAME} (OCID: ${instance_id})"
             
             return 0
@@ -354,6 +360,7 @@ launch_instance() {
                 # Track capacity-related failures for performance analysis
                 log_performance_metric "AD_FAILURE" "$current_ad" "$((ad_index + 1))" "$max_attempts" "$error_type"
                 record_ad_result "$current_ad" "failure" "$error_type"
+                record_failure_pattern "$current_ad" "$error_type" "$((ad_index + 1))" "$max_attempts"
                 
                 # Try next AD if available
                 if [[ $((ad_index + 1)) -lt $max_attempts ]]; then
@@ -424,6 +431,12 @@ launch_instance() {
                         # Track successful AD for performance metrics
                         log_performance_metric "AD_SUCCESS_RETRY" "$current_ad" "$retry_count" "$transient_retry_max"
                         record_ad_result "$current_ad" "success" "RETRY_$retry_count"
+                        
+                        # Set GitHub repository variable to prevent future runs
+                        set_success_variable "$instance_id" "$current_ad"
+                        
+                        # Record success pattern for adaptive scheduling
+                        record_success_pattern "$current_ad" "$retry_count" "$transient_retry_max"
                         
                         send_telegram_notification "success" "OCI instance created in $current_ad after $retry_count retries: ${INSTANCE_DISPLAY_NAME} (OCID: ${instance_id})"
                         
@@ -669,6 +682,13 @@ verify_instance_creation() {
                 --raw-output 2>/dev/null || echo "")
             
             log_success "Instance found: $instance_id (state: $state)"
+            
+            # Set GitHub repository variable to prevent future runs
+            set_success_variable "$instance_id" "VERIFIED"
+            
+            # Record success pattern for adaptive scheduling
+            record_success_pattern "VERIFIED" "1" "1"
+            
             send_telegram_notification "success" "OCI instance verified: ${INSTANCE_DISPLAY_NAME} (OCID: ${instance_id}, State: ${state})"
             return 0
         fi

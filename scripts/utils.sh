@@ -908,3 +908,109 @@ url_decode() {
     printf '%b\n' "${string//%/\\x}"
 }
 
+# Set GitHub repository variable to mark successful instance creation
+set_success_variable() {
+    local instance_id="$1"
+    local availability_domain="$2"
+    
+    # Only attempt to set variable if we have GITHUB_TOKEN (running in Actions)
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        log_info "Setting INSTANCE_CREATED variable to prevent future workflow runs"
+        
+        # Use GitHub CLI to set repository variable
+        if command -v gh >/dev/null 2>&1; then
+            local success_value="{\"created\": true, \"instance_id\": \"$instance_id\", \"ad\": \"$availability_domain\", \"timestamp\": \"$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')\"}"
+            
+            if gh variable set INSTANCE_CREATED --body "true" >/dev/null 2>&1; then
+                log_success "Successfully set INSTANCE_CREATED variable"
+                
+                # Also set detailed info in a separate variable for debugging
+                if gh variable set INSTANCE_CREATED_INFO --body "$success_value" >/dev/null 2>&1; then
+                    log_debug "Set INSTANCE_CREATED_INFO with details: $success_value"
+                fi
+            else
+                log_warning "Failed to set INSTANCE_CREATED variable - workflow may continue running"
+            fi
+        else
+            log_warning "GitHub CLI not available - cannot set success variable"
+        fi
+    else
+        log_debug "GITHUB_TOKEN not available - skipping repository variable update"
+    fi
+}
+
+# Record success pattern for adaptive scheduling analysis
+record_success_pattern() {
+    local availability_domain="$1"
+    local attempt_number="$2"
+    local total_attempts="$3"
+    
+    # Only record if pattern tracking is enabled
+    if [[ "${SUCCESS_TRACKING_ENABLED:-true}" != "true" ]]; then
+        return 0
+    fi
+    
+    local timestamp=$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')
+    local hour_utc=$(date -u '+%H')
+    local day_of_week=$(date -u '+%u')
+    
+    if [[ -n "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
+        # Get existing pattern data
+        local existing_data=$(gh variable get SUCCESS_PATTERN_DATA 2>/dev/null || echo "[]")
+        
+        # Create success entry
+        local success_entry="{\"type\":\"success\",\"timestamp\":\"$timestamp\",\"hour_utc\":$hour_utc,\"day_of_week\":$day_of_week,\"ad\":\"$availability_domain\",\"attempt\":$attempt_number,\"total_attempts\":$total_attempts}"
+        
+        # Update pattern data (keep last 100 entries)
+        local updated_data
+        if [[ -z "$existing_data" || "$existing_data" == "[]" ]]; then
+            updated_data="[$success_entry]"
+        else
+            updated_data=$(echo "$existing_data" | jq --arg entry "$success_entry" '. + [($entry | fromjson)] | .[-50:]' 2>/dev/null || echo "[$success_entry]")
+        fi
+        
+        # Store updated data
+        if echo "$updated_data" | gh variable set SUCCESS_PATTERN_DATA --body-file - 2>/dev/null; then
+            log_debug "Recorded success pattern: AD=$availability_domain, Hour=${hour_utc}UTC, Attempt=$attempt_number"
+        fi
+    fi
+}
+
+# Record failure pattern for adaptive scheduling analysis  
+record_failure_pattern() {
+    local availability_domain="$1"
+    local error_type="$2"
+    local attempt_number="$3"
+    local total_attempts="$4"
+    
+    # Only record if pattern tracking is enabled
+    if [[ "${SUCCESS_TRACKING_ENABLED:-true}" != "true" ]]; then
+        return 0
+    fi
+    
+    local timestamp=$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')
+    local hour_utc=$(date -u '+%H')
+    local day_of_week=$(date -u '+%u')
+    
+    if [[ -n "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
+        # Get existing pattern data
+        local existing_data=$(gh variable get SUCCESS_PATTERN_DATA 2>/dev/null || echo "[]")
+        
+        # Create failure entry
+        local failure_entry="{\"type\":\"${error_type}_failure\",\"timestamp\":\"$timestamp\",\"hour_utc\":$hour_utc,\"day_of_week\":$day_of_week,\"ad\":\"$availability_domain\",\"attempt\":$attempt_number,\"total_attempts\":$total_attempts}"
+        
+        # Update pattern data (keep last 100 entries)
+        local updated_data
+        if [[ -z "$existing_data" || "$existing_data" == "[]" ]]; then
+            updated_data="[$failure_entry]"
+        else
+            updated_data=$(echo "$existing_data" | jq --arg entry "$failure_entry" '. + [($entry | fromjson)] | .[-50:]' 2>/dev/null || echo "[$failure_entry]")
+        fi
+        
+        # Store updated data
+        if echo "$updated_data" | gh variable set SUCCESS_PATTERN_DATA --body-file - 2>/dev/null; then
+            log_debug "Recorded failure pattern: AD=$availability_domain, Error=$error_type, Hour=${hour_utc}UTC"
+        fi
+    fi
+}
+
