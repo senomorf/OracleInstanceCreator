@@ -69,8 +69,7 @@ env:
 
 jobs:
   create-instance:
-    # Skip execution if instance already created (unless manually reset)
-    if: ${{ vars.INSTANCE_CREATED != 'true' || inputs.reset_success_state }}
+    # Always run - scripts handle instance checking logic internally
     runs-on: ubuntu-latest
     name: Create OCI Instances (Both Shapes)
     permissions:

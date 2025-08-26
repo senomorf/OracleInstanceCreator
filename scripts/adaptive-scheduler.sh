@@ -173,7 +173,8 @@ analyze_time_patterns() {
     fi
     
     # Analyze success by hour of day (UTC)
-    local hour_analysis=$(echo "$pattern_data" | jq -r '
+    local hour_analysis
+    hour_analysis=$(echo "$pattern_data" | jq -r '
         [.[] | select(.type == "success")] | 
         group_by(.timestamp[11:13]) | 
         .[] | 
@@ -195,16 +196,21 @@ provide_scheduling_recommendations() {
     log_info "=== ADAPTIVE SCHEDULING RECOMMENDATIONS ==="
     
     # Current schedule effectiveness
-    local current_context=$(get_current_context)
-    local schedule_type=$(echo "$current_context" | cut -d'|' -f1)
-    local region_info=$(echo "$current_context" | cut -d'|' -f2)
+    local current_context
+    current_context=$(get_current_context)
+    local schedule_type
+    schedule_type=$(echo "$current_context" | cut -d'|' -f1)
+    local region_info
+    region_info=$(echo "$current_context" | cut -d'|' -f2)
     
     log_info "Current schedule: $schedule_type ($region_info)"
     
     # Check if we should adjust strategy based on recent patterns
     if command -v jq >/dev/null 2>&1; then
-        local recent_failures=$(echo "$pattern_data" | jq '[.[] | select(.timestamp >= (now - 86400 | strftime("%Y-%m-%dT%H:%M:%S.%3NZ")) and .type == "capacity_failure")] | length' 2>/dev/null || echo "0")
-        local recent_successes=$(echo "$pattern_data" | jq '[.[] | select(.timestamp >= (now - 86400 | strftime("%Y-%m-%dT%H:%M:%S.%3NZ")) and .type == "success")] | length' 2>/dev/null || echo "0")
+        local recent_failures
+        recent_failures=$(echo "$pattern_data" | jq '[.[] | select(.timestamp >= (now - 86400 | strftime("%Y-%m-%dT%H:%M:%S.%3NZ")) and .type == "capacity_failure")] | length' 2>/dev/null || echo "0")
+        local recent_successes
+        recent_successes=$(echo "$pattern_data" | jq '[.[] | select(.timestamp >= (now - 86400 | strftime("%Y-%m-%dT%H:%M:%S.%3NZ")) and .type == "success")] | length' 2>/dev/null || echo "0")
         
         if [[ $recent_failures -gt 5 && $recent_successes -eq 0 ]]; then
             log_info "RECOMMENDATION: High recent failure rate - consider adjusting time windows"
@@ -268,8 +274,10 @@ should_skip_attempt() {
     fi
 
     # Get current context for logging
-    local current_context=$(get_current_context)
-    local schedule_type=$(echo "$current_context" | cut -d'|' -f1)
+    local current_context
+    current_context=$(get_current_context)
+    local schedule_type
+    schedule_type=$(echo "$current_context" | cut -d'|' -f1)
     log_debug "Schedule context: $schedule_type - proceeding with attempt"
     return 1  # Don't skip
 }
@@ -279,8 +287,9 @@ main() {
     log_info "=== ADAPTIVE SCHEDULING INTELLIGENCE ==="
     
     # Get current timing context
-    local current_context=$(get_current_context)
-    IFS='|' read -r schedule_type region_info timestamp <<< "$current_context"
+    local current_context
+    current_context=$(get_current_context)
+    IFS='|' read -r schedule_type region_info _ <<< "$current_context"
     
     log_info "Schedule Context: $schedule_type"
     log_info "Regional Context: $region_info"

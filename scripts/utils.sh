@@ -797,7 +797,8 @@ parse_and_configure_proxy() {
     # Re-encode credentials to handle special characters in final URL
     local encoded_user
     encoded_user=$(url_encode "$proxy_user")
-    local encoded_pass=$(url_encode "$proxy_pass")
+    local encoded_pass
+    encoded_pass=$(url_encode "$proxy_pass")
     
     # Construct proxy URL with authentication and proper IPv6 bracketing
     local proxy_url
@@ -918,7 +919,8 @@ validate_availability_domain() {
     
     # Process the last (or only) AD
     if [[ -n "$temp_list" ]]; then
-        local ad=$(echo "$temp_list" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        local ad
+        ad=$(echo "$temp_list" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         
         if [[ -z "$ad" ]]; then
             log_error "Empty availability domain found at end of list"
@@ -1076,7 +1078,8 @@ log_performance_metric() {
     local total_attempts="$4"
     local additional_info="${5:-}"
     
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    local timestamp
+    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     local metric_line="[$timestamp] $metric_type: AD=$ad_name, Attempt=$attempt_number/$total_attempts"
     
     if [[ -n "$additional_info" ]]; then
@@ -1112,7 +1115,8 @@ set_success_variable() {
         
         # Use GitHub CLI to set repository variable
         if command -v gh >/dev/null 2>&1; then
-            local success_value="{\"created\": true, \"instance_id\": \"$instance_id\", \"ad\": \"$availability_domain\", \"timestamp\": \"$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')\"}"
+            local success_value
+            success_value="{\"created\": true, \"instance_id\": \"$instance_id\", \"ad\": \"$availability_domain\", \"timestamp\": \"$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')\"}"
             
             if gh variable set INSTANCE_CREATED --body "true" >/dev/null 2>&1; then
                 log_success "Successfully set INSTANCE_CREATED variable"
@@ -1143,13 +1147,17 @@ record_success_pattern() {
         return 0
     fi
     
-    local timestamp=$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')
-    local hour_utc=$(date -u '+%H')
-    local day_of_week=$(date -u '+%u')
+    local timestamp
+    timestamp=$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')
+    local hour_utc
+    hour_utc=$(date -u '+%H')
+    local day_of_week
+    day_of_week=$(date -u '+%u')
     
     if [[ -n "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
         # Get existing pattern data
-        local existing_data=$(gh variable get SUCCESS_PATTERN_DATA 2>/dev/null || echo "[]")
+        local existing_data
+        existing_data=$(gh variable get SUCCESS_PATTERN_DATA 2>/dev/null || echo "[]")
         
         # Create success entry
         local success_entry="{\"type\":\"success\",\"timestamp\":\"$timestamp\",\"hour_utc\":$hour_utc,\"day_of_week\":$day_of_week,\"ad\":\"$availability_domain\",\"attempt\":$attempt_number,\"total_attempts\":$total_attempts}"
@@ -1181,13 +1189,17 @@ record_failure_pattern() {
         return 0
     fi
     
-    local timestamp=$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')
-    local hour_utc=$(date -u '+%H')
-    local day_of_week=$(date -u '+%u')
+    local timestamp
+    timestamp=$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')
+    local hour_utc
+    hour_utc=$(date -u '+%H')
+    local day_of_week
+    day_of_week=$(date -u '+%u')
     
     if [[ -n "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
         # Get existing pattern data
-        local existing_data=$(gh variable get SUCCESS_PATTERN_DATA 2>/dev/null || echo "[]")
+        local existing_data
+        existing_data=$(gh variable get SUCCESS_PATTERN_DATA 2>/dev/null || echo "[]")
         
         # Create failure entry
         local failure_entry="{\"type\":\"${error_type}_failure\",\"timestamp\":\"$timestamp\",\"hour_utc\":$hour_utc,\"day_of_week\":$day_of_week,\"ad\":\"$availability_domain\",\"attempt\":$attempt_number,\"total_attempts\":$total_attempts}"
