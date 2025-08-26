@@ -31,6 +31,38 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.11
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-claude-action-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-claude-action-
+            ${{ runner.os }}-bun-
+
+      - name: Pre-install dependencies with retry
+        run: |
+          echo "Pre-warming Bun cache to avoid rate limiting..."
+          # Install some common packages to warm the cache
+          for i in 1 2 3; do
+            if timeout 60 bun install --help > /dev/null 2>&1; then
+              echo "Bun cache warmed successfully on attempt $i"
+              break
+            elif [ $i -eq 3 ]; then
+              echo "Failed to warm Bun cache after 3 attempts, continuing anyway"
+            else
+              echo "Attempt $i failed, retrying in $((i*5)) seconds..."
+              sleep $((i*5))
+            fi
+          done
+        env:
+          BUN_INSTALL_CACHE_DIR: ~/.bun/install/cache
+
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@beta
@@ -40,6 +72,11 @@ jobs:
           !contains(github.event.pull_request.title, '[WIP]')
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        env:
+          # Help with caching and rate limiting
+          BUN_INSTALL_CACHE_DIR: ~/.bun/install/cache
+          NPM_CONFIG_MAXSOCKETS: "15"
+          NPM_CONFIG_NETWORK_CONCURRENCY: "1"
 
           # Optional: Specify model (defaults to Claude Sonnet 4, uncomment for Claude Opus 4.1)
           model: "claude-opus-4-1-20250805"

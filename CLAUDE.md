@@ -205,6 +205,20 @@ source scripts/utils.sh && get_error_type "Too many requests"
 # Example: myuser:my%40pass@proxy.com:3128 (for password my@pass)
 ```
 
+### Workflow Management
+- ❌ **NEVER remove the Claude Code Review workflow** (.github/workflows/claude-code-review.yml)
+  - This workflow is essential for automated PR code review
+  - If it fails, fix the issue rather than removing the workflow
+  - **Optimization applied (2025-08-26)**: Added Bun caching and rate limit mitigation
+    - Pre-caches Bun dependencies to avoid npm registry 403 errors
+    - Implements retry logic with exponential backoff
+    - Reduces network concurrency to respect rate limits
+
+### Oracle Cloud Gotchas
+- "Out of host capacity" is **expected** for free tier (not failure)
+- OCID validation: `^ocid1\.type\.[a-z0-9-]*\.[a-z0-9-]*\..+`
+- Flexible shapes need `--shape-config {"ocpus": N, "memoryInGBs": N}`
+
 ### Troubleshooting
 ```bash
 # Test proxy configuration
@@ -219,6 +233,9 @@ echo $HTTP_PROXY $HTTPS_PROXY
 ```
 
 ## Performance Indicators
+- **17-18 seconds**: Optimal execution time
+- **>30 seconds**: Investigation needed
+- **>1 minute**: Missing `--no-retry` flag or other optimizations
 
 ### Execution Timing
 - **<20 seconds**: Optimal performance ✅
@@ -320,3 +337,11 @@ fi
 - **Proxy is optional** - if not configured, connects directly to Oracle Cloud
 - **Multi-AD cycling** - dramatically increases success rates
 - **Security**: All credentials masked in logs, no exposure risk
+
+## Current Status
+- **Transient Error Retry**: Added same-AD retry before cycling
+- **Compartment Fallback**: Optional compartment ID with tenancy fallback
+- **Test Coverage**: 31 automated tests, 100% pass rate
+- **Performance**: Maintained 17-18s execution time
+- **Security**: All credentials properly redacted in logs
+- **Claude Code Review Workflow**: Optimized with Bun caching and rate limit mitigation (2025-08-26)
