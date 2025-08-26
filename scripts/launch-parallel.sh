@@ -62,7 +62,7 @@ cleanup_handler() {
         kill "$PID_E2" 2>/dev/null || true
     fi
     
-    sleep $GRACEFUL_TERMINATION_DELAY
+    sleep "$GRACEFUL_TERMINATION_DELAY"
     
     # Force kill if still running
     if [[ -n "$PID_A1" ]] && kill -0 "$PID_A1" 2>/dev/null; then
@@ -76,7 +76,7 @@ cleanup_handler() {
     [[ -n "$temp_dir" && -d "$temp_dir" ]] && rm -rf "$temp_dir" 2>/dev/null || true
     
     log_info "Cleanup completed"
-    exit $OCI_EXIT_GENERAL_ERROR
+    exit "$OCI_EXIT_GENERAL_ERROR"
 }
 
 # Set up signal handlers

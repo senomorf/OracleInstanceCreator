@@ -143,8 +143,10 @@ analyze_success_patterns() {
     
     # Basic pattern analysis using jq if available
     if command -v jq >/dev/null 2>&1; then
-        local total_attempts=$(echo "$pattern_data" | jq 'length' 2>/dev/null || echo "0")
-        local success_attempts=$(echo "$pattern_data" | jq '[.[] | select(.type == "success")] | length' 2>/dev/null || echo "0")
+        local total_attempts
+        total_attempts=$(echo "$pattern_data" | jq 'length' 2>/dev/null || echo "0")
+        local success_attempts
+        success_attempts=$(echo "$pattern_data" | jq '[.[] | select(.type == "success")] | length' 2>/dev/null || echo "0")
         
         if [[ $total_attempts -gt 0 ]]; then
             local success_rate=$((success_attempts * 100 / total_attempts))
@@ -248,12 +250,16 @@ should_skip_attempt() {
 
     # Skip logic: Skip if the last 5 attempts in this hour have failed
     if command -v jq >/dev/null 2>&1; then
-        local current_hour_utc=$(date -u '+%H')
+        local current_hour_utc
+        current_hour_utc=$(date -u '+%H')
         # Strip leading zeros to avoid octal interpretation
         current_hour_utc=$((10#$current_hour_utc))
-        local recent_attempts_in_hour=$(echo "$pattern_data" | jq --arg hour "$current_hour_utc" '[.[] | select(.timestamp[11:13] == $hour)] | .[-5:]')
-        local failure_count=$(echo "$recent_attempts_in_hour" | jq '[.[] | select(.type == "capacity_failure")] | length')
-        local success_count=$(echo "$recent_attempts_in_hour" | jq '[.[] | select(.type == "success")] | length')
+        local recent_attempts_in_hour
+        recent_attempts_in_hour=$(echo "$pattern_data" | jq --arg hour "$current_hour_utc" '[.[] | select(.timestamp[11:13] == $hour)] | .[-5:]')
+        local failure_count
+        failure_count=$(echo "$recent_attempts_in_hour" | jq '[.[] | select(.type == "capacity_failure")] | length')
+        local success_count
+        success_count=$(echo "$recent_attempts_in_hour" | jq '[.[] | select(.type == "success")] | length')
 
         if [[ $(echo "$recent_attempts_in_hour" | jq 'length') -ge 5 && "$failure_count" -ge 5 && "$success_count" -eq 0 ]]; then
             log_info "Adaptive Skip: The last 5 attempts in hour $current_hour_utc UTC have failed. Skipping this attempt."

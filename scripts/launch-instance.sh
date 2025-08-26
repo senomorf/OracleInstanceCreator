@@ -370,7 +370,7 @@ launch_instance() {
         
         # Handle launch errors
         local error_type
-        error_type=$(handle_launch_error_with_ad "$output" "$current_ad" $((ad_index + 1)) $max_attempts)
+        error_type=$(handle_launch_error_with_ad "$output" "$current_ad" $((ad_index + 1)) "$max_attempts")
         
         case "$error_type" in
             "CAPACITY"|"RATE_LIMIT")
@@ -469,7 +469,7 @@ launch_instance() {
                     
                     # Check the error type again
                     local retry_error_type
-                    retry_error_type=$(handle_launch_error_with_ad "$output" "$current_ad" $retry_count $transient_retry_max)
+                    retry_error_type=$(handle_launch_error_with_ad "$output" "$current_ad" $retry_count "$transient_retry_max")
                     
                     # If it's no longer a transient error, stop retrying same AD
                     if [[ "$retry_error_type" != "INTERNAL_ERROR" && "$retry_error_type" != "NETWORK" ]]; then
