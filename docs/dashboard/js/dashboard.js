@@ -11,6 +11,8 @@ class OracleInstanceDashboard {
         
         this.charts = {};
         this.refreshTimer = null;
+        this.offlineTimer = null;
+        this.refreshInProgress = false;
         this.lastUpdate = null;
         this.cdnFallbacks = {
             chartjs: false,
@@ -26,7 +28,8 @@ class OracleInstanceDashboard {
             exceeded: false,
             resetTime: null,
             remaining: null,
-            retryAfter: null
+            retryAfter: null,
+            warningShown: false
         };
         
         this.init();
@@ -434,21 +437,29 @@ class OracleInstanceDashboard {
     async refreshData() {
         console.log('🔄 Refreshing dashboard data...');
         
-        // Check if basic configuration is available
-        if (!this.config.owner || !this.config.repo) {
-            console.warn('⚠️ Repository not configured. Showing setup prompt.');
-            this.showConfigurationPrompt();
+        // Prevent overlapping refresh operations
+        if (this.refreshInProgress) {
+            console.log('⏭️ Refresh already in progress, skipping...');
             return;
         }
         
-        // If offline, use cached data instead of making API calls
-        if (this.offlineMode.enabled) {
-            console.log('📵 Offline mode - using cached data');
-            this.loadCachedData();
-            return;
-        }
+        this.refreshInProgress = true;
         
         try {
+            // Check if basic configuration is available
+            if (!this.config.owner || !this.config.repo) {
+                console.warn('⚠️ Repository not configured. Showing setup prompt.');
+                this.showConfigurationPrompt();
+                return;
+            }
+            
+            // If offline, use cached data instead of making API calls
+            if (this.offlineMode.enabled) {
+                console.log('📵 Offline mode - using cached data');
+                this.loadCachedData();
+                return;
+            }
+            
             // Update last update time
             this.lastUpdate = new Date();
             document.getElementById('last-update').innerHTML = `
@@ -489,6 +500,9 @@ class OracleInstanceDashboard {
         } catch (error) {
             console.error('Error refreshing data:', error);
             this.handleDataLoadError(error);
+        } finally {
+            // Always reset the refresh flag
+            this.refreshInProgress = false;
         }
     }
 
@@ -633,7 +647,15 @@ class OracleInstanceDashboard {
             document.getElementById('success-trend').textContent = trend;
             
             // Update success pattern chart
-            this.updateSuccessPatternChart(30, patternData ? JSON.parse(patternData.value) : []);
+            let chartData = [];
+            if (patternData) {
+                try {
+                    chartData = JSON.parse(patternData.value);
+                } catch (e) {
+                    console.error('Error parsing pattern data for chart:', e);
+                }
+            }
+            this.updateSuccessPatternChart(30, chartData);
             
         } catch (error) {
             document.getElementById('success-rate').textContent = '---%';
@@ -666,7 +688,7 @@ class OracleInstanceDashboard {
                 `${currentMonthMinutes}/${estimatedMonthlyMinutes} min projected`;
             
             // Update usage chart if available
-            if (this.charts.usage && !this.cdnFallbacks.chartjs) {
+            if (this.charts?.usage && !this.cdnFallbacks.chartjs) {
                 this.charts.usage.data.datasets[0].data = [currentMonthMinutes, Math.max(0, remainingMinutes)];
                 this.charts.usage.data.datasets[0].backgroundColor = [
                     usagePercentage > 80 ? '#ef4444' : usagePercentage > 60 ? '#f59e0b' : '#10b981',
@@ -696,7 +718,15 @@ class OracleInstanceDashboard {
                 return;
             }
             
-            const patterns = JSON.parse(patternData.value);
+            let patterns = [];
+            try {
+                patterns = JSON.parse(patternData.value);
+            } catch (e) {
+                console.error('Error parsing AD performance data:', e);
+                container.innerHTML = '<div class="loading">Invalid AD performance data</div>';
+                return;
+            }
+            
             const adStats = {};
             
             patterns.forEach(pattern => {
@@ -750,7 +780,7 @@ class OracleInstanceDashboard {
 
     updateSuccessPatternChart(days, data = null) {
         // Use fallback rendering if Chart.js is unavailable or charts not initialized
-        if (this.cdnFallbacks.chartjs || !this.charts.successPattern) {
+        if (this.cdnFallbacks.chartjs || !this.charts?.successPattern) {
             const chartData = data ? this.processChartData(data, days) : this.generateMockChartData(days);
             this.renderFallbackChart('success-pattern-chart', chartData, 'line');
             return;
@@ -871,7 +901,7 @@ class OracleInstanceDashboard {
         });
         
         // Check periodically as well (navigator.onLine can be unreliable)
-        setInterval(() => {
+        this.offlineTimer = setInterval(() => {
             this.checkOfflineStatus();
         }, 30000); // Check every 30 seconds
     }
@@ -1281,9 +1311,13 @@ class OracleInstanceDashboard {
             this.rateLimitState.resetTime = new Date(parseInt(reset) * 1000);
         }
         
-        // Log rate limit status for debugging
-        if (this.rateLimitState.remaining < 100) {
+        // Log rate limit status for debugging (prevent spam)
+        if (this.rateLimitState.remaining < 100 && !this.rateLimitState.warningShown) {
             console.warn(`⚠️ GitHub API rate limit low: ${this.rateLimitState.remaining} requests remaining`);
+            this.rateLimitState.warningShown = true;
+        } else if (this.rateLimitState.remaining >= 100) {
+            // Reset warning flag when rate limit recovers
+            this.rateLimitState.warningShown = false;
         }
     }
 
@@ -1327,9 +1361,26 @@ class OracleInstanceDashboard {
     }
 
     saveSettings() {
-        this.config.token = document.getElementById('github-token').value;
-        this.config.owner = document.getElementById('repo-owner').value;
-        this.config.repo = document.getElementById('repo-name').value;
+        // Validate input fields
+        const owner = document.getElementById('repo-owner').value?.trim();
+        const repo = document.getElementById('repo-name').value?.trim();
+        const token = document.getElementById('github-token').value?.trim();
+        
+        if (!owner || !repo) {
+            this.showError('Repository owner and name are required');
+            return;
+        }
+        
+        // Basic validation for GitHub username/repo format
+        const validName = /^[a-zA-Z0-9._-]+$/;
+        if (!validName.test(owner) || !validName.test(repo)) {
+            this.showError('Repository owner and name can only contain letters, numbers, dots, hyphens, and underscores');
+            return;
+        }
+        
+        this.config.token = token;
+        this.config.owner = owner;
+        this.config.repo = repo;
         this.config.autoRefresh = document.getElementById('auto-refresh').checked;
         
         this.saveConfig();
@@ -1366,6 +1417,13 @@ class OracleInstanceDashboard {
     startAutoRefresh() {
         if (this.refreshTimer) {
             clearInterval(this.refreshTimer);
+        }
+        
+        // Validate refresh interval to prevent rapid-fire API calls
+        const interval = this.config.refreshInterval || 120000;
+        if (interval < 10000) {
+            console.warn('⚠️ Refresh interval too short, minimum 10s required. Using default 2 minutes.');
+            this.config.refreshInterval = 120000;
         }
         
         this.refreshTimer = setInterval(() => {
@@ -1461,6 +1519,18 @@ class OracleInstanceDashboard {
         setTimeout(() => {
             notification.remove();
         }, 5000);
+    }
+
+    // Cleanup method to prevent memory leaks
+    cleanup() {
+        if (this.refreshTimer) {
+            clearInterval(this.refreshTimer);
+            this.refreshTimer = null;
+        }
+        if (this.offlineTimer) {
+            clearInterval(this.offlineTimer);
+            this.offlineTimer = null;
+        }
     }
 }
 
