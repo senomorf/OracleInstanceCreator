@@ -1,3 +1,4 @@
+---
 name: Claude Code Review
 
 on:
@@ -17,14 +18,14 @@ jobs:
     #   github.event.pull_request.user.login == 'external-contributor' ||
     #   github.event.pull_request.user.login == 'new-developer' ||
     #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
-    
+
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
       issues: read
       id-token: write
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -132,7 +133,7 @@ jobs:
 
           # Use sticky comments to make Claude reuse the same comment on subsequent pushes to the same PR
           use_sticky_comment: true
-          
+
           # Optional: Customize review based on file types
           # direct_prompt: |
           #   Review this PR focusing on:
@@ -140,13 +141,20 @@ jobs:
           #   - For API endpoints: Security, input validation, and error handling
           #   - For React components: Performance, accessibility, and best practices
           #   - For tests: Coverage, edge cases, and test quality
-          
+
           # Optional: Different prompts for different authors
           # direct_prompt: |
-          #   ${{ github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR' && 
+          #   ${{ github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR' &&
           #   'Welcome! Please review this PR from a first-time contributor. Be encouraging and provide detailed explanations for any suggestions.' ||
           #   'Please provide a thorough code review focusing on our coding standards and best practices.' }}
-          
-          # Allow specific tools for validation and testing
-          allowed_tools: "Bash(bash -n scripts/*.sh),Bash(./tests/test_*.sh),Bash(yamllint .github/workflows/*.yml)"
 
+          # Allow specific tools for validation and testing
+          allowed_tools: |
+            Bash(eslint docs/dashboard/js/*.js),
+            Bash(djlint --check docs/dashboard/*.html),
+            Bash(shellcheck scripts/*.sh tests/*.sh),
+            Bash(yamllint -c .yamllint.yml .github/workflows/*.yml config/*.yml),
+            Bash(actionlint .github/workflows/*.yml),
+            Bash(markdownlint *.md docs/*.md),
+            Bash(make lint),
+            Bash(./tests/test_*.sh)
