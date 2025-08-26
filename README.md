@@ -1,10 +1,24 @@
 # OCI Orchestrator
 
+[![GitHub Actions](https://github.com/senomorf/OracleInstanceCreator/workflows/OCI%20Orchestrator%20-%20Infrastructure%20Deployment/badge.svg)](https://github.com/senomorf/OracleInstanceCreator/actions)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![OCI Compatible](https://img.shields.io/badge/OCI-Compatible-orange.svg)](https://cloud.oracle.com/)
+[![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Optimized-green.svg)](https://github.com/features/actions)
+
 Enterprise-grade infrastructure automation toolkit for Oracle Cloud Infrastructure (OCI) resource deployment, orchestration, and lifecycle management using GitHub Actions with **parallel execution** capabilities.
 
 ## Overview
 
 This project provides automated infrastructure deployment and orchestration capabilities for Oracle Cloud Infrastructure using GitHub Actions workflows. It efficiently provisions **BOTH** ARM (A1.Flex) and AMD (E2.1.Micro) instances in parallel, demonstrating advanced cloud automation patterns and providing the best chance of successful resource deployment when capacity is available.
+
+## Enterprise Use Cases
+
+- **Development Environment Automation**: Rapidly provision consistent development infrastructure for teams
+- **CI/CD Pipeline Infrastructure**: Automated test environment deployment and teardown
+- **Disaster Recovery Setup**: Automated backup infrastructure deployment across availability domains
+- **Testing Environment Management**: On-demand creation of isolated testing environments
+- **Educational Platform**: Learn OCI automation patterns and Infrastructure-as-Code practices
+- **Multi-Region Deployments**: Orchestrate infrastructure across different Oracle Cloud regions
 
 ## Key Features
 
@@ -51,14 +65,14 @@ The major performance improvement was achieved by optimizing OCI CLI flags:
 
 **A1.Flex (ARM) Instance:**
 - **Shape**: VM.Standard.A1.Flex
-- **OCPUs**: 4 
+- **OCPUs**: 4
 - **Memory**: 24GB
 - **Instance Name**: a1-flex-sg
 
 **E2.1.Micro (AMD) Instance:**
 - **Shape**: VM.Standard.E2.1.Micro
 - **OCPUs**: 1 (fixed shape)
-- **Memory**: 1GB (fixed shape) 
+- **Memory**: 1GB (fixed shape)
 - **Instance Name**: e2-micro-sg
 
 ### Execution Results
@@ -77,6 +91,8 @@ The major performance improvement was achieved by optimizing OCI CLI flags:
 - Execution time: ~20-25 seconds
 - Billing time: 1 minute per run
 - **Monthly usage at */6 schedule**: ~7,200 minutes
+
+> **Note**: Monitor your GitHub Actions usage through your account settings to ensure it aligns with your organization's CI/CD budget.
 
 **Alternative Matrix Strategy (NOT used):**
 - Would create 2 separate jobs (1 per shape)
@@ -135,7 +151,7 @@ Configure these secrets in your GitHub repository:
 ### Manual Execution
 ```bash
 # Run workflow manually with debug output
-gh workflow run free-tier-creation.yml --field verbose_output=true --field send_notifications=false
+gh workflow run infrastructure-deployment.yml --field verbose_output=true --field send_notifications=false
 
 # Monitor execution
 gh run watch <run-id>
@@ -157,8 +173,8 @@ chmod +x scripts/*.sh
 ## Architecture
 
 ### File Structure
-```
-├── .github/workflows/free-tier-creation.yml  # Main GitHub Actions workflow (parallel)
+```text
+├── .github/workflows/infrastructure-deployment.yml  # Main GitHub Actions workflow (parallel)
 ├── scripts/
 │   ├── utils.sh                              # Common utilities & OCI CLI wrappers
 │   ├── validate-config.sh                    # Configuration validation
@@ -233,8 +249,28 @@ If workflow takes longer than expected:
 ### Debug Mode
 Enable verbose output for troubleshooting:
 ```bash
-gh workflow run free-tier-creation.yml --field verbose_output=true
+gh workflow run infrastructure-deployment.yml --field verbose_output=true
 ```
+
+## Compliance & Best Practices
+
+### Production Deployment Guidelines
+- **Security**: All credentials properly managed through GitHub Secrets - never commit OCIDs, API keys, or SSH keys
+- **Monitoring**: Enable structured logging (`LOG_FORMAT: "json"`) for production audit trails
+- **Resource Limits**: Respect Oracle Cloud fair use policies and capacity constraints
+- **Access Control**: Use least-privilege principles for OCI user permissions and compartment access
+
+### Enterprise Security Considerations
+- **Credential Rotation**: Regularly rotate OCI API keys and update GitHub Secrets
+- **Network Security**: Configure appropriate security lists and network access controls
+- **Compliance Logging**: All operations are logged with timestamp and outcome tracking
+- **Multi-Factor Authentication**: Enable MFA for OCI accounts used with this toolkit
+
+### Audit and Governance
+- **Change Tracking**: All infrastructure changes are version-controlled through Git
+- **Approval Workflows**: Consider implementing branch protection rules for production deployments
+- **Cost Management**: Monitor Oracle Cloud usage and set up billing alerts
+- **Documentation**: Maintain infrastructure documentation alongside code changes
 
 ## Security & Testing (Updated 2025-08-25)
 
@@ -297,3 +333,7 @@ See [CLAUDE.md](CLAUDE.md) for detailed development guidance, technical patterns
 ## License
 
 This project provides educational value for learning cloud infrastructure automation patterns and DevOps best practices with Oracle Cloud Infrastructure.
+
+## Migration Note
+
+This is a rebranding from "Oracle Instance Creator" to "OCI Orchestrator" with no functional changes. All existing configurations and workflows remain compatible. The new positioning emphasizes professional infrastructure automation capabilities.
