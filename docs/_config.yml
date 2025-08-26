@@ -6,7 +6,7 @@ description: Real-time monitoring and analytics for Oracle Cloud Infrastructure 
 theme: minima
 
 # Custom settings
-baseurl: ""
+baseurl: "/OracleInstanceCreator"
 url: "https://senomorf.github.io"
 
 # Plugins
