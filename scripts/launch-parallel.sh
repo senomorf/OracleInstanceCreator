@@ -73,7 +73,9 @@ cleanup_handler() {
     fi
     
     # Cleanup temporary files
-    [[ -n "$temp_dir" && -d "$temp_dir" ]] && rm -rf "$temp_dir" 2>/dev/null || true
+    if [[ -n "$temp_dir" && -d "$temp_dir" ]]; then
+        rm -rf "$temp_dir" 2>/dev/null || true
+    fi
     
     log_info "Cleanup completed"
     exit "$OCI_EXIT_GENERAL_ERROR"
@@ -90,12 +92,6 @@ declare -A A1_FLEX_CONFIG=(
     ["DISPLAY_NAME"]="a1-flex-sg"
 )
 
-declare -A E2_MICRO_CONFIG=(
-    ["SHAPE"]="VM.Standard.E2.1.Micro"
-    ["OCPUS"]=""
-    ["MEMORY_IN_GBS"]=""
-    ["DISPLAY_NAME"]="e2-micro-sg"
-)
 
 launch_shape() {
     local shape_name="$1"

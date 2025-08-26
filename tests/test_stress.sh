@@ -331,7 +331,7 @@ test_memory_leak_detection() {
     local memory_samples=()
     
     # Run multiple iterations
-    for iteration in {1..10}; do
+    for _ in {1..10}; do
         # Launch parallel processes
         local pids=()
         for i in {1..3}; do

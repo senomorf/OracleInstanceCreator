@@ -24,8 +24,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: '**/package-lock.json'
 
       - name: Install Node.js linters
         run: |
@@ -53,7 +51,7 @@ jobs:
 
       - name: Run ESLint
         run: |
-          if [ -f "eslint.config.js" ]; then
+          if [ -f "eslint.config.js" ] || [ -f "eslint.config.mjs" ] || [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ]; then
             eslint docs/dashboard/js/*.js
           else
             echo "⚠️ No ESLint config found, skipping JavaScript linting"
@@ -65,7 +63,7 @@ jobs:
 
       - name: Run shellcheck
         run: |
-          shellcheck scripts/*.sh tests/*.sh
+          shellcheck ./scripts/*.sh ./tests/*.sh
 
       - name: Run yamllint
         run: |

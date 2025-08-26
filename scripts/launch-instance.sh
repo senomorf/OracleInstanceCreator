@@ -309,7 +309,6 @@ launch_instance() {
     local max_attempts=${#ad_list[@]}
     local wait_time="${RETRY_WAIT_TIME:-30}"
     local transient_retry_max="${TRANSIENT_ERROR_MAX_RETRIES:-3}"
-    local transient_retry_delay="${TRANSIENT_ERROR_RETRY_DELAY:-15}"
     
     while [[ $ad_index -lt $max_attempts ]]; do
         # Check for interruption signal
