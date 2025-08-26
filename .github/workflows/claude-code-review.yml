@@ -34,11 +34,15 @@ jobs:
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@beta
+        # Optional: Skip review for certain conditions
+        if: |
+          !contains(github.event.pull_request.title, '[skip-review]') &&
+          !contains(github.event.pull_request.title, '[WIP]')
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
           # Optional: Specify model (defaults to Claude Sonnet 4, uncomment for Claude Opus 4.1)
-          # model: "claude-opus-4-1-20250805"
+          model: "claude-opus-4-1-20250805"
 
           # Direct prompt for automated review (no @claude mention needed)
           direct_prompt: |
@@ -108,9 +112,4 @@ jobs:
           
           # Allow specific tools for validation and testing
           allowed_tools: "Bash(bash -n scripts/*.sh),Bash(./tests/test_*.sh),Bash(yamllint .github/workflows/*.yml)"
-          
-          # Optional: Skip review for certain conditions
-          # if: |
-          #   !contains(github.event.pull_request.title, '[skip-review]') &&
-          #   !contains(github.event.pull_request.title, '[WIP]')
 
