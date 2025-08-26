@@ -22,12 +22,17 @@ get_current_context() {
     local region_local_time=""
     
     # Determine schedule context based on UTC hour
+    # This maps UTC time to regional business patterns for optimal scheduling
     if [[ $current_hour -ge 2 && $current_hour -le 7 ]]; then
         schedule_type="off_peak_aggressive"
         region_local_time="10am-3pm SGT (Low business activity)"
+        # 2-7am UTC = 10am-3pm Singapore time (lunch/afternoon lull)
+        # This is the most aggressive schedule with 15-minute intervals
     elif [[ ($current_dow -eq 6 || $current_dow -eq 7) && $current_hour -ge 1 && $current_hour -le 6 ]]; then
-        schedule_type="weekend_boost"
+        schedule_type="weekend_boost" 
         region_local_time="Weekend 9am-2pm SGT (Lower demand)"
+        # Weekend boost: 20-minute intervals during weekend mornings
+        # Lower overall Oracle Cloud usage on weekends
     else
         schedule_type="conservative_peak"
         region_local_time="Peak business hours SGT"
@@ -56,30 +61,36 @@ record_attempt_context() {
     # Prepare new entry
     local new_entry="{\"context\":\"$context_info\",\"timestamp\":\"$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')\",\"type\":\"attempt\"}"
     
-    # Update pattern data (keep last 100 entries to prevent variable size issues)
+    # Update pattern data with size management
+    # GitHub repository variables have a 64KB limit, so we maintain a rolling window
+    # of the last 50 entries (~10KB), leaving ample buffer for growth
     local updated_data
     if [[ -z "$existing_data" ]]; then
         updated_data="[$new_entry]"
     else
-        # Add new entry and keep last 50 entries
+        # Add new entry and keep last 50 entries (prevents size limit issues)
+        # Each entry is ~200 bytes, so 50 entries ≈ 10KB << 64KB limit
         updated_data=$(echo "$existing_data" | jq --arg entry "$new_entry" '. + [($entry | fromjson)] | .[-50:]' 2>/dev/null || echo "[$new_entry]")
     fi
     
-    # Store updated pattern data with retry logic
+    # Store updated pattern data with robust error handling
+    # Uses retry logic with exponential backoff to handle transient GitHub API failures
     if command -v gh >/dev/null 2>&1 && [[ -n "${GITHUB_TOKEN:-}" ]]; then
         local max_retries=3
         local retry_count=0
         local success=false
         
+        # Retry loop with exponential backoff (2s, 4s, 6s delays)
+        # This handles transient network issues and API rate limiting
         while [[ $retry_count -lt $max_retries && "$success" != "true" ]]; do
             if echo "$updated_data" | gh variable set SUCCESS_PATTERN_DATA --body-file - 2>/dev/null; then
-                log_debug "Updated success pattern tracking data"
+                log_debug "Successfully updated pattern tracking data (${#updated_data} bytes)"
                 success=true
             else
                 retry_count=$((retry_count + 1))
                 if [[ $retry_count -lt $max_retries ]]; then
-                    log_info "Failed to update pattern tracking data, retrying... ($retry_count/$max_retries)"
-                    sleep $((2 * retry_count))  # Exponential backoff
+                    log_info "GitHub API failure, retrying... ($retry_count/$max_retries)"
+                    sleep $((2 * retry_count))  # Exponential backoff: 2s, 4s, 6s
                 else
                     log_error "Failed to update pattern tracking data after $max_retries attempts - this may affect scheduling optimization"
                 fi

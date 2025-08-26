@@ -12,12 +12,155 @@ class OracleInstanceDashboard {
         this.charts = {};
         this.refreshTimer = null;
         this.lastUpdate = null;
+        this.cdnFallbacks = {
+            chartjs: false,
+            dateFns: false,
+            fontAwesome: false
+        };
+        this.offlineMode = {
+            enabled: false,
+            lastDataCache: null,
+            cacheTimestamp: null
+        };
         
         this.init();
     }
 
+    // CDN Fallback Management
+    checkCDNAvailability() {
+        console.log('🔍 Checking CDN availability...');
+        
+        // Check Chart.js availability
+        if (typeof Chart === 'undefined') {
+            this.cdnFallbacks.chartjs = true;
+            console.warn('⚠️ Chart.js CDN failed - using fallback rendering');
+            this.showNotification('Chart.js unavailable - using simplified charts', 'warning');
+        }
+        
+        // Check date-fns availability
+        if (typeof dateFns === 'undefined' && typeof window.dateFns === 'undefined') {
+            this.cdnFallbacks.dateFns = true;
+            console.warn('⚠️ date-fns CDN failed - using native Date functions');
+        }
+        
+        // Check Font Awesome (by checking if FA icons are loaded)
+        const testIcon = document.createElement('i');
+        testIcon.className = 'fas fa-test';
+        testIcon.style.visibility = 'hidden';
+        testIcon.style.position = 'absolute';
+        document.body.appendChild(testIcon);
+        
+        const computedStyle = window.getComputedStyle(testIcon, ':before');
+        if (computedStyle.content === 'none' || computedStyle.content === '') {
+            this.cdnFallbacks.fontAwesome = true;
+            console.warn('⚠️ Font Awesome CDN failed - using fallback icons');
+        }
+        document.body.removeChild(testIcon);
+        
+        // Apply fallback styles if needed
+        if (Object.values(this.cdnFallbacks).some(failed => failed)) {
+            this.applyCDNFallbacks();
+        }
+    }
+
+    applyCDNFallbacks() {
+        console.log('🔧 Applying CDN fallbacks...');
+        
+        // Font Awesome fallback - replace icons with Unicode symbols
+        if (this.cdnFallbacks.fontAwesome) {
+            const iconMappings = {
+                'fa-github': '⚡',
+                'fa-clock': '🕒',
+                'fa-chart-line': '📈',
+                'fa-server': '🖥️',
+                'fa-play': '▶️',
+                'fa-refresh': '🔄',
+                'fa-cog': '⚙️',
+                'fa-info': 'ℹ️',
+                'fa-warning': '⚠️',
+                'fa-check': '✅',
+                'fa-times': '❌'
+            };
+            
+            Object.entries(iconMappings).forEach(([faClass, unicode]) => {
+                const icons = document.querySelectorAll(`i.${faClass}`);
+                icons.forEach(icon => {
+                    icon.innerHTML = unicode;
+                    icon.style.fontFamily = 'system-ui, sans-serif';
+                    icon.style.fontStyle = 'normal';
+                });
+            });
+        }
+    }
+
+    // Fallback chart rendering for when Chart.js is unavailable
+    renderFallbackChart(canvasId, data, type = 'line') {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, width, height);
+        
+        // Simple fallback visualization
+        ctx.fillStyle = '#e3f2fd';
+        ctx.fillRect(0, 0, width, height);
+        
+        ctx.fillStyle = '#1976d2';
+        ctx.font = '14px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Chart data available', width / 2, height / 2 - 10);
+        ctx.fillText('(Chart.js CDN unavailable)', width / 2, height / 2 + 10);
+        
+        // Simple bar representation if data is available
+        if (data && Array.isArray(data) && data.length > 0) {
+            const barWidth = Math.max(2, (width - 40) / data.length);
+            const maxValue = Math.max(...data.map(d => typeof d === 'number' ? d : d.value || 0));
+            
+            data.forEach((item, index) => {
+                const value = typeof item === 'number' ? item : item.value || 0;
+                const barHeight = maxValue > 0 ? (value / maxValue) * (height - 60) : 0;
+                const x = 20 + index * barWidth;
+                const y = height - 30 - barHeight;
+                
+                ctx.fillStyle = '#4caf50';
+                ctx.fillRect(x, y, barWidth - 2, barHeight);
+            });
+        }
+    }
+
+    // Safe date formatting without date-fns dependency
+    formatDateSafe(date) {
+        if (this.cdnFallbacks.dateFns) {
+            // Fallback to native Date methods
+            return new Date(date).toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } else if (typeof dateFns !== 'undefined') {
+            return dateFns.format(new Date(date), 'MMM dd, yyyy HH:mm');
+        } else if (typeof window.dateFns !== 'undefined') {
+            return window.dateFns.format(new Date(date), 'MMM dd, yyyy HH:mm');
+        } else {
+            return new Date(date).toLocaleString();
+        }
+    }
+
     async init() {
         console.log('🚀 Initializing Oracle Instance Creator Dashboard...');
+        
+        // Check CDN availability and apply fallbacks if needed
+        this.checkCDNAvailability();
+        
+        // Setup offline mode detection
+        this.setupOfflineHandlers();
+        this.checkOfflineStatus();
         
         // Load saved config
         this.loadConfig();
@@ -209,6 +352,13 @@ class OracleInstanceDashboard {
     async refreshData() {
         console.log('🔄 Refreshing dashboard data...');
         
+        // If offline, use cached data instead of making API calls
+        if (this.offlineMode.enabled) {
+            console.log('📵 Offline mode - using cached data');
+            this.loadCachedData();
+            return;
+        }
+        
         try {
             // Update last update time
             this.lastUpdate = new Date();
@@ -226,6 +376,9 @@ class OracleInstanceDashboard {
                 this.updateADPerformance(),
                 this.updateScheduleInfo()
             ]);
+
+            // Cache the successful data fetch for offline mode
+            this.cacheCurrentData();
 
         } catch (error) {
             console.error('Error refreshing data:', error);
@@ -443,6 +596,13 @@ class OracleInstanceDashboard {
     }
 
     updateSuccessPatternChart(days, data = null) {
+        // Use fallback rendering if Chart.js is unavailable
+        if (this.cdnFallbacks.chartjs) {
+            const chartData = data ? this.processChartData(data, days) : this.generateMockChartData(days);
+            this.renderFallbackChart('successPatternChart', chartData, 'line');
+            return;
+        }
+        
         if (!data) {
             // Mock data for demonstration
             const labels = [];
@@ -499,6 +659,269 @@ class OracleInstanceDashboard {
         }
         
         this.charts.successPattern.update();
+    }
+
+    // Helper methods for CDN fallback chart data processing
+    processChartData(data, days) {
+        const dailyStats = {};
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - days);
+        
+        data.forEach(pattern => {
+            const date = new Date(pattern.timestamp).toDateString();
+            if (new Date(pattern.timestamp) >= cutoffDate) {
+                if (!dailyStats[date]) {
+                    dailyStats[date] = { total: 0, success: 0 };
+                }
+                dailyStats[date].total++;
+                if (pattern.type === 'success') {
+                    dailyStats[date].success++;
+                }
+            }
+        });
+        
+        const chartData = [];
+        for (let i = days - 1; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateStr = date.toDateString();
+            
+            const stats = dailyStats[dateStr];
+            if (stats && stats.total > 0) {
+                chartData.push(Math.round((stats.success / stats.total) * 100));
+            } else {
+                chartData.push(0);
+            }
+        }
+        
+        return chartData;
+    }
+
+    generateMockChartData(days) {
+        const mockData = [];
+        for (let i = 0; i < days; i++) {
+            mockData.push(Math.floor(Math.random() * 100));
+        }
+        return mockData;
+    }
+
+    // Setup offline event handlers
+    setupOfflineHandlers() {
+        window.addEventListener('online', () => {
+            console.log('🌐 Connection restored');
+            this.checkOfflineStatus();
+        });
+        
+        window.addEventListener('offline', () => {
+            console.log('📵 Connection lost');
+            this.checkOfflineStatus();
+        });
+        
+        // Check periodically as well (navigator.onLine can be unreliable)
+        setInterval(() => {
+            this.checkOfflineStatus();
+        }, 30000); // Check every 30 seconds
+    }
+
+    // Offline Mode Management
+    checkOfflineStatus() {
+        const isOnline = navigator.onLine;
+        const wasOffline = this.offlineMode.enabled;
+        
+        this.offlineMode.enabled = !isOnline;
+        
+        // Show/hide offline indicator
+        const offlineIndicator = document.getElementById('offline-indicator');
+        if (!offlineIndicator) {
+            this.createOfflineIndicator();
+        }
+        
+        if (!isOnline && !wasOffline) {
+            console.warn('🔌 Dashboard is now offline - using cached data');
+            this.showOfflineMode();
+        } else if (isOnline && wasOffline) {
+            console.log('🌐 Connection restored - refreshing data');
+            this.hideOfflineMode();
+            this.refreshData();
+        }
+    }
+
+    createOfflineIndicator() {
+        const indicator = document.createElement('div');
+        indicator.id = 'offline-indicator';
+        indicator.innerHTML = `
+            <div class="offline-banner">
+                <span>📵 Offline Mode</span>
+                <small>Using cached data</small>
+            </div>
+        `;
+        indicator.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            display: none;
+            background: linear-gradient(45deg, #ff9800, #f57c00);
+            color: white;
+            text-align: center;
+            padding: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        `;
+        document.body.appendChild(indicator);
+    }
+
+    showOfflineMode() {
+        const indicator = document.getElementById('offline-indicator');
+        if (indicator) {
+            indicator.style.display = 'block';
+        }
+        
+        // Load cached data if available
+        this.loadCachedData();
+        
+        // Disable refresh functionality
+        const refreshBtn = document.getElementById('refresh-data');
+        if (refreshBtn) {
+            refreshBtn.disabled = true;
+            refreshBtn.title = 'Cannot refresh in offline mode';
+        }
+        
+        this.showNotification('Offline mode: Using cached data', 'info');
+    }
+
+    hideOfflineMode() {
+        const indicator = document.getElementById('offline-indicator');
+        if (indicator) {
+            indicator.style.display = 'none';
+        }
+        
+        // Re-enable refresh functionality
+        const refreshBtn = document.getElementById('refresh-data');
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.title = 'Refresh dashboard data';
+        }
+        
+        this.showNotification('Connection restored', 'success');
+    }
+
+    cacheData(data) {
+        try {
+            const cacheData = {
+                timestamp: new Date().toISOString(),
+                data: data
+            };
+            localStorage.setItem('oic-dashboard-cache', JSON.stringify(cacheData));
+            this.offlineMode.lastDataCache = data;
+            this.offlineMode.cacheTimestamp = new Date();
+            console.log('💾 Dashboard data cached successfully');
+        } catch (error) {
+            console.warn('Failed to cache data:', error);
+        }
+    }
+
+    loadCachedData() {
+        try {
+            const cached = localStorage.getItem('oic-dashboard-cache');
+            if (cached) {
+                const cacheData = JSON.parse(cached);
+                const cacheAge = Date.now() - new Date(cacheData.timestamp).getTime();
+                const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+                
+                if (cacheAge < maxAge) {
+                    console.log('📂 Loading cached data (age: ' + Math.round(cacheAge / 1000 / 60) + ' minutes)');
+                    this.displayCachedData(cacheData.data);
+                    return true;
+                } else {
+                    console.warn('Cached data is too old, clearing cache');
+                    localStorage.removeItem('oic-dashboard-cache');
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load cached data:', error);
+        }
+        
+        // Show offline message if no cache available
+        this.displayOfflineMessage();
+        return false;
+    }
+
+    displayCachedData(data) {
+        // Update UI with cached data
+        if (data.instanceStatus) {
+            document.getElementById('instance-status').textContent = data.instanceStatus;
+            document.getElementById('instance-trend').textContent = 'Cached data';
+        }
+        
+        if (data.workflowRuns) {
+            const container = document.getElementById('workflow-runs');
+            container.innerHTML = data.workflowRuns.map(run => `
+                <div class="run-item ${this.getRunStatusClass(run.status).class}">
+                    <span class="run-status">${this.getRunStatusClass(run.status).text}</span>
+                    <span class="run-time">${this.formatDateSafe(run.created_at)} (cached)</span>
+                    <span class="run-duration">${run.duration || '--'}s</span>
+                </div>
+            `).join('');
+        }
+        
+        // Update last refresh time
+        document.getElementById('last-update').innerHTML = `
+            <span>Last updated (cached): ${this.formatDateSafe(this.offlineMode.cacheTimestamp)}</span>
+        `;
+    }
+
+    displayOfflineMessage() {
+        // Show offline placeholders
+        document.getElementById('instance-status').textContent = 'Offline';
+        document.getElementById('instance-trend').textContent = 'No cached data available';
+        
+        document.getElementById('workflow-runs').innerHTML = `
+            <div class="loading">
+                <i class="fas fa-wifi" style="opacity: 0.5;"></i>
+                No connection - cached data unavailable
+            </div>
+        `;
+        
+        document.getElementById('last-update').innerHTML = `
+            <span>Offline mode - no data available</span>
+        `;
+    }
+
+    cacheCurrentData() {
+        try {
+            const currentData = {
+                instanceStatus: document.getElementById('instance-status')?.textContent,
+                instanceTrend: document.getElementById('instance-trend')?.textContent,
+                successRate: document.getElementById('success-rate')?.textContent,
+                usagePercentage: document.getElementById('usage-percentage')?.textContent,
+                workflowRuns: this.getCurrentWorkflowData(),
+                lastRefresh: new Date().toISOString()
+            };
+            
+            this.cacheData(currentData);
+        } catch (error) {
+            console.warn('Failed to cache current data:', error);
+        }
+    }
+
+    getCurrentWorkflowData() {
+        const runs = [];
+        const runElements = document.querySelectorAll('#workflow-runs .run-item');
+        
+        runElements.forEach(element => {
+            const statusElement = element.querySelector('.run-status');
+            const timeElement = element.querySelector('.run-time');
+            const durationElement = element.querySelector('.run-duration');
+            
+            runs.push({
+                status: statusElement?.textContent || 'Unknown',
+                created_at: timeElement?.textContent || new Date().toISOString(),
+                duration: durationElement?.textContent?.replace('s', '') || 0
+            });
+        });
+        
+        return runs;
     }
 
     async updateRegionalAnalysis(region = 'auto') {
