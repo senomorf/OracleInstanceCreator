@@ -5,7 +5,7 @@ Oracle Cloud Infrastructure (OCI) automation for **parallel free tier instance c
 ## Architecture
 
 **Core Components:**
-```
+```text
 ├── .github/workflows/free-tier-creation.yml  # Single-job parallel execution
 ├── scripts/
 │   ├── launch-parallel.sh                    # Orchestrates both shapes
