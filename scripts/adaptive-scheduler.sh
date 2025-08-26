@@ -23,6 +23,8 @@ get_current_context() {
     
     # Determine schedule context based on UTC hour
     # This maps UTC time to regional business patterns for optimal scheduling
+    # Strip leading zeros to avoid octal interpretation in bash arithmetic
+    current_hour=$((10#$current_hour))
     if [[ $current_hour -ge 2 && $current_hour -le 7 ]]; then
         schedule_type="off_peak_aggressive"
         region_local_time="10am-3pm SGT (Low business activity)"
@@ -243,6 +245,8 @@ should_skip_attempt() {
     # Skip logic: Skip if the last 5 attempts in this hour have failed
     if command -v jq >/dev/null 2>&1; then
         local current_hour_utc=$(date -u '+%H')
+        # Strip leading zeros to avoid octal interpretation
+        current_hour_utc=$((10#$current_hour_utc))
         local recent_attempts_in_hour=$(echo "$pattern_data" | jq --arg hour "$current_hour_utc" '[.[] | select(.timestamp[11:13] == $hour)] | .[-5:]')
         local failure_count=$(echo "$recent_attempts_in_hour" | jq '[.[] | select(.type == "capacity_failure")] | length')
         local success_count=$(echo "$recent_attempts_in_hour" | jq '[.[] | select(.type == "success")] | length')
