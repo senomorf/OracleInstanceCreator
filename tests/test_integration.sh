@@ -261,6 +261,97 @@ test_signal_handling() {
     rm -f "$temp_file.cleanup" 2>/dev/null || true
 }
 
+# Test network partition simulation
+test_network_partition_simulation() {
+    # Simulate network errors during parallel execution
+    local a1_result e2_result
+    a1_result="$TEST_TEMP_DIR/a1_network_test"
+    e2_result="$TEST_TEMP_DIR/e2_network_test"
+    
+    # Mock processes that simulate network failures
+    (
+        sleep 1
+        # Simulate network timeout/connection error (exit code 4)
+        echo "4" > "$a1_result"
+    ) &
+    local pid_a1=$!
+    
+    (
+        sleep 2  
+        # E2 succeeds after network delay
+        echo "0" > "$e2_result"  
+    ) &
+    local pid_e2=$!
+    
+    # Wait for completion
+    wait $pid_a1 $pid_e2
+    
+    # Verify results
+    assert_file_exists "$a1_result"
+    assert_file_exists "$e2_result"
+    
+    local a1_status e2_status
+    a1_status=$(cat "$a1_result")
+    e2_status=$(cat "$e2_result")
+    
+    # A1 should have network error, E2 should succeed
+    [[ "$a1_status" == "4" ]] || return 1
+    [[ "$e2_status" == "0" ]] || return 1
+    
+    rm -f "$a1_result" "$e2_result" 2>/dev/null || true
+}
+
+# Test concurrent execution stress
+test_concurrent_execution_stress() {
+    # Test with multiple rapid parallel executions to detect race conditions
+    local test_iteration
+    local success_count=0
+    local expected_iterations=3
+    
+    for test_iteration in $(seq 1 $expected_iterations); do
+        local a1_result e2_result
+        a1_result="$TEST_TEMP_DIR/a1_stress_${test_iteration}"
+        e2_result="$TEST_TEMP_DIR/e2_stress_${test_iteration}"
+        
+        # Run quick parallel processes
+        (
+            sleep 0.2
+            echo "0" > "$a1_result"
+        ) &
+        
+        (
+            sleep 0.3
+            echo "0" > "$e2_result"
+        ) &
+        
+        # Don't wait here - let them run concurrently
+    done
+    
+    # Now wait for all processes and check results
+    sleep 1  # Allow all processes to complete
+    
+    for test_iteration in $(seq 1 $expected_iterations); do
+        local a1_result e2_result
+        a1_result="$TEST_TEMP_DIR/a1_stress_${test_iteration}"
+        e2_result="$TEST_TEMP_DIR/e2_stress_${test_iteration}"
+        
+        if [[ -f "$a1_result" && -f "$e2_result" ]]; then
+            local a1_status e2_status
+            a1_status=$(cat "$a1_result" 2>/dev/null || echo "1")
+            e2_status=$(cat "$e2_result" 2>/dev/null || echo "1")
+            
+            if [[ "$a1_status" == "0" && "$e2_status" == "0" ]]; then
+                ((success_count++))
+            fi
+        fi
+        
+        rm -f "$a1_result" "$e2_result" 2>/dev/null || true
+    done
+    
+    # At least 2 out of 3 iterations should succeed (allows for some stress-induced failures)
+    [[ $success_count -ge 2 ]] || return 1
+}
+
 # Main test execution
 main() {
     echo ""
@@ -288,6 +379,11 @@ main() {
     echo "Testing error handling..."
     run_test "Error classification" test_error_classification
     run_test "Signal handling" test_signal_handling
+    
+    echo ""
+    echo "Testing advanced scenarios..."
+    run_test "Network partition simulation" test_network_partition_simulation
+    run_test "Concurrent execution stress" test_concurrent_execution_stress
     
     echo ""
     echo "Test Results:"

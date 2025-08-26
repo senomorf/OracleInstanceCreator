@@ -228,11 +228,42 @@ print_configuration_summary() {
     echo "  Compartment: ${OCI_COMPARTMENT_ID:-$OCI_TENANCY_OCID (tenancy)}"
 }
 
+# Validate constants from constants.sh are within acceptable ranges
+validate_constants_configuration() {
+    log_info "Validating centralized constants..."
+    
+    # Validate GitHub Actions timeout is within billing boundary
+    if [[ "$GITHUB_ACTIONS_BILLING_TIMEOUT" -ge "$GITHUB_ACTIONS_BILLING_BOUNDARY" ]]; then
+        die "GITHUB_ACTIONS_BILLING_TIMEOUT ($GITHUB_ACTIONS_BILLING_TIMEOUT) must be less than boundary ($GITHUB_ACTIONS_BILLING_BOUNDARY)"
+    fi
+    
+    # Validate OCI timeout configuration
+    if [[ "$OCI_CONNECTION_TIMEOUT_SECONDS" -ge "$OCI_READ_TIMEOUT_SECONDS" ]]; then
+        die "OCI_CONNECTION_TIMEOUT_SECONDS ($OCI_CONNECTION_TIMEOUT_SECONDS) should be less than OCI_READ_TIMEOUT_SECONDS ($OCI_READ_TIMEOUT_SECONDS)"
+    fi
+    
+    # Validate retry configuration bounds
+    if [[ "$TRANSIENT_ERROR_MAX_RETRIES_DEFAULT" -lt "$TRANSIENT_ERROR_MAX_RETRIES_MIN" ]] || 
+       [[ "$TRANSIENT_ERROR_MAX_RETRIES_DEFAULT" -gt "$TRANSIENT_ERROR_MAX_RETRIES_MAX" ]]; then
+        die "TRANSIENT_ERROR_MAX_RETRIES_DEFAULT ($TRANSIENT_ERROR_MAX_RETRIES_DEFAULT) must be between $TRANSIENT_ERROR_MAX_RETRIES_MIN-$TRANSIENT_ERROR_MAX_RETRIES_MAX"
+    fi
+    
+    # Validate boot volume size bounds
+    if [[ "$BOOT_VOLUME_SIZE_DEFAULT" -lt "$BOOT_VOLUME_SIZE_MIN" ]]; then
+        die "BOOT_VOLUME_SIZE_DEFAULT ($BOOT_VOLUME_SIZE_DEFAULT) cannot be less than minimum ($BOOT_VOLUME_SIZE_MIN)"
+    fi
+    
+    log_success "Constants configuration validation passed"
+}
+
 # Main validation function
 validate_all_configuration() {
     log_info "Starting configuration validation..."
     
-    # Run comprehensive validation first (includes space checking and OCID validation)
+    # Validate centralized constants first
+    validate_constants_configuration
+    
+    # Run comprehensive validation (includes space checking and OCID validation)
     if ! validate_configuration; then
         die "Comprehensive configuration validation failed"
     fi

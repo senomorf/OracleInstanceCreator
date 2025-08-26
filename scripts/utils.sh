@@ -5,6 +5,9 @@
 
 set -euo pipefail
 
+# Source centralized constants
+source "$(dirname "${BASH_SOURCE[0]:-$0}")/constants.sh"
+
 # Colors for logging (if terminal supports it)
 if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
     RED=$(tput setaf 1)
@@ -106,7 +109,7 @@ log_with_context() {
 
 # Timing functions for performance monitoring
 # Note: Using bash 4+ associative arrays if available, otherwise simple variables
-if [[ ${BASH_VERSION%%.*} -ge 4 ]]; then
+if [[ -n "${BASH_VERSION:-}" ]] && [[ ${BASH_VERSION%%.*} -ge 4 ]]; then
     declare -A TIMER_START_TIMES
 else
     # Fallback for older bash versions - use simple timer variable
@@ -115,7 +118,7 @@ fi
 
 start_timer() {
     local timer_name="$1"
-    if [[ ${BASH_VERSION%%.*} -ge 4 ]]; then
+    if [[ -n "${BASH_VERSION:-}" ]] && [[ ${BASH_VERSION%%.*} -ge 4 ]]; then
         TIMER_START_TIMES[$timer_name]=$(date +%s.%N)
     else
         # Fallback - only support one timer at a time
@@ -128,7 +131,7 @@ log_elapsed() {
     local timer_name="$1"
     local start_time=""
     
-    if [[ ${BASH_VERSION%%.*} -ge 4 ]]; then
+    if [[ -n "${BASH_VERSION:-}" ]] && [[ ${BASH_VERSION%%.*} -ge 4 ]]; then
         start_time="${TIMER_START_TIMES[$timer_name]:-}"
         if [[ -n "$start_time" ]]; then
             unset TIMER_START_TIMES[$timer_name]
@@ -577,27 +580,12 @@ if [[ -z "${OCI_EXIT_SUCCESS:-}" ]]; then
     readonly OCI_EXIT_TIMEOUT=124
 fi
 
-# Constants for better maintainability
-# Only define if not already defined (avoid readonly conflicts from multiple sourcing)
-if [[ -z "${RESULT_FILE_TIMEOUT_SECONDS:-}" ]]; then
-    readonly RESULT_FILE_TIMEOUT_SECONDS=10
-    readonly RESULT_FILE_POLL_INTERVAL=0.1
-    readonly GITHUB_ACTIONS_TIMEOUT_SECONDS=55  # Stay under 60s to avoid 2-minute billing boundary
-    readonly OCI_CONNECTION_TIMEOUT_SECONDS=5
-    readonly OCI_READ_TIMEOUT_SECONDS=15
-    readonly RETRY_WAIT_TIME_DEFAULT=30
-    readonly INSTANCE_VERIFY_MAX_CHECKS_DEFAULT=5
-    readonly INSTANCE_VERIFY_DELAY_DEFAULT=30
-    readonly BOOT_VOLUME_SIZE_DEFAULT=50
-    readonly GRACEFUL_TERMINATION_DELAY=2
-    
-    readonly TIMEOUT_EXIT_CODE=124
-fi
+# Constants are now centralized in constants.sh - sourced in init_script()
 
 # Wait for result file with polling and timeout
 wait_for_result_file() {
     local file_path="$1"
-    local timeout="${2:-$RESULT_FILE_TIMEOUT_SECONDS}"
+    local timeout="${2:-$RESULT_FILE_WAIT_TIMEOUT}"
     local elapsed=0
     local poll_interval="$RESULT_FILE_POLL_INTERVAL"
     

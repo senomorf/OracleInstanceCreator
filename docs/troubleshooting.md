@@ -406,6 +406,145 @@ LOG_FORMAT: "json"  # For structured logs
    [INFO] AD-2: 0% success (0/3 attempts)
    ```
 
+## Recent Improvements Troubleshooting
+
+### 🔧 Constants Consolidation Issues
+
+After the constants consolidation update, you might encounter these issues:
+
+#### Problem: "GITHUB_ACTIONS_TIMEOUT_SECONDS: unbound variable"
+**Cause:** Old constant names still in use after centralization to `constants.sh`
+
+**Solution:**
+1. **Verify constants.sh is sourced**:
+   ```bash
+   grep -n "constants.sh" scripts/utils.sh scripts/launch-parallel.sh
+   # Should show constants.sh being sourced
+   ```
+
+2. **Check for old constant references**:
+   ```bash
+   # These should return no results (old constants removed)
+   grep -r "TIMEOUT_EXIT_CODE" scripts/
+   grep -r "GITHUB_ACTIONS_TIMEOUT_SECONDS" scripts/
+   
+   # These should show new constants being used
+   grep -r "EXIT_TIMEOUT_ERROR" scripts/
+   grep -r "GITHUB_ACTIONS_BILLING_TIMEOUT" scripts/
+   ```
+
+3. **Validate constants are loaded**:
+   ```bash
+   # Test constants validation
+   ./scripts/validate-config.sh
+   # Should show "Constants configuration validation passed"
+   ```
+
+#### Problem: Functions like `wait_for_result_file` fail
+**Cause:** Constants name mismatch after consolidation
+
+**Solution:**
+```bash
+# Verify constants mapping in constants.sh
+grep -A 5 -B 5 "RESULT_FILE" scripts/constants.sh
+# Should show: RESULT_FILE_WAIT_TIMEOUT and RESULT_FILE_POLL_INTERVAL
+
+# Test the function directly
+source scripts/utils.sh
+temp_file=$(mktemp)
+echo "test" > "$temp_file"
+wait_for_result_file "$temp_file" 5  # Should succeed immediately
+```
+
+### 🧪 New Integration Test Issues
+
+#### Problem: New tests failing in `test_integration.sh`
+**Symptoms:**
+- "Network partition simulation" fails
+- "Concurrent execution stress" fails
+- Tests timeout or show race conditions
+
+**Diagnosis:**
+```bash
+# Run individual tests with debug
+DEBUG=true ./tests/test_integration.sh
+
+# Check for race conditions in stress test
+for i in {1..5}; do
+  echo "Run $i:"
+  ./tests/test_integration.sh | grep -E "(stress|concurrent)"
+done
+```
+
+**Solutions:**
+1. **Increase timeout for slower systems**:
+   ```bash
+   # Edit test_integration.sh, increase MOCK_DURATION if needed
+   # Default is 3 seconds, try 5 for slower systems
+   ```
+
+2. **Check file system performance**:
+   ```bash
+   # Test file creation speed (should be <1ms)
+   time (echo "test" > /tmp/speed_test.txt)
+   rm -f /tmp/speed_test.txt
+   ```
+
+### 🔍 Configuration Validation Enhancement Issues
+
+#### Problem: New validation checks failing
+**Symptoms:**
+- "Constants validation failed"
+- "GITHUB_ACTIONS_BILLING_TIMEOUT must be less than boundary"
+- Validation errors for transient retry settings
+
+**Solutions:**
+1. **Check constants.sh values**:
+   ```bash
+   grep -E "BILLING_TIMEOUT|BILLING_BOUNDARY" scripts/constants.sh
+   # Timeout should be less than boundary (55 < 60)
+   ```
+
+2. **Validate retry configuration**:
+   ```bash
+   # Check retry bounds in constants.sh
+   grep -A 3 -B 3 "TRANSIENT_ERROR.*RETRIES" scripts/constants.sh
+   # Default should be between MIN and MAX values
+   ```
+
+3. **Test validation manually**:
+   ```bash
+   source scripts/constants.sh
+   source scripts/utils.sh
+   validate_constants_configuration  # New function
+   ```
+
+### 🚀 Parallel Execution Improvements
+
+#### Problem: Parallel execution behaves differently after updates
+**Symptoms:**
+- Different timing patterns
+- New error messages
+- Changed exit codes
+
+**Expected Changes (Normal):**
+- More consistent timeout handling (55 seconds exactly)
+- Better process cleanup (no zombie processes)
+- Improved error classification
+- Enhanced result file handling
+
+**Validation:**
+```bash
+# Test timing consistency (should be ~20-25 seconds for capacity errors)
+time ./scripts/launch-parallel.sh
+
+# Check process cleanup (no OCI processes should remain)
+ps aux | grep -i oci | grep -v grep
+
+# Verify result files are cleaned up
+ls -la /tmp/ | grep -E "(a1_result|e2_result)" # Should be empty
+```
+
 ## Advanced Troubleshooting
 
 ### Network Connectivity Issues

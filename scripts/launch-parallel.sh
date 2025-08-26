@@ -86,8 +86,8 @@ main() {
     log_info "Starting parallel OCI instance creation for both free tier shapes"
     
     # Set timeout to prevent exceeding 60 seconds (GitHub Actions billing boundary)
-    # Using constant defined in utils.sh for consistency and maintainability
-    local timeout_seconds=$GITHUB_ACTIONS_TIMEOUT_SECONDS
+    # Using constant defined in constants.sh for consistency and maintainability
+    local timeout_seconds=$GITHUB_ACTIONS_BILLING_TIMEOUT
     log_debug "Setting execution timeout to ${timeout_seconds}s to avoid 2-minute billing"
     
     # Create temporary files for process communication with secure permissions  
@@ -154,8 +154,8 @@ main() {
         sleep $GRACEFUL_TERMINATION_DELAY  # Give processes time to terminate gracefully before force kill
         [[ -n "$PID_A1" ]] && kill -9 "$PID_A1" 2>/dev/null || true
         [[ -n "$PID_E2" ]] && kill -9 "$PID_E2" 2>/dev/null || true
-        STATUS_A1=$TIMEOUT_EXIT_CODE  # Standard timeout exit code (GNU timeout compatibility)
-        STATUS_E2=$TIMEOUT_EXIT_CODE  # Standard timeout exit code (GNU timeout compatibility)
+        STATUS_A1=$EXIT_TIMEOUT_ERROR  # Standard timeout exit code (GNU timeout compatibility)
+        STATUS_E2=$EXIT_TIMEOUT_ERROR  # Standard timeout exit code (GNU timeout compatibility)
     fi
     
     # Always wait for processes to fully complete and flush their output
