@@ -52,21 +52,25 @@ track_resource_usage() {
 cleanup_handler() {
     log_warning "Received interrupt signal - cleaning up background processes"
     
-    if [[ -n "$PID_A1" ]]; then
+    if [[ -n "$PID_A1" ]] && kill -0 "$PID_A1" 2>/dev/null; then
         log_debug "Terminating A1 process (PID: $PID_A1)"
-        kill $PID_A1 2>/dev/null || true
+        kill "$PID_A1" 2>/dev/null || true
     fi
     
-    if [[ -n "$PID_E2" ]]; then
+    if [[ -n "$PID_E2" ]] && kill -0 "$PID_E2" 2>/dev/null; then
         log_debug "Terminating E2 process (PID: $PID_E2)"
-        kill $PID_E2 2>/dev/null || true
+        kill "$PID_E2" 2>/dev/null || true
     fi
     
     sleep $GRACEFUL_TERMINATION_DELAY
     
     # Force kill if still running
-    [[ -n "$PID_A1" ]] && kill -9 $PID_A1 2>/dev/null || true
-    [[ -n "$PID_E2" ]] && kill -9 $PID_E2 2>/dev/null || true
+    if [[ -n "$PID_A1" ]] && kill -0 "$PID_A1" 2>/dev/null; then
+        kill -9 "$PID_A1" 2>/dev/null || true
+    fi
+    if [[ -n "$PID_E2" ]] && kill -0 "$PID_E2" 2>/dev/null; then
+        kill -9 "$PID_E2" 2>/dev/null || true
+    fi
     
     # Cleanup temporary files
     [[ -n "$temp_dir" && -d "$temp_dir" ]] && rm -rf "$temp_dir" 2>/dev/null || true
@@ -99,6 +103,10 @@ launch_shape() {
     
     log_info "Starting $shape_name launch attempt..."
     
+    # Track shape-specific timing
+    local shape_start_time
+    shape_start_time=$(date +%s)
+    
     # Set shape-specific environment variables
     export OCI_SHAPE="${config[SHAPE]}"
     export OCI_OCPUS="${config[OCPUS]}"
@@ -109,8 +117,22 @@ launch_shape() {
     local script_dir
     script_dir="$(dirname "$0")"
     "$script_dir/launch-instance.sh"
+    local exit_code=$?
     
-    return $?
+    # Calculate and log shape execution time
+    local shape_end_time duration
+    shape_end_time=$(date +%s)
+    duration=$((shape_end_time - shape_start_time))
+    
+    # Log shape performance metrics
+    log_performance_metric "SHAPE_DURATION" "$shape_name" "$duration" "$exit_code" "Shape=${config[SHAPE]}"
+    
+    # Store duration for analysis (write to temp file if available)
+    if [[ -n "${temp_dir:-}" ]]; then
+        echo "$duration" > "${temp_dir}/${shape_name,,}_duration" 2>/dev/null || true
+    fi
+    
+    return $exit_code
 }
 
 # Main parallel execution
@@ -193,12 +215,23 @@ main() {
     # Handle timeout case
     if [[ $elapsed -ge $timeout_seconds ]]; then
         log_warning "Execution timeout reached (${timeout_seconds}s) - terminating background processes"
-        # Fix: Add process existence checks before kill commands
-        [[ -n "$PID_A1" ]] && kill "$PID_A1" 2>/dev/null || true
-        [[ -n "$PID_E2" ]] && kill "$PID_E2" 2>/dev/null || true
+        # Enhanced process cleanup with existence checks
+        if [[ -n "$PID_A1" ]] && kill -0 "$PID_A1" 2>/dev/null; then
+            log_debug "Terminating A1 process (PID: $PID_A1)"
+            kill "$PID_A1" 2>/dev/null || true
+        fi
+        if [[ -n "$PID_E2" ]] && kill -0 "$PID_E2" 2>/dev/null; then
+            log_debug "Terminating E2 process (PID: $PID_E2)"
+            kill "$PID_E2" 2>/dev/null || true
+        fi
         sleep $GRACEFUL_TERMINATION_DELAY  # 2-second grace period allows processes to cleanup before SIGKILL
-        [[ -n "$PID_A1" ]] && kill -9 "$PID_A1" 2>/dev/null || true
-        [[ -n "$PID_E2" ]] && kill -9 "$PID_E2" 2>/dev/null || true
+        # Force kill if still running
+        if [[ -n "$PID_A1" ]] && kill -0 "$PID_A1" 2>/dev/null; then
+            kill -9 "$PID_A1" 2>/dev/null || true
+        fi
+        if [[ -n "$PID_E2" ]] && kill -0 "$PID_E2" 2>/dev/null; then
+            kill -9 "$PID_E2" 2>/dev/null || true
+        fi
         STATUS_A1=$EXIT_TIMEOUT_ERROR  # Standard timeout exit code (GNU timeout compatibility)
         STATUS_E2=$EXIT_TIMEOUT_ERROR  # Standard timeout exit code (GNU timeout compatibility)
     fi
@@ -249,9 +282,30 @@ main() {
     
     log_elapsed "parallel_execution"
     
-    # Track final resource usage and log execution summary
+    # Track final resource usage and collect detailed performance summary
     track_resource_usage "end"
-    log_performance_metric "CONCURRENT_END" "parallel_execution" "$success_count" "2" "ExecutionTime=${elapsed}s"
+    
+    # Collect shape-specific durations for analysis
+    local a1_duration=0 e2_duration=0 peak_memory=0
+    if [[ -f "${temp_dir}/a1.flex_duration" ]]; then
+        a1_duration=$(cat "${temp_dir}/a1.flex_duration" 2>/dev/null || echo "0")
+    fi
+    if [[ -f "${temp_dir}/e2.1.micro_duration" ]]; then
+        e2_duration=$(cat "${temp_dir}/e2.1.micro_duration" 2>/dev/null || echo "0")
+    fi
+    if [[ -f "${temp_dir}/peak_memory_usage" ]]; then
+        peak_memory=$(cat "${temp_dir}/peak_memory_usage" 2>/dev/null || echo "0")
+    fi
+    
+    # Log comprehensive execution summary
+    local performance_summary="ExecutionTime=${elapsed}s,A1Duration=${a1_duration}s,E2Duration=${e2_duration}s,PeakMemory=${peak_memory}MB,SuccessRate=${success_count}/2"
+    log_performance_metric "CONCURRENT_END" "parallel_execution" "$success_count" "2" "$performance_summary"
+    
+    # Log structured performance data for analysis
+    if [[ "${LOG_FORMAT:-}" == "json" ]]; then
+        local performance_context="{\"total_duration\":${elapsed},\"a1_duration\":${a1_duration},\"e2_duration\":${e2_duration},\"peak_memory\":${peak_memory},\"success_count\":${success_count},\"parallel_efficiency\":$(( (a1_duration + e2_duration) > 0 ? (a1_duration + e2_duration) * 100 / elapsed : 0 ))}"
+        log_with_context "info" "Parallel execution performance summary" "$performance_context"
+    fi
     
     if [[ $success_count -gt 0 ]]; then
         log_success "Parallel execution completed: $success_count of 2 instances created successfully"

@@ -533,6 +533,31 @@ get_error_type() {
     fi
 }
 
+# Calculate exponential backoff delay for retry attempts
+# Used for transient error retry scenarios where we need smart delay calculation
+#
+# Parameters:
+#   attempt     Current attempt number (1-based)
+#   base_delay  Base delay in seconds (default: 5)
+#   max_delay   Maximum delay cap in seconds (default: 40)
+# Returns:
+#   Calculated delay in seconds
+calculate_exponential_backoff() {
+    local attempt="$1"
+    local base_delay="${2:-5}"
+    local max_delay="${3:-40}"
+    
+    # Calculate 2^(attempt-1) * base_delay
+    local delay=$((base_delay * (2 ** (attempt - 1))))
+    
+    # Cap at maximum delay
+    if [[ $delay -gt $max_delay ]]; then
+        delay=$max_delay
+    fi
+    
+    echo "$delay"
+}
+
 # Retry function with exponential backoff
 retry_with_backoff() {
     local max_attempts="$1"

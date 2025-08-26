@@ -13,23 +13,29 @@ readonly OIC_CONSTANTS_LOADED=true
 # =============================================================================
 
 # GitHub Actions billing optimization - stay under 60s to avoid 2-minute billing boundary
+# CRITICAL BILLING LOGIC: GitHub Actions bills in whole-minute increments
+# - Jobs under 60s = 1 minute billing
+# - Jobs 60s+ = 2 minutes billing 
+# - 55s timeout provides 5s safety buffer for job cleanup/finalization
+# - This optimization saves 50% cost vs 2-minute billing (1 min vs 2 min per run)
 readonly GITHUB_ACTIONS_BILLING_TIMEOUT=55
 readonly GITHUB_ACTIONS_BILLING_BOUNDARY=60
 
-# Process monitoring and cleanup
-readonly PROCESS_MONITORING_INTERVAL=1  # Monitor processes every second for responsive detection
-readonly GRACEFUL_TERMINATION_DELAY=2  # Seconds to wait before force-killing processes
-readonly RESULT_FILE_WAIT_TIMEOUT=10    # Max time to wait for result files
-readonly RESULT_FILE_POLL_INTERVAL=0.1  # Polling interval for result file detection
+# Process monitoring and cleanup timing
+readonly PROCESS_MONITORING_INTERVAL=1  # Monitor processes every 1s for responsive detection without excessive CPU usage
+readonly GRACEFUL_TERMINATION_DELAY=2   # 2s grace period allows processes proper cleanup before SIGKILL
+readonly RESULT_FILE_WAIT_TIMEOUT=10     # 10s max wait prevents indefinite blocking on missing result files
+readonly RESULT_FILE_POLL_INTERVAL=0.1   # 100ms polling provides responsive detection without excessive CPU load
 
 # =============================================================================
 # OCI PERFORMANCE OPTIMIZATION
 # =============================================================================
 
 # OCI CLI performance flags - provides 93% improvement (2 minutes -> 20 seconds)
-readonly OCI_CONNECTION_TIMEOUT_SECONDS=5   # 5s vs 10s default
-readonly OCI_READ_TIMEOUT_SECONDS=15        # 15s vs 60s default
-readonly OCI_NO_RETRY_FLAG="--no-retry"     # Eliminates exponential backoff
+# PERFORMANCE CRITICAL: These flags eliminate OCI CLI's built-in delays
+readonly OCI_CONNECTION_TIMEOUT_SECONDS=5   # 5s vs 10s default - faster connection failure detection
+readonly OCI_READ_TIMEOUT_SECONDS=15        # 15s vs 60s default - faster read timeout for non-responsive API
+readonly OCI_NO_RETRY_FLAG="--no-retry"     # Eliminates OCI's exponential backoff (we handle retries ourselves)
 
 # =============================================================================
 # ERROR HANDLING & RETRY CONFIGURATION  
@@ -40,13 +46,14 @@ readonly RETRY_WAIT_TIME_MIN=1
 readonly RETRY_WAIT_TIME_MAX=300
 readonly RETRY_WAIT_TIME_DEFAULT=30
 
-# Transient error retry configuration
+# Transient error retry configuration with exponential backoff
+# RETRY STRATEGY: For INTERNAL_ERROR and NETWORK errors, retry same AD before moving to next
 readonly TRANSIENT_ERROR_MAX_RETRIES_MIN=1
 readonly TRANSIENT_ERROR_MAX_RETRIES_MAX=10
-readonly TRANSIENT_ERROR_MAX_RETRIES_DEFAULT=3
+readonly TRANSIENT_ERROR_MAX_RETRIES_DEFAULT=3      # 3 retries = 4 total attempts per AD
 readonly TRANSIENT_ERROR_RETRY_DELAY_MIN=1
 readonly TRANSIENT_ERROR_RETRY_DELAY_MAX=60
-readonly TRANSIENT_ERROR_RETRY_DELAY_DEFAULT=15
+readonly TRANSIENT_ERROR_RETRY_DELAY_DEFAULT=15     # Base delay for exponential backoff (5s, 10s, 20s, 40s)
 
 # Exit codes following GNU standards
 readonly EXIT_SUCCESS=0

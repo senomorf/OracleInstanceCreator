@@ -8,6 +8,7 @@ set -euo pipefail
 source "$(dirname "$0")/utils.sh"
 source "$(dirname "$0")/notify.sh"
 source "$(dirname "$0")/metrics.sh"
+source "$(dirname "$0")/circuit-breaker.sh"
 
 # Global flag for signal handling
 INTERRUPTED=false
@@ -288,9 +289,20 @@ launch_instance() {
     local comp_id="$1"
     local image_id="$2"
     
-    # Parse availability domains (support comma-separated list)
+    # Parse availability domains and apply circuit breaker filtering
+    local available_ads_string
+    available_ads_string=$(get_available_ads "$OCI_AD")
+    
+    if [[ -z "$available_ads_string" ]]; then
+        log_warning "Circuit breaker has filtered out all ADs - all have too many recent failures"
+        log_info "Will try again later when circuit breakers reset"
+        return 0  # Treat as capacity issue - retry later
+    fi
+    
     local ad_list
-    IFS=',' read -ra ad_list <<< "$OCI_AD"
+    IFS=',' read -ra ad_list <<< "$available_ads_string"
+    
+    log_info "Available ADs after circuit breaker filtering: $available_ads_string"
     
     # Try each AD until success or all ADs exhausted
     local ad_index=0
@@ -340,9 +352,10 @@ launch_instance() {
             local context="{\"availability_domain\":\"$current_ad\",\"instance_ocid\":\"$instance_id\",\"attempt\":$((ad_index + 1)),\"max_attempts\":$max_attempts}"
             log_with_context "success" "Instance launched successfully" "$context"
             
-            # Track successful AD for performance metrics
+            # Track successful AD for performance metrics and circuit breaker
             log_performance_metric "AD_SUCCESS" "$current_ad" "$((ad_index + 1))" "$max_attempts"
             record_ad_result "$current_ad" "success" ""
+            mark_ad_success "$current_ad"  # Reset circuit breaker for this AD
             
             send_telegram_notification "success" "OCI instance created in $current_ad: ${INSTANCE_DISPLAY_NAME} (OCID: ${instance_id})"
             
@@ -355,9 +368,10 @@ launch_instance() {
         
         case "$error_type" in
             "CAPACITY"|"RATE_LIMIT")
-                # Track capacity-related failures for performance analysis
+                # Track capacity-related failures for performance analysis and circuit breaker
                 log_performance_metric "AD_FAILURE" "$current_ad" "$((ad_index + 1))" "$max_attempts" "$error_type"
                 record_ad_result "$current_ad" "failure" "$error_type"
+                increment_ad_failure "$current_ad"  # Track for circuit breaker
                 
                 # Try next AD if available
                 if [[ $((ad_index + 1)) -lt $max_attempts ]]; then
@@ -397,10 +411,15 @@ launch_instance() {
                 
                 while [[ $should_retry_same_ad == true && $retry_count -lt $transient_retry_max ]]; do
                     ((retry_count++))
-                    log_info "Transient $error_type error - retrying same AD attempt $retry_count/$transient_retry_max..."
                     
-                    # Wait before retry
-                    if ! interruptible_sleep "$transient_retry_delay" "Waiting before retry on same AD"; then
+                    # Calculate exponential backoff delay for this attempt
+                    local backoff_delay
+                    backoff_delay=$(calculate_exponential_backoff "$retry_count" 5 40)
+                    
+                    log_info "Transient $error_type error - retrying same AD attempt $retry_count/$transient_retry_max (backoff: ${backoff_delay}s)..."
+                    
+                    # Wait before retry using exponential backoff
+                    if ! interruptible_sleep "$backoff_delay" "Exponential backoff before retry on same AD"; then
                         log_info "Sleep interrupted - exiting gracefully"
                         return 130  # Signal interrupted
                     fi
@@ -425,9 +444,10 @@ launch_instance() {
                         local context="{\"availability_domain\":\"$current_ad\",\"instance_ocid\":\"$instance_id\",\"retry_attempt\":$retry_count,\"total_retries\":$transient_retry_max}"
                         log_with_context "success" "Instance launched successfully after retry" "$context"
                         
-                        # Track successful AD for performance metrics
+                        # Track successful AD for performance metrics and circuit breaker
                         log_performance_metric "AD_SUCCESS_RETRY" "$current_ad" "$retry_count" "$transient_retry_max"
                         record_ad_result "$current_ad" "success" "RETRY_$retry_count"
+                        mark_ad_success "$current_ad"  # Reset circuit breaker for this AD
                         
                         send_telegram_notification "success" "OCI instance created in $current_ad after $retry_count retries: ${INSTANCE_DISPLAY_NAME} (OCID: ${instance_id})"
                         
