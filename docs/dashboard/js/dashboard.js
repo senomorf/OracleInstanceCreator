@@ -29,8 +29,14 @@ class OracleInstanceDashboard {
             resetTime: null,
             remaining: null,
             retryAfter: null,
-            warningShown: false
+            warningShown: false,
+            retryCount: 0,
+            maxRetries: 3,
+            baseDelay: 1000  // 1 second base delay
         };
+        
+        // Cache frequently accessed DOM elements
+        this.domElements = {};
         
         this.init();
     }
@@ -99,7 +105,7 @@ class OracleInstanceDashboard {
             Object.entries(iconMappings).forEach(([faClass, unicode]) => {
                 const icons = document.querySelectorAll(`i.${faClass}`);
                 icons.forEach(icon => {
-                    icon.innerHTML = unicode;
+                    icon.textContent = unicode;
                     icon.style.fontFamily = 'system-ui, sans-serif';
                     icon.style.fontStyle = 'normal';
                 });
@@ -266,6 +272,9 @@ class OracleInstanceDashboard {
     }
 
     initializeUI() {
+        // Cache frequently accessed DOM elements
+        this.cacheDOMElements();
+        
         // Initialize charts
         this.initCharts();
         
@@ -274,6 +283,108 @@ class OracleInstanceDashboard {
         
         // Show current config in UI
         this.updateConfigUI();
+    }
+
+    cacheDOMElements() {
+        // Cache frequently used DOM elements to improve performance
+        const elementIds = [
+            'instance-status', 'instance-trend', 'success-rate', 'success-trend',
+            'workflow-runs', 'cost-estimation', 'workflow-count', 'success-count',
+            'failure-count', 'last-update', 'connection-status', 'config-status',
+            'token-status', 'repo-info', 'settings-btn'
+        ];
+        
+        elementIds.forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                this.domElements[id] = element;
+            } else {
+                console.warn(`DOM element with id '${id}' not found`);
+            }
+        });
+    }
+
+    // Helper method to get cached DOM elements (fallback to getElementById)
+    getElement(id) {
+        return this.domElements[id] || document.getElementById(id);
+    }
+
+    // Calculate exponential backoff delay
+    calculateExponentialBackoff(retryCount, baseDelay = 1000, maxDelay = 30000) {
+        const delay = Math.min(baseDelay * Math.pow(2, retryCount), maxDelay);
+        // Add jitter to prevent thundering herd
+        const jitter = Math.random() * 0.1 * delay;
+        return Math.floor(delay + jitter);
+    }
+
+    // API call wrapper with exponential backoff for rate limits
+    async apiCallWithBackoff(apiFunction, ...args) {
+        let lastError;
+        
+        for (let attempt = 0; attempt <= this.rateLimitState.maxRetries; attempt++) {
+            try {
+                const result = await apiFunction.apply(this, args);
+                // Reset retry count on successful call
+                this.rateLimitState.retryCount = 0;
+                return result;
+            } catch (error) {
+                lastError = error;
+                
+                // Only retry on rate limit errors
+                if (error.message.includes('Rate limit exceeded') && attempt < this.rateLimitState.maxRetries) {
+                    const delay = this.calculateExponentialBackoff(attempt, this.rateLimitState.baseDelay);
+                    console.warn(`Rate limit retry ${attempt + 1}/${this.rateLimitState.maxRetries}, waiting ${delay}ms`);
+                    await this.delay(delay);
+                    continue;
+                }
+                
+                // Don't retry other types of errors or if max retries exceeded
+                throw error;
+            }
+        }
+        
+        throw lastError;
+    }
+
+    // Safe calculation of minutes remaining with bounds checking
+    calculateMinutesRemaining(resetTime) {
+        if (!resetTime || !(resetTime instanceof Date) || isNaN(resetTime.getTime())) {
+            console.warn('Invalid reset time provided for rate limit calculation');
+            return 60; // Default to 1 hour if invalid
+        }
+        
+        const now = new Date();
+        const msRemaining = resetTime.getTime() - now.getTime();
+        
+        // Ensure positive value and reasonable bounds (max 60 minutes)
+        const minutesRemaining = Math.max(0, Math.ceil(msRemaining / 60000));
+        return Math.min(minutesRemaining, 60);
+    }
+
+    // Safe parsing of reset time with validation
+    parseResetTime(resetTimeHeader) {
+        if (!resetTimeHeader) {
+            return null;
+        }
+        
+        const resetTimestamp = parseInt(resetTimeHeader);
+        if (isNaN(resetTimestamp) || resetTimestamp <= 0) {
+            console.warn('Invalid reset time header:', resetTimeHeader);
+            return null;
+        }
+        
+        // Ensure timestamp is reasonable (not too far in the future or past)
+        const resetTime = new Date(resetTimestamp * 1000);
+        const now = new Date();
+        const hourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+        const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+        
+        if (resetTime < hourAgo || resetTime > hourFromNow) {
+            console.warn('Reset time is outside reasonable bounds:', resetTime);
+            return new Date(now.getTime() + 60 * 60 * 1000); // Default to 1 hour from now
+        }
+        
+        return resetTime;
     }
 
     initCharts() {
@@ -432,6 +543,11 @@ class OracleInstanceDashboard {
                 this.closeModal();
             }
         });
+
+        // Cleanup on page unload to prevent memory leaks
+        window.addEventListener('beforeunload', () => {
+            this.cleanup();
+        });
     }
 
     async refreshData() {
@@ -508,9 +624,15 @@ class OracleInstanceDashboard {
 
     showConfigurationPrompt() {
         // Show message for missing repository configuration
-        document.getElementById('instance-status').textContent = 'Not Configured';
-        document.getElementById('instance-trend').innerHTML = 
-            '⚙️ <a href="#" onclick="document.getElementById(\'settings-btn\').click()">Configure repository settings</a>';
+        this.getElement('instance-status').textContent = 'Not Configured';
+        
+        const trendElement = this.getElement('instance-trend');
+        trendElement.innerHTML = '⚙️ <a href="#" id="config-link">Configure repository settings</a>';
+        const configLink = trendElement.querySelector('#config-link');
+        configLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.getElement('settings-btn').click();
+        });
         
         document.getElementById('workflow-runs').innerHTML = `
             <div class="loading">
@@ -522,9 +644,15 @@ class OracleInstanceDashboard {
 
     showAuthenticationPrompt() {
         // Show limited access message for features requiring authentication
-        document.getElementById('instance-status').textContent = 'Limited Access';
-        document.getElementById('instance-trend').innerHTML = 
-            '🔒 <a href="#" onclick="document.getElementById(\'settings-btn\').click()">Add GitHub token for full access</a>';
+        this.getElement('instance-status').textContent = 'Limited Access';
+        
+        const trendElement = this.getElement('instance-trend');
+        trendElement.innerHTML = '🔒 <a href="#" id="token-link">Add GitHub token for full access</a>';
+        const tokenLink = trendElement.querySelector('#token-link');
+        tokenLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.getElement('settings-btn').click();
+        });
         
         document.getElementById('success-rate').textContent = '---%';
         document.getElementById('success-trend').textContent = 'Token required';
@@ -560,6 +688,7 @@ class OracleInstanceDashboard {
                         const info = JSON.parse(instanceInfo.value);
                         trend = `✅ Created in ${info.ad} at ${this.formatTime(new Date(info.timestamp))}`;
                     } catch (e) {
+                        console.warn('Failed to parse instance info:', e);
                         // Use default trend
                     }
                 }
@@ -1254,7 +1383,7 @@ class OracleInstanceDashboard {
         if (this.rateLimitState.exceeded) {
             const now = new Date();
             if (this.rateLimitState.resetTime && now < this.rateLimitState.resetTime) {
-                const minutesRemaining = Math.ceil((this.rateLimitState.resetTime - now) / 60000);
+                const minutesRemaining = this.calculateMinutesRemaining(this.rateLimitState.resetTime);
                 throw new Error(`Rate limit exceeded. Try again in ${minutesRemaining} minute(s).`);
             }
             // Reset state if time has passed
@@ -1281,11 +1410,10 @@ class OracleInstanceDashboard {
                 const rateLimitRemaining = response.headers.get('X-RateLimit-Remaining');
                 if (rateLimitRemaining === '0') {
                     this.rateLimitState.exceeded = true;
-                    const resetTime = response.headers.get('X-RateLimit-Reset');
-                    if (resetTime) {
-                        this.rateLimitState.resetTime = new Date(parseInt(resetTime) * 1000);
-                    }
-                    const minutesRemaining = Math.ceil((this.rateLimitState.resetTime - new Date()) / 60000);
+                    const resetTimeHeader = response.headers.get('X-RateLimit-Reset');
+                    this.rateLimitState.resetTime = this.parseResetTime(resetTimeHeader);
+                    const minutesRemaining = this.rateLimitState.resetTime ? 
+                        this.calculateMinutesRemaining(this.rateLimitState.resetTime) : 60;
                     throw new Error(`Rate limit exceeded. Try again in ${minutesRemaining} minute(s).`);
                 } else {
                     throw new Error('GitHub API access forbidden. Repository may be private.');
