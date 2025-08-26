@@ -672,8 +672,12 @@ class OracleInstanceDashboard {
     this.getElement('instance-status').textContent = 'Limited Access'
 
     const trendElement = this.getElement('instance-trend')
-    trendElement.innerHTML = '🔒 <a href="#" id="token-link">Add GitHub token for full access</a>'
-    const tokenLink = trendElement.querySelector('#token-link')
+    trendElement.textContent = '🔒 '
+    const tokenLink = document.createElement('a')
+    tokenLink.href = '#'
+    tokenLink.id = 'token-link'
+    tokenLink.textContent = 'Add GitHub token for full access'
+    trendElement.appendChild(tokenLink)
     tokenLink.addEventListener('click', (e) => {
       e.preventDefault()
       this.getElement('settings-btn').click()
@@ -1544,10 +1548,19 @@ class OracleInstanceDashboard {
       return
     }
 
-    // Basic validation for GitHub username/repo format
-    const validName = /^[a-zA-Z0-9._-]+$/
-    if (!validName.test(owner) || !validName.test(repo)) {
-      this.showError('Repository owner and name can only contain letters, numbers, dots, hyphens, and underscores')
+    // Enhanced validation for GitHub username/repo format
+    // GitHub usernames: alphanumeric and hyphens, cannot start/end with hyphen, max 39 chars
+    // Repo names: alphanumeric, hyphens, underscores, dots, max 100 chars
+    const validOwner = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/
+    const validRepo = /^[a-zA-Z0-9._-]{1,100}$/
+    
+    if (!validOwner.test(owner)) {
+      this.showError('Invalid repository owner format (alphanumeric and hyphens only, max 39 chars)')
+      return
+    }
+    
+    if (!validRepo.test(repo)) {
+      this.showError('Invalid repository name format (alphanumeric, dots, hyphens, underscores, max 100 chars)')
       return
     }
 
