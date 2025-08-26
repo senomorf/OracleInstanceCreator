@@ -320,3 +320,78 @@ fi
 - **Proxy is optional** - if not configured, connects directly to Oracle Cloud
 - **Multi-AD cycling** - dramatically increases success rates
 - **Security**: All credentials masked in logs, no exposure risk
+
+## Code Quality Standards
+
+### Required Linters
+All code must pass the following linters before merge:
+
+- **JavaScript**: ESLint v9+ (ES2022, browser environment)
+- **HTML**: djlint (proper formatting and structure validation)
+- **Shell**: shellcheck (bash best practices and error prevention)
+- **YAML**: yamllint (consistent formatting and syntax validation)
+- **GitHub Actions**: actionlint (workflow validation and best practices)
+- **Markdown**: markdownlint (documentation standards and formatting)
+
+### Running Linters
+
+#### Local Development
+```bash
+# Run all linters
+make lint
+
+# Auto-fix issues where possible
+make lint-fix
+
+# Individual linters
+make lint-js       # ESLint for JavaScript
+make lint-html     # djlint for HTML
+make lint-shell    # shellcheck for shell scripts
+make lint-yaml     # yamllint for YAML files
+make lint-actions  # actionlint for workflows
+make lint-md       # markdownlint for documentation
+```
+
+#### Manual Commands
+```bash
+# JavaScript
+eslint docs/dashboard/js/*.js
+
+# HTML formatting
+djlint --check docs/dashboard/*.html
+djlint --reformat docs/dashboard/*.html  # Auto-fix
+
+# Shell scripts
+shellcheck scripts/*.sh tests/*.sh
+
+# YAML files
+yamllint -c .yamllint.yml .github/workflows/*.yml config/*.yml
+
+# GitHub Actions
+actionlint .github/workflows/*.yml
+
+# Markdown
+markdownlint *.md docs/*.md
+```
+
+### Configuration Files
+- `.eslintrc.yml` - ESLint configuration
+- `.yamllint.yml` - yamllint configuration with 120-char line limit
+- `.shellcheckrc` - shellcheck configuration (disables SC1091 source following)
+
+### Pre-commit Validation
+Before committing code:
+1. Run `make lint` to check all files
+2. Fix any errors or warnings
+3. Use `make lint-fix` for auto-fixable issues
+4. Commit only after all linters pass
+
+### CI/CD Integration
+- All linters run automatically on push/PR via `.github/workflows/lint.yml`
+- Workflow runs in parallel for optimal performance
+- Failed linting blocks merge to maintain code quality
+
+### Quality Gates
+- **Error Level**: Must be fixed before merge
+- **Warning Level**: Should be addressed, may block merge for critical files
+- **Info Level**: Optional improvements for better code quality

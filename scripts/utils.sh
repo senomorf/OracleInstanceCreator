@@ -134,7 +134,7 @@ log_elapsed() {
     if [[ -n "${BASH_VERSION:-}" ]] && [[ ${BASH_VERSION%%.*} -ge 4 ]]; then
         start_time="${TIMER_START_TIMES[$timer_name]:-}"
         if [[ -n "$start_time" ]]; then
-            unset TIMER_START_TIMES[$timer_name]
+            unset "TIMER_START_TIMES[$timer_name]"
         fi
     else
         # Fallback - use single timer
@@ -143,8 +143,10 @@ log_elapsed() {
     fi
     
     if [[ -n "$start_time" ]]; then
-        local end_time=$(date +%s.%N)
-        local elapsed=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0")
+        local end_time
+        end_time=$(date +%s.%N)
+        local elapsed
+        elapsed=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0")
         log_info "Timer '$timer_name' elapsed: ${elapsed}s"
     else
         log_warning "Timer '$timer_name' was not started"

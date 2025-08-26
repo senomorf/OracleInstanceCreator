@@ -9,14 +9,17 @@ source "$(dirname "$0")/utils.sh"
 
 # Adaptive scheduling configuration
 PATTERN_ANALYSIS_ENABLED="${SUCCESS_TRACKING_ENABLED:-true}"
-MIN_DATA_POINTS="${MIN_PATTERN_DATA_POINTS:-10}"
+export MIN_DATA_POINTS="${MIN_PATTERN_DATA_POINTS:-10}"
 PATTERN_WINDOW_DAYS="${PATTERN_WINDOW_DAYS:-30}"
 
 # Get current timing context
 get_current_context() {
-    local current_hour=$(date -u '+%H')
-    local current_dow=$(date -u '+%u')  # 1=Monday, 7=Sunday
-    local current_timestamp=$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')
+    local current_hour
+    current_hour=$(date -u '+%H')
+    local current_dow
+    current_dow=$(date -u '+%u')  # 1=Monday, 7=Sunday
+    local current_timestamp
+    current_timestamp=$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')
     
     local schedule_type="unknown"
     local region_local_time=""

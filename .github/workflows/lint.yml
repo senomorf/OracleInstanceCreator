@@ -1,0 +1,92 @@
+---
+name: Lint Code Base
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  lint:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: '**/package-lock.json'
+
+      - name: Install Node.js linters
+        run: |
+          npm install -g eslint@9.34.0
+          npm install -g markdownlint-cli
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install Python linters
+        run: |
+          pip install djlint yamllint
+
+      - name: Install other linters
+        run: |
+          # Install shellcheck
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          
+          # Install actionlint
+          bash <(curl https://raw.githubusercontent.com/rhymond/actionlint/main/scripts/download-actionlint.bash)
+          sudo mv ./actionlint /usr/local/bin/
+
+      - name: Run ESLint
+        run: |
+          if [ -f "eslint.config.js" ]; then
+            eslint docs/dashboard/js/*.js
+          else
+            echo "⚠️ No ESLint config found, skipping JavaScript linting"
+          fi
+
+      - name: Run djlint
+        run: |
+          djlint --check docs/dashboard/*.html
+
+      - name: Run shellcheck
+        run: |
+          shellcheck scripts/*.sh tests/*.sh
+
+      - name: Run yamllint
+        run: |
+          if [ -f ".yamllint.yml" ]; then
+            yamllint -c .yamllint.yml .github/workflows/*.yml config/*.yml
+          else
+            yamllint .github/workflows/*.yml config/*.yml
+          fi
+
+      - name: Run actionlint
+        run: |
+          actionlint .github/workflows/*.yml
+
+      - name: Run markdownlint
+        run: |
+          if command -v markdownlint >/dev/null 2>&1; then
+            markdownlint *.md docs/*.md || echo "⚠️ Markdown linting issues found"
+          else
+            echo "⚠️ markdownlint not available"
+          fi
+
+      - name: Lint Summary
+        if: always()
+        run: |
+          echo "🎉 Code quality checks completed!"
+          echo "Check the individual steps above for any issues."

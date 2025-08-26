@@ -1,24 +1,26 @@
+---
+name: 'Oracle Free Tier Instance Creator (Parallel)'
+
 permissions:
   contents: read
   actions: write
-name: 'Oracle Free Tier Instance Creator (Parallel)'
 
 on:
   schedule:
     # Three-tier regional optimization: 85% cost reduction (7,200→1,068 runs/month)
     # All schedules target Oracle Cloud low-usage windows for maximum success rate
-    
+
     # TIER 1: Off-peak aggressive (550 runs/month)
     # UTC 2-7am = SGT 10am-3pm (lunch/afternoon lull)
-    # UTC 2-7am = EST 9pm-2am (late evening/night)  
+    # UTC 2-7am = EST 9pm-2am (late evening/night)
     # UTC 2-7am = CET 3-8am (early morning)
     - cron: "*/15 2-7 * * *"
-    
-    # TIER 2: Conservative peak (374 runs/month)  
+
+    # TIER 2: Conservative peak (374 runs/month)
     # UTC 8-23,0-1am = SGT 4pm-7am (avoids 8am-3pm business peak)
     # 17 total hours at 60min intervals = conservative approach
     - cron: "0 8-23,0-1 * * *"
-    
+
     # TIER 3: Weekend boost (144 runs/month)
     # Weekends only: UTC 1-6am = SGT 9am-2pm (lower weekend cloud usage)
     # 20min intervals for 5 hours × 2 days = moderate frequency
@@ -218,7 +220,7 @@ jobs:
         run: |
           # Check if the failure was due to capacity issues
           # This provides defense-in-depth against false failure notifications
-          echo "capacity_error=false" >> $GITHUB_OUTPUT
+          echo "capacity_error=false" >> "$GITHUB_OUTPUT"
           # Note: GitHub job logs would need to be checked via API for full implementation
           # For now, we rely on the script-level fix to handle capacity errors properly
 

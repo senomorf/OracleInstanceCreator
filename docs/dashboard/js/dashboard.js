@@ -114,9 +114,11 @@ class OracleInstanceDashboard {
     }
 
     // Fallback chart rendering for when Chart.js is unavailable
-    renderFallbackChart(canvasId, data, type = 'line') {
+    renderFallbackChart(canvasId, data) {
         const canvas = document.getElementById(canvasId);
-        if (!canvas) return;
+        if (!canvas) {
+            return;
+        }
         
         const ctx = canvas.getContext('2d');
         const width = canvas.width;
@@ -700,6 +702,7 @@ class OracleInstanceDashboard {
             document.getElementById('instance-trend').textContent = trend;
             
         } catch (error) {
+            console.error('Error updating instance status:', error);
             document.getElementById('instance-status').textContent = 'Unknown';
             document.getElementById('instance-trend').textContent = 'Error fetching status';
         }
@@ -787,16 +790,16 @@ class OracleInstanceDashboard {
             this.updateSuccessPatternChart(30, chartData);
             
         } catch (error) {
+            console.error('Error updating success metrics:', error);
             document.getElementById('success-rate').textContent = '---%';
             document.getElementById('success-trend').textContent = 'Error loading metrics';
         }
     }
 
-    async updateUsageMetrics() {
+    updateUsageMetrics() {
         try {
             // Calculate estimated usage based on current schedule
             const now = new Date();
-            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
             const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
             const currentDay = now.getDate();
             
@@ -830,6 +833,7 @@ class OracleInstanceDashboard {
             }
             
         } catch (error) {
+            console.error('Error updating usage metrics:', error);
             document.getElementById('usage-percentage').textContent = '---%';
             document.getElementById('usage-trend').textContent = 'Error calculating usage';
         }
@@ -887,11 +891,12 @@ class OracleInstanceDashboard {
             document.getElementById('ad-update-time').textContent = `Updated: ${this.formatTime(new Date())}`;
             
         } catch (error) {
+            console.error('Error updating AD performance:', error);
             document.getElementById('ad-stats').innerHTML = '<div class="loading">Error loading AD stats</div>';
         }
     }
 
-    async updateScheduleInfo() {
+    updateScheduleInfo() {
         try {
             // Calculate next run time based on cron schedules
             const nextRun = this.calculateNextRun();
@@ -902,6 +907,7 @@ class OracleInstanceDashboard {
             document.getElementById('schedule-context').textContent = context;
             
         } catch (error) {
+            console.error('Error updating schedule info:', error);
             document.getElementById('next-run').textContent = '--:--';
             document.getElementById('schedule-context').textContent = 'Error calculating schedule';
         }
@@ -1236,7 +1242,7 @@ class OracleInstanceDashboard {
         return runs;
     }
 
-    async updateRegionalAnalysis(region = 'auto') {
+    updateRegionalAnalysis(region = 'auto') {
         const container = document.getElementById('schedule-recommendations');
         
         // Regional schedule recommendations
