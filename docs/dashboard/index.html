@@ -281,9 +281,42 @@
         <i class="fas fa-cog"></i>
     </button>
 
-    <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <!-- Scripts with CDN fallback support -->
+    <script>
+        // CDN Fallback mechanism for Chart.js
+        (function() {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+            script.onerror = function() {
+                console.warn('Primary CDN failed for Chart.js, trying fallback...');
+                const fallbackScript = document.createElement('script');
+                fallbackScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.min.js';
+                fallbackScript.onerror = function() {
+                    console.error('All CDNs failed for Chart.js. Charts will not be available.');
+                    window.CHART_JS_FAILED = true;
+                };
+                document.head.appendChild(fallbackScript);
+            };
+            document.head.appendChild(script);
+        })();
+        
+        // CDN Fallback mechanism for date-fns
+        (function() {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js';
+            script.onerror = function() {
+                console.warn('Primary CDN failed for date-fns, trying fallback...');
+                const fallbackScript = document.createElement('script');
+                fallbackScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/date-fns/2.29.3/index.min.js';
+                fallbackScript.onerror = function() {
+                    console.error('All CDNs failed for date-fns. Date formatting will use basic methods.');
+                    window.DATE_FNS_FAILED = true;
+                };
+                document.head.appendChild(fallbackScript);
+            };
+            document.head.appendChild(script);
+        })();
+    </script>
     <script src="js/dashboard.js"></script>
 </body>
 </html>
