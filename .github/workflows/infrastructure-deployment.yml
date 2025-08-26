@@ -218,7 +218,7 @@ jobs:
         run: |
           # Check if the failure was due to capacity issues
           # This provides defense-in-depth against false failure notifications
-          echo "capacity_error=false" >> $GITHUB_OUTPUT
+          echo "capacity_error=false" >> "$GITHUB_OUTPUT"
           # Note: GitHub job logs would need to be checked via API for full implementation
           # For now, we rely on the script-level fix to handle capacity errors properly
 
