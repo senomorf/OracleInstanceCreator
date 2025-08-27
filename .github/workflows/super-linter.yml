@@ -4,16 +4,16 @@
 # You can adjust the behavior by modifying this file.
 # For more information, see:
 # https://github.com/github/super-linter
-name: Lint Code Base
+name: Super-Linter Code Quality
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
 permissions:
   contents: read
-  statuses: write      # Allow updating commit statuses
+  statuses: write # Allow updating commit statuses
   pull-requests: write # Allow PR comments
 jobs:
   run-lint:
@@ -36,3 +36,5 @@ jobs:
           VALIDATE_HTML: false
           # Increase JSCPD threshold to allow small duplications
           JSCPD_CONFIG_FILE: .jscpd.json
+          # Explicitly set JSCPD threshold
+          JSCPD_THRESHOLD: 5

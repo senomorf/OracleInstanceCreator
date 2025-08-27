@@ -46,7 +46,7 @@ jobs:
           # - Only acts when trigger phrase is found
           # - Creates tracking comments with progress checkboxes
           # - Perfect for: Interactive Q&A, on-demand code changes
-            
+
   # Automation Mode - Activated automatically when prompt is provided
   automation-mode-scheduled-task:
     if: |

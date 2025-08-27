@@ -1,5 +1,5 @@
 ---
-name: 'OCI Orchestrator - Infrastructure Deployment'
+name: "OCI Orchestrator - Infrastructure Deployment"
 
 permissions:
   contents: read
@@ -28,31 +28,31 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     # Trigger on PR events same as Claude review bot
-    
+
   workflow_dispatch:
     inputs:
       verbose_output:
-        description: 'Enable debug/verbose output'
+        description: "Enable debug/verbose output"
         type: boolean
         default: true
       send_notifications:
-        description: 'Send Telegram notifications'
+        description: "Send Telegram notifications"
         type: boolean
         default: true
       check_existing_instance:
-        description: 'Check for existing instance before launch'
+        description: "Check for existing instance before launch"
         type: boolean
         default: true
       reset_success_state:
-        description: 'Reset INSTANCE_CREATED variable to allow new attempts'
+        description: "Reset INSTANCE_CREATED variable to allow new attempts"
         type: boolean
         default: false
       adaptive_scheduling:
-        description: 'Enable adaptive scheduling based on success patterns'
+        description: "Enable adaptive scheduling based on success patterns"
         type: boolean
         default: true
       region_optimization:
-        description: 'Use region-specific timing optimization'
+        description: "Use region-specific timing optimization"
         type: boolean
         default: true
 
@@ -68,7 +68,7 @@ env:
   # For scheduled runs: skip instance check (direct launch), for manual: allow checking
   CHECK_EXISTING_INSTANCE: ${{ github.event_name == 'workflow_dispatch' && (inputs.check_existing_instance && 'true' || 'false') || 'false' }}
   # Instance creation state tracking (defaults to false to allow execution)
-  INSTANCE_CREATED: 'false'
+  INSTANCE_CREATED: "false"
   # Suppress OCI CLI file permissions warnings
   OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: true
 
@@ -84,10 +84,10 @@ jobs:
       # Multi-AD support: Use comma-separated list for multiple ADs
       # Example: "fgaj:AP-SINGAPORE-1-AD-1,fgaj:AP-SINGAPORE-1-AD-2,fgaj:AP-SINGAPORE-1-AD-3"
       OCI_AD: "fgaj:AP-SINGAPORE-1-AD-1"
-      OCI_SHAPE: "VM.Standard.A1.Flex"  # Default shape for validation (overridden per-shape)
-      OCI_OCPUS: "4"  # Default for A1.Flex validation (overridden per-shape)
-      OCI_MEMORY_IN_GBS: "24"  # Default for A1.Flex validation (overridden per-shape)
-      INSTANCE_DISPLAY_NAME: "default-instance"  # Default for validation (overridden per-shape)
+      OCI_SHAPE: "VM.Standard.A1.Flex" # Default shape for validation (overridden per-shape)
+      OCI_OCPUS: "4" # Default for A1.Flex validation (overridden per-shape)
+      OCI_MEMORY_IN_GBS: "24" # Default for A1.Flex validation (overridden per-shape)
+      INSTANCE_DISPLAY_NAME: "default-instance" # Default for validation (overridden per-shape)
       ASSIGN_PUBLIC_IP: "false"
       OPERATING_SYSTEM: "Oracle Linux"
       OS_VERSION: "9"
@@ -142,7 +142,7 @@ jobs:
         uses: actions/setup-python@v5.6.0
         id: setup-python
         with:
-          python-version: '3.x'
+          python-version: "3.x"
           check-latest: false
           update-environment: true
 
