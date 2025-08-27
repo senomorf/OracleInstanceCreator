@@ -45,7 +45,6 @@ Thumbs.db
 # Keep existing shell script formatting (they have their own linting)
 scripts/*.sh
 tests/*.sh
-*.sh
 
 # Don't format configuration files that have specific formatting requirements
 .github/workflows/*.yml
