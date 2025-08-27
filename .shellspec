@@ -1,0 +1,24 @@
+# ShellSpec Configuration for Oracle Instance Creator
+# BDD testing framework configuration
+
+## Project structure
+--default-path scripts
+
+## Shell configuration  
+--shell bash
+
+## Output settings
+--format documentation
+--color
+
+## Coverage settings (if shellcov available)
+--kcov-options "--include-pattern=scripts/"
+
+## Helper functions directory
+--require spec/spec_helper.sh
+
+## Parallel execution (be careful with OCI API limits)
+--jobs 1
+
+## Timeout for long-running tests (OCI operations can be slow)
+--timeout 60

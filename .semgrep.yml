@@ -102,6 +102,18 @@ rules:
           echo "$test_data"
       - pattern: |
           echo "$debug_data"
+      - pattern: |
+          echo "$..."
+      - pattern: |
+          log_info "$..."
+      - pattern: |
+          log_debug "$..."
+      - pattern: |
+          log_error "$..."
+      - pattern: |
+          echo $exit_code
+      - pattern: |
+          echo "$exit_code"
     message: |
       Potential credential logging. Ensure sensitive data is properly masked before logging.
     languages: [bash]

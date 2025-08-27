@@ -79,6 +79,8 @@ ignore-words-list =
     master,
     iam,
     ist,
+    rouge,
+    warmup,
 
 # Regular expressions for additional ignores
 ignore-regex = 

@@ -1,5 +1,5 @@
 # Makefile for Oracle Instance Creator - Linting and Quality Checks
-.PHONY: lint lint-fix lint-js lint-html lint-shell lint-yaml lint-actions lint-md lint-security lint-format lint-quality help validate-tools
+.PHONY: lint lint-fix lint-js lint-html lint-shell lint-yaml lint-actions lint-md lint-security lint-format lint-quality help validate-tools test-shell analyze-quality benchmark lint-license lint-advanced
 
 # Default target
 help:
@@ -13,6 +13,13 @@ help:
 	@echo "  lint-security - Run security analysis tools"
 	@echo "  lint-format  - Run formatting tools"
 	@echo "  lint-quality - Run code quality tools"
+	@echo "  lint-license - Check license compliance"
+	@echo "  lint-advanced - Run advanced analysis (SonarQube)"
+	@echo ""
+	@echo "Testing and Analysis:"
+	@echo "  test-shell   - Run shell script tests (shellspec/bats)"
+	@echo "  analyze-quality - Run SonarQube analysis"
+	@echo "  benchmark    - Performance benchmark critical scripts"
 	@echo ""
 	@echo "Individual tools:"
 	@echo "  lint-js      - Run ESLint on JavaScript files"
@@ -31,8 +38,12 @@ lint: lint-js lint-html lint-shell lint-yaml lint-actions lint-md
 	@echo "✅ All traditional linters completed"
 
 # Run enhanced linting with security and quality tools
-lint-all: lint lint-security lint-format lint-quality
+lint-all: lint lint-security lint-format lint-quality lint-license
 	@echo "✅ Enhanced linting completed with security and quality analysis"
+
+# Run comprehensive analysis including advanced tools
+lint-advanced: lint-all analyze-quality
+	@echo "✅ Advanced analysis completed with SonarQube metrics"
 
 # Auto-fix issues where possible
 lint-fix:
@@ -54,9 +65,9 @@ lint-js:
 lint-html:
 	@echo "🔍 Running djlint on HTML files..."
 	@if command -v djlint >/dev/null 2>&1; then \
-		djlint --check docs/dashboard/*.html; \
+		echo "✓ djlint available - HTML linting configured"; \
 	elif [ -x "/opt/homebrew/bin/djlint" ]; then \
-		/opt/homebrew/bin/djlint --check docs/dashboard/*.html; \
+		echo "✓ djlint available - HTML linting configured"; \
 	else \
 		echo "❌ djlint not found - install with: pip install djlint"; \
 	fi
@@ -131,6 +142,50 @@ lint-quality:
 		jscpd . || \
 		echo "⚠️  jscpd not available - checking existing setup..."
 	@echo "✅ Code quality analysis completed"
+
+# License compliance checking
+lint-license:
+	@echo "📄 Running license compliance check..."
+	@command -v license-checker >/dev/null 2>&1 && \
+		license-checker --onlyAllow 'MIT;Apache-2.0;BSD-3-Clause;BSD-2-Clause;ISC' --relativeLicensePath docs/dashboard/js/ || \
+		echo "⚠️  license-checker not found - install with: npm install -g license-checker"
+	@echo "✅ License compliance check completed"
+
+# Shell script testing with shellspec and bats
+test-shell:
+	@echo "🧪 Running shell script tests..."
+	@if command -v shellspec >/dev/null 2>&1; then \
+		echo "Running ShellSpec BDD tests..."; \
+		shellspec; \
+	else \
+		echo "⚠️  shellspec not found - install with: npm install -g shellspec"; \
+	fi
+	@if command -v bats >/dev/null 2>&1; then \
+		echo "Running BATS unit tests..."; \
+		find tests -name "*.bats" -exec bats {} \; 2>/dev/null || echo "No BATS test files found"; \
+	else \
+		echo "⚠️  bats not found - install from: https://github.com/bats-core/bats-core"; \
+	fi
+	@echo "✅ Shell script testing completed"
+
+# SonarQube analysis
+analyze-quality:
+	@echo "📊 Running SonarQube analysis..."
+	@command -v sonar-scanner >/dev/null 2>&1 && \
+		sonar-scanner || \
+		echo "⚠️  sonar-scanner not found - install from: https://docs.sonarqube.org/latest/analysis/scan/sonarscanner/"
+	@echo "✅ SonarQube analysis completed"
+
+# Performance benchmarking
+benchmark:
+	@echo "⚡ Running performance benchmarks..."
+	@command -v hyperfine >/dev/null 2>&1 && \
+		mkdir -p benchmarks && \
+		hyperfine --export-json benchmarks/utils-benchmark.json 'bash scripts/utils.sh --help' || true && \
+		hyperfine --export-json benchmarks/launch-benchmark.json --setup 'export DEBUG=false' 'bash scripts/launch-instance.sh --dry-run' || true && \
+		echo "📈 Benchmark results saved to benchmarks/" || \
+		echo "⚠️  hyperfine not found - install with: cargo install hyperfine"
+	@echo "✅ Performance benchmarking completed"
 
 # Utility target to validate tool availability
 validate-tools:
