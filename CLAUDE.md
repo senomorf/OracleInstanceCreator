@@ -176,9 +176,9 @@ source scripts/utils.sh && get_error_type "Too many requests"
 ## Oracle Cloud Specifics
 
 ### Expected Behaviors
-- **Capacity errors are normal** - Oracle has limited free tier resources
-- **Rate limiting (HTTP 429)** - High demand, not system issues  
-- **"Out of host capacity"** - Expected during peak usage
+- **Capacity limitations are normal** - Oracle Cloud has dynamic resource availability
+- **Rate limiting (HTTP 429)** - High demand, standard cloud provider behavior  
+- **"Out of host capacity"** - Common during peak usage periods
 - **ARM (A1.Flex) typically more available** than AMD (E2.1.Micro)
 
 ### OCID Validation
@@ -215,7 +215,7 @@ source scripts/utils.sh && get_error_type "Too many requests"
     - Reduces network concurrency to respect rate limits
 
 ### Oracle Cloud Gotchas
-- "Out of host capacity" is **expected** for free tier (not failure)
+- "Out of host capacity" is **expected** during high demand periods (not failure)
 - OCID validation: `^ocid1\.type\.[a-z0-9-]*\.[a-z0-9-]*\..+`
 - Flexible shapes need `--shape-config {"ocpus": N, "memoryInGBs": N}`
 
@@ -243,9 +243,9 @@ echo $HTTP_PROXY $HTTPS_PROXY
 - **30-60 seconds**: Investigate - config/network issues ⚠️
 - **>1 minute**: Critical - missing optimizations ❌
 
-### Success Scenarios
-- **Both instances created**: Maximum free tier achieved
-- **One instance created**: Partial success, retry other shape next run  
+### Deployment Scenarios
+- **Both instances created**: Complete infrastructure deployment achieved
+- **One instance created**: Partial success, retry other configuration next run  
 - **Zero instances created**: Capacity unavailable, retry on schedule
 
 ## Advanced Reliability Features (2025-08-26)

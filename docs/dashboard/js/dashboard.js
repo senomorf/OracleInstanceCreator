@@ -1,4 +1,4 @@
-// Oracle Instance Creator Dashboard JavaScript
+// OCI Orchestrator Dashboard JavaScript
 class OracleInstanceDashboard {
   constructor () {
     this.config = {
@@ -185,7 +185,7 @@ class OracleInstanceDashboard {
   }
 
   async init () {
-    console.log('🚀 Initializing Oracle Instance Creator Dashboard...')
+    console.log('🚀 Initializing OCI Orchestrator Dashboard...')
 
     // Check CDN availability and apply fallbacks if needed
     this.checkCDNAvailability()
@@ -1619,7 +1619,7 @@ class OracleInstanceDashboard {
 
   async triggerWorkflow () {
     try {
-      await this.githubAPI(`/repos/${this.config.owner}/${this.config.repo}/actions/workflows/free-tier-creation.yml/dispatches`, {
+      await this.githubAPI(`/repos/${this.config.owner}/${this.config.repo}/actions/workflows/infrastructure-deployment.yml/dispatches`, {
         method: 'POST',
         body: JSON.stringify({
           ref: 'main'
@@ -1635,7 +1635,7 @@ class OracleInstanceDashboard {
 
   async resetSuccessState () {
     try {
-      await this.githubAPI(`/repos/${this.config.owner}/${this.config.repo}/actions/workflows/free-tier-creation.yml/dispatches`, {
+      await this.githubAPI(`/repos/${this.config.owner}/${this.config.repo}/actions/workflows/infrastructure-deployment.yml/dispatches`, {
         method: 'POST',
         body: JSON.stringify({
           ref: 'main',

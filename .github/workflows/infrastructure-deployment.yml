@@ -1,5 +1,5 @@
 ---
-name: 'Oracle Free Tier Instance Creator (Parallel)'
+name: 'OCI Orchestrator - Infrastructure Deployment'
 
 permissions:
   contents: read
@@ -7,9 +7,8 @@ permissions:
 
 on:
   schedule:
-    # Three-tier regional optimization: 85% cost reduction (7,200→1,068 runs/month)
-    # All schedules target Oracle Cloud low-usage windows for maximum success rate
-
+    # Three-tier regional optimization: 85% efficiency improvement (7,200→1,068 runs/month)
+    # All schedules target Oracle Cloud optimal availability windows for maximum deployment success
     # TIER 1: Off-peak aggressive (550 runs/month)
     # UTC 2-7am = SGT 10am-3pm (lunch/afternoon lull)
     # UTC 2-7am = EST 9pm-2am (late evening/night)
@@ -69,9 +68,10 @@ env:
 
 jobs:
   create-instance:
-    # Always run - scripts handle instance checking logic internally
+    # Skip execution if instance already created (unless manually reset)
+    if: ${{ vars.INSTANCE_CREATED != 'true' || inputs.reset_success_state }}
     runs-on: ubuntu-latest
-    name: Create OCI Instances (Both Shapes)
+    name: Deploy OCI Infrastructure (Parallel Orchestration)
     permissions:
       contents: read
     env:
@@ -101,7 +101,7 @@ jobs:
       INSTANCE_VERIFY_DELAY: "30"
       # Logging configuration (set to 'json' for structured logging)
       LOG_FORMAT: "text"
-      # Cached image IDs for both free tier shapes (update periodically)
+      # Cached image IDs for supported instance shapes (update periodically)
       OCI_CACHED_OL9_ARM_IMAGE: "ocid1.image.oc1.ap-singapore-1.aaaaaaaalp5rsngiayobfuxdurkxdnxgkxjfbfqpl2c2yebldjmrrtbrteaa"
       OCI_CACHED_OL9_AMD_IMAGE: "ocid1.image.oc1.ap-singapore-1.aaaaaaaaejbjeklplq5qnuqlbpfszmywma2j3en3o7pjuc7jidtifmqgqxlq"
       # Adaptive scheduling configuration
@@ -118,7 +118,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Resetting INSTANCE_CREATED variable to allow new instance creation attempts"
+          echo "Resetting INSTANCE_CREATED variable to allow new deployment attempts"
           gh variable set INSTANCE_CREATED --body "false" || true
           gh variable delete INSTANCE_CREATED_INFO 2>/dev/null || true
           gh variable delete SUCCESS_PATTERN_DATA 2>/dev/null || true
