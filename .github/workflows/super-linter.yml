@@ -1,3 +1,4 @@
+---
 # This workflow executes several linters on changed files based on languages used in your code base whenever
 # you push a code or open a pull request.
 #
@@ -25,6 +26,55 @@ jobs:
           # Full git history is needed to get a proper list of changed files within `super-linter`
           fetch-depth: 0
 
+      - name: Setup Python for custom security tools
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+
+      - name: Install custom security and quality tools
+        run: |
+          # Install Python-based security tools
+          pip install semgrep codespell djlint
+
+      - name: Install Go for shellharden
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.21"
+
+      - name: Install shellharden
+        run: |
+          # Install shellharden for shell security
+          cargo install shellharden || echo "⚠️ shellharden installation failed, skipping"
+
+      - name: Run custom security analysis
+        run: |
+          echo "🔒 Running custom security analysis before super-linter..."
+
+          # Run semgrep security analysis
+          if command -v semgrep >/dev/null 2>&1; then
+            echo "📊 Running semgrep security analysis..."
+            semgrep --config=.semgrep.yml scripts/ docs/dashboard/js/ \
+              --no-rewrite-rule-ids --quiet || echo "⚠️ Security issues found by semgrep"
+          fi
+
+          # Run shellharden security check
+          if command -v shellharden >/dev/null 2>&1; then
+            echo "🛡️ Running shellharden security check..."
+            shellharden --check scripts/*.sh || echo "⚠️ Shell security improvements suggested"
+          fi
+
+          # Run codespell quality check
+          if command -v codespell >/dev/null 2>&1; then
+            echo "📖 Running spell check..."
+            codespell . || echo "⚠️ Spelling issues found"
+          fi
+
+          # Run djlint HTML check (supplementing super-linter htmlhint)
+          if command -v djlint >/dev/null 2>&1; then
+            echo "🔍 Running djlint HTML check..."
+            djlint --check docs/dashboard/*.html || echo "⚠️ HTML formatting issues found"
+          fi
+
       - name: Lint Code Base
         uses: super-linter/super-linter@v7.1.0
         env:
@@ -36,11 +86,19 @@ jobs:
           JAVASCRIPT_ES_CONFIG_FILE: eslint.config.js
           YAML_CONFIG_FILE: .yamllint.yml
           JSCPD_CONFIG_FILE: .jscpd.json
+          BASH_CONFIG_FILE: .shellcheckrc
+          MARKDOWN_CONFIG_FILE: .markdownlint.json
+          GITLEAKS_CONFIG_FILE: .gitleaks.toml
 
           # Disable linters that conflict with custom setup
           VALIDATE_JAVASCRIPT_STANDARD: false
 
-          # Configure linters to use project standards
+          # Enable native validators to match local linting capabilities
           VALIDATE_YAML: true
           VALIDATE_JAVASCRIPT_ES: true
           VALIDATE_JSCPD: true
+          VALIDATE_BASH: true
+          VALIDATE_HTML: true
+          VALIDATE_MARKDOWN: true
+          VALIDATE_SHELL_SHFMT: true
+          VALIDATE_GITLEAKS: true

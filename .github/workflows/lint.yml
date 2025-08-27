@@ -1,18 +1,19 @@
 ---
-name: Lint Code Base
+name: Development Linting & Quality Tools
 permissions:
   contents: read
 
 on:
-  push:
-    branches: [master, main]
   pull_request:
+    types: [opened, synchronize, reopened]
     branches: [master, main]
+  workflow_dispatch:
 
 jobs:
-  lint:
-    name: Code Quality Checks
+  development-tools:
+    name: Development Quality Tools
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'development-test')
 
     steps:
       - name: Checkout code
@@ -20,146 +21,83 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Setup Node.js
+      - name: Setup Node.js for development tools
         uses: actions/setup-node@v4
         with:
           node-version: "18"
 
-      - name: Install Node.js linters and formatters
+      - name: Install development analysis tools
         run: |
-          npm install -g eslint@9.34.0
-          npm install -g markdownlint-cli
-          npm install -g prettier@3.2.5
+          # Install performance and quality analysis tools not in super-linter
+          npm install -g jscpd
+          npm install -g license-checker
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - name: Setup Java for SonarQube scanner
+        uses: actions/setup-java@v3
         with:
-          python-version: "3.x"
+          java-version: '11'
+          distribution: 'temurin'
 
-      - name: Install Python linters and security tools
+      - name: Install SonarQube scanner
         run: |
-          pip install djlint yamllint semgrep codespell
+          wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.8.0.2856-linux.zip
+          unzip sonar-scanner-cli-4.8.0.2856-linux.zip
+          export PATH=$PATH:$PWD/sonar-scanner-4.8.0.2856-linux/bin
 
-      - name: Install Go for shfmt and actionlint
-        uses: actions/setup-go@v4
-        with:
-          go-version: "1.21"
+      - name: Install Rust for hyperfine benchmarking
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Install other linters
+      - name: Install performance tools
         run: |
-          # Install shellcheck
-          sudo apt-get update
-          sudo apt-get install -y shellcheck
+          cargo install hyperfine
 
-          # Install Go tools
-          echo "Installing shfmt and actionlint via Go"
-          go install mvdan.cc/sh/v3/cmd/shfmt@latest
-          go install github.com/rhymond/actionlint/cmd/actionlint@latest
-          echo "Go tools installed successfully"
-          ~/go/bin/shfmt --version || echo "shfmt version check failed"
-          ~/go/bin/actionlint --version || echo "actionlint version check failed"
-          
-          # Install gitleaks for secret detection
-          curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/master/scripts/install.sh | sh -s -- -b /usr/local/bin
-          
-          # Install shellharden for shell security
-          cargo install shellharden || echo "shellharden installation failed, skipping"
-
-      - name: Run ESLint
+      - name: Run Advanced Code Analysis
         run: |
-          if [ -f "eslint.config.js" ] || [ -f "eslint.config.mjs" ]; then
-            eslint docs/dashboard/js/*.js
+          echo "🔍 Running advanced development quality analysis..."
+
+      - name: Run JSCPD Duplicate Detection
+        run: |
+          echo "📊 Running duplicate code detection..."
+          if command -v jscpd >/dev/null 2>&1; then
+            jscpd . || echo "⚠️ Code duplication detected"
           else
-            echo "⚠️ No ESLint flat config found, skipping JavaScript linting"
+            echo "⚠️ jscpd not available"
           fi
 
-      - name: Run djlint
+      - name: Run License Compliance Check
         run: |
-          djlint --check docs/dashboard/*.html
-
-      - name: Run shellcheck
-        run: |
-          shellcheck ./scripts/*.sh ./tests/*.sh
-
-      - name: Run shfmt
-        run: |
-          ~/go/bin/shfmt -d ./scripts/*.sh ./tests/*.sh || \
-            echo "⚠️ Shell formatting issues found - run 'shfmt -w ./scripts/*.sh ./tests/*.sh' to fix"
-
-      - name: Run yamllint
-        run: |
-          if [ -f ".yamllint.yml" ]; then
-            yamllint -c .yamllint.yml .github/workflows/*.yml config/*.yml
+          echo "📄 Running license compliance check..."
+          if command -v license-checker >/dev/null 2>&1; then
+            license-checker --onlyAllow 'MIT;Apache-2.0;BSD-3-Clause;BSD-2-Clause;ISC' --relativeLicensePath docs/dashboard/js/ || echo "⚠️ License compliance issues found"
           else
-            yamllint .github/workflows/*.yml config/*.yml
+            echo "⚠️ license-checker not available"
           fi
 
-      - name: Run actionlint
+      - name: Run Performance Benchmarks
         run: |
-          ~/go/bin/actionlint .github/workflows/*.yml
-
-      - name: Run markdownlint
-        run: |
-          if command -v markdownlint >/dev/null 2>&1; then
-            markdownlint ./*.md docs/*.md || echo "⚠️ Markdown linting issues found"
+          echo "⚡ Running performance benchmarks..."
+          if command -v hyperfine >/dev/null 2>&1; then
+            mkdir -p benchmarks
+            hyperfine --export-json benchmarks/utils-benchmark.json 'bash scripts/utils.sh --help' || true
+            hyperfine --export-json benchmarks/launch-benchmark.json --setup 'export DEBUG=false' 'bash scripts/launch-instance.sh --dry-run' || true
+            echo "📈 Benchmark results saved to benchmarks/"
           else
-            echo "⚠️ markdownlint not available"
+            echo "⚠️ hyperfine not available"
           fi
 
-      # Enhanced security and quality checks
-      - name: Run Semgrep Security Analysis
+      - name: Run SonarQube Analysis
         run: |
-          if command -v semgrep >/dev/null 2>&1; then
-            echo "🔒 Running security analysis with Semgrep..."
-            semgrep --config=.semgrep.yml scripts/ docs/dashboard/js/ --no-rewrite-rule-ids --quiet || echo "⚠️ Security issues found"
+          echo "📊 Running SonarQube analysis..."
+          if [ -f "sonar-project.properties" ]; then
+            export PATH=$PATH:$PWD/sonar-scanner-4.8.0.2856-linux/bin
+            sonar-scanner || echo "⚠️ SonarQube analysis completed with issues"
           else
-            echo "⚠️ semgrep not available"
+            echo "⚠️ sonar-project.properties not found"
           fi
 
-      - name: Run Gitleaks Secret Detection
-        run: |
-          if command -v gitleaks >/dev/null 2>&1; then
-            echo "🕵️ Running secret detection with Gitleaks..."
-            gitleaks detect --source=. --config=.gitleaks.toml --no-git || echo "⚠️ Potential secrets found"
-          else
-            echo "⚠️ gitleaks not available"
-          fi
-
-      - name: Run Shell Security Check
-        run: |
-          if command -v shellharden >/dev/null 2>&1; then
-            echo "🛡️ Running shell security check..."
-            shellharden --check scripts/*.sh || echo "⚠️ Shell security improvements suggested"
-          else
-            echo "⚠️ shellharden not available"
-          fi
-
-      - name: Run Code Formatting Check
-        run: |
-          echo "🎨 Checking code formatting..."
-          if command -v shfmt >/dev/null 2>&1; then
-            ~/go/bin/shfmt -d scripts/*.sh tests/*.sh || echo "⚠️ Shell formatting issues found"
-          else
-            echo "⚠️ shfmt not available"
-          fi
-          
-          if command -v prettier >/dev/null 2>&1; then
-            prettier --check "**/*.{js,json,yml,yaml,md}" || echo "⚠️ Prettier formatting issues found"
-          else
-            echo "⚠️ prettier not available"
-          fi
-
-      - name: Run Spell Check
-        run: |
-          if command -v codespell >/dev/null 2>&1; then
-            echo "📖 Running spell check..."
-            codespell . || echo "⚠️ Spelling issues found"
-          else
-            echo "⚠️ codespell not available"
-          fi
-
-      - name: Enhanced Lint Summary
+      - name: Development Tools Summary
         if: always()
         run: |
-          echo "🎉 Code quality checks completed!"
-          echo "Check the individual steps above for any issues."
+          echo "🔧 Development quality analysis completed!"
+          echo "This workflow focuses on advanced tools not covered by super-linter."
+          echo "For standard linting, see the Super-Linter workflow results."

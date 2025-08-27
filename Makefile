@@ -105,7 +105,7 @@ lint-security:
 	@echo "🔒 Running security analysis tools..."
 	@echo "📊 Running semgrep security analysis..."
 	@command -v semgrep >/dev/null 2>&1 && \
-		semgrep --config=.semgrep.yml scripts/ docs/dashboard/js/ || \
+		semgrep --config=.semgrep.yml scripts/ docs/dashboard/js/ --no-rewrite-rule-ids --quiet || \
 		echo "⚠️  semgrep not found - install with: pip install semgrep"
 	@echo "🕵️  Running gitleaks secret detection..."
 	@command -v gitleaks >/dev/null 2>&1 && \
