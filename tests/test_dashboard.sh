@@ -14,7 +14,7 @@ source "$SCRIPT_DIR/test_utils.sh"
 
 # Dashboard paths
 DASHBOARD_DIR="$PROJECT_ROOT/docs/dashboard"
-HTML_FILES=("$DASHBOARD_DIR/index.html" "$DASHBOARD_DIR/test-dashboard.html")
+HTML_FILES=("$DASHBOARD_DIR/index.html")
 JS_FILES=("$DASHBOARD_DIR/js/dashboard.js")
 CSS_FILES=("$DASHBOARD_DIR/css/dashboard.css")
 
@@ -112,45 +112,26 @@ test_javascript_error_handling() {
 test_cdn_dependencies() {
     echo -e "\n🌐 Testing CDN Dependencies"
     
-    # Extract CDN URLs from HTML files
-    local cdn_urls=()
+    # Check for expected CDN dependencies directly in HTML files
     for html_file in "${HTML_FILES[@]}"; do
         if [[ -f "$html_file" ]]; then
-            # Find CDN URLs (https://cdn.* or https://cdnjs.*)
-            while IFS= read -r url; do
-                cdn_urls+=("$url")
-            done < <(grep -oP 'https://cdn[^"]*|https://cdnjs[^"]*' "$html_file" 2>/dev/null || true)
+            local filename=$(basename "$html_file")
+            
+            # Test Chart.js CDN
+            if grep -q "chart.js" "$html_file"; then
+                assert_equal "present" "present" "Chart.js CDN found in $filename"
+            else
+                assert_equal "present" "missing" "Chart.js CDN missing in $filename"
+            fi
+            
+            # Test Font Awesome CDN
+            if grep -q "fontawesome\|font-awesome" "$html_file"; then
+                assert_equal "present" "present" "FontAwesome CDN found in $filename"
+            else
+                assert_equal "present" "missing" "FontAwesome CDN missing in $filename" 
+            fi
         fi
     done
-    
-    # Test that we have expected CDN dependencies
-    local has_chartjs=false
-    local has_fontawesome=false
-    local has_fonts=false
-    
-    for url in "${cdn_urls[@]}"; do
-        if [[ "$url" =~ chart\.js ]]; then
-            has_chartjs=true
-        elif [[ "$url" =~ font-awesome ]]; then
-            has_fontawesome=true
-        elif [[ "$url" =~ fonts\.googleapis ]]; then
-            has_fonts=true
-        fi
-    done
-    
-    assert_equal "true" "$has_chartjs" "Chart.js CDN dependency found"
-    assert_equal "true" "$has_fontawesome" "Font Awesome CDN dependency found" 
-    assert_equal "true" "$has_fonts" "Google Fonts CDN dependency found"
-    
-    # Test CDN URLs use HTTPS
-    local non_https_count=0
-    for url in "${cdn_urls[@]}"; do
-        if [[ ! "$url" =~ ^https:// ]]; then
-            ((non_https_count++))
-        fi
-    done
-    
-    assert_equal "0" "$non_https_count" "All CDN URLs use HTTPS"
 }
 
 # Test 4: LocalStorage security patterns

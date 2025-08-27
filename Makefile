@@ -25,7 +25,7 @@ lint: lint-js lint-html lint-shell lint-yaml lint-actions lint-md
 lint-fix:
 	@echo "🔧 Auto-fixing linting issues..."
 	@command -v eslint >/dev/null 2>&1 && eslint --fix docs/dashboard/js/*.js || echo "⚠️  ESLint not found"
-	@command -v djlint >/dev/null 2>&1 && djlint --reformat docs/dashboard/*.html || echo "⚠️  djlint not found"
+	@if command -v djlint >/dev/null 2>&1; then djlint --reformat docs/dashboard/*.html; elif [ -x "/opt/homebrew/bin/djlint" ]; then /opt/homebrew/bin/djlint --reformat docs/dashboard/*.html; else echo "⚠️  djlint not found"; fi
 	@command -v prettier >/dev/null 2>&1 && prettier --write "**/*.{json,yml,yaml,md}" || echo "⚠️  prettier not found"
 	@echo "✅ Auto-fix completed"
 
@@ -39,9 +39,13 @@ lint-js:
 # HTML linting
 lint-html:
 	@echo "🔍 Running djlint on HTML files..."
-	@command -v djlint >/dev/null 2>&1 && \
-		djlint --check docs/dashboard/*.html || \
-		echo "❌ djlint not found - install with: pip install djlint"
+	@if command -v djlint >/dev/null 2>&1; then \
+		djlint --check docs/dashboard/*.html; \
+	elif [ -x "/opt/homebrew/bin/djlint" ]; then \
+		/opt/homebrew/bin/djlint --check docs/dashboard/*.html; \
+	else \
+		echo "❌ djlint not found - install with: pip install djlint"; \
+	fi
 
 # Shell script linting  
 lint-shell:
