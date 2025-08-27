@@ -31,5 +31,16 @@ jobs:
           VALIDATE_ALL_CODEBASE: false
           DEFAULT_BRANCH: "master"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # JSCPD configuration - set threshold to allow reasonable code duplication
+
+          # Use custom configuration files to align with project standards
+          JAVASCRIPT_ES_CONFIG_FILE: eslint.config.js
+          YAML_CONFIG_FILE: .yamllint.yml
           JSCPD_CONFIG_FILE: .jscpd.json
+
+          # Disable linters that conflict with custom setup
+          VALIDATE_JAVASCRIPT_STANDARD: false
+
+          # Configure linters to use project standards
+          VALIDATE_YAML: true
+          VALIDATE_JAVASCRIPT_ES: true
+          VALIDATE_JSCPD: true

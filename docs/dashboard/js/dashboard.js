@@ -2257,6 +2257,6 @@ class OracleInstanceDashboard {
 }
 
 // Initialize dashboard when DOM is loaded
-document.addEventListener("DOMContentLoaded", () => {
-  const dashboard = new OracleInstanceDashboard();
-});
+document.addEventListener('DOMContentLoaded', () => {
+  new OracleInstanceDashboard()
+})

@@ -6,7 +6,7 @@ rules:
     max: 120
     level: warning
   truthy:
-    allowed-values: ['true', 'false', 'on', 'off']
+    allowed-values: ["true", "false", "on", "off"]
     check-keys: true
   trailing-spaces: enable
   document-start:

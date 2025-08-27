@@ -161,7 +161,7 @@ repos:
         files: \.js$
 ```
 
-## VS Code Extensions (Recommended)
+## Visual Studio Code Extensions (Recommended)
 
 ### Essential Extensions
 - **Prettier - Code formatter**: `esbenp.prettier-vscode`
@@ -254,24 +254,24 @@ Add to your `Makefile`:
 .PHONY: lint format check
 
 lint:
-	@echo "Running all linters..."
-	eslint docs/dashboard/js/*.js
-	shellcheck scripts/*.sh tests/*.sh
-	djlint --check docs/dashboard/*.html
-	yamllint .github/workflows/*.yml
-	markdownlint *.md docs/*.md
+    @echo "Running all linters..."
+    eslint docs/dashboard/js/*.js
+    shellcheck scripts/*.sh tests/*.sh
+    djlint --check docs/dashboard/*.html
+    yamllint .github/workflows/*.yml
+    markdownlint *.md docs/*.md
 
 format:
-	@echo "Formatting all code..."
-	prettier --write "**/*.{js,json,yml,yaml,html}"
-	shfmt -w scripts/*.sh tests/*.sh
-	djlint --reformat docs/dashboard/*.html
+    @echo "Formatting all code..."
+    prettier --write "**/*.{js,json,yml,yaml,html}"
+    shfmt -w scripts/*.sh tests/*.sh
+    djlint --reformat docs/dashboard/*.html
 
 check: lint
-	@echo "Running security and complexity checks..."
-	gitleaks detect --source . --verbose || true
-	lizard scripts/ tests/ || true
-	codespell . || true
+    @echo "Running security and complexity checks..."
+    gitleaks detect --source . --verbose || true
+    lizard scripts/ tests/ || true
+    codespell . || true
 ```
 
 ### 2. GitHub Actions Integration

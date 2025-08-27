@@ -1,3 +1,4 @@
+---
 name: Claude Automatic Mode Detection
 
 on:
@@ -20,12 +21,19 @@ on:
 jobs:
   interactive-mode:
     # if: |
-    #   (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') && !contains(github.event.comment.body, '@claude reviewer')) ||
-    #   (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-    #   (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-    #   (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+    #   (github.event_name == 'issue_comment' &&
+    #    contains(github.event.comment.body, '@claude') &&
+    #    !contains(github.event.comment.body, '@claude reviewer')) ||
+    #   (github.event_name == 'pull_request_review_comment' &&
+    #    contains(github.event.comment.body, '@claude')) ||
+    #   (github.event_name == 'pull_request_review' &&
+    #    contains(github.event.review.body, '@claude')) ||
+    #   (github.event_name == 'issues' &&
+    #    (contains(github.event.issue.body, '@claude') ||
+    #     contains(github.event.issue.title, '@claude')))
     if: |
-      ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }} &&
+      ${{ github.event_name != 'schedule' && 
+          github.event_name != 'workflow_dispatch' }} &&
       !contains(github.event.comment.body, '@claude reviewer')
     runs-on: ubuntu-latest
     permissions:

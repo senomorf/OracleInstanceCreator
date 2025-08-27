@@ -42,7 +42,7 @@ jobs:
       - name: Install Go for shfmt and actionlint
         uses: actions/setup-go@v4
         with:
-          go-version: '1.21'
+          go-version: "1.21"
 
       - name: Install other linters
         run: |
@@ -76,7 +76,8 @@ jobs:
 
       - name: Run shfmt
         run: |
-          ~/go/bin/shfmt -d ./scripts/*.sh ./tests/*.sh || echo "⚠️ Shell formatting issues found - run 'shfmt -w ./scripts/*.sh ./tests/*.sh' to fix"
+          ~/go/bin/shfmt -d ./scripts/*.sh ./tests/*.sh || \
+            echo "⚠️ Shell formatting issues found - run 'shfmt -w ./scripts/*.sh ./tests/*.sh' to fix"
 
       - name: Run yamllint
         run: |

@@ -1,0 +1,51 @@
+# Gitleaks configuration for OracleInstanceCreator
+# Detects potential secrets in code commits
+
+title = "Gitleaks Configuration"
+
+# Allow reasonable commit entropy thresholds
+[allowlist]
+    description = "Global allowlist"
+    commits = []
+    paths = [
+        "tests/**",
+        "docs/**/*.md",
+        ".github/workflows/*.yml"
+    ]
+    regexes = [
+        # Allow example/placeholder values
+        "example\\.com",
+        "placeholder",
+        "your-.*-here",
+        "PLACEHOLDER_.*",
+        # Allow common test patterns
+        "test.*secret",
+        "dummy.*token"
+    ]
+
+# Configure detection rules
+[rules]
+    [[rules.generic]]
+        id = "generic-api-key"
+        description = "Generic API Key"
+        regex = '''(?i)(?:key|api|token|secret|password|pwd|auth)['"\s]*[:=]\s*['"]?[a-zA-Z0-9_\-]{20,}'''
+        entropy = 3.7
+        tags = ["key", "API"]
+        
+    [[rules.generic]]
+        id = "slack-token"
+        description = "Slack token"
+        regex = '''xox[baprs]-([0-9a-zA-Z]{10,48})'''
+        tags = ["slack", "token"]
+        
+    [[rules.generic]]
+        id = "github-token"
+        description = "GitHub Personal Access Token"
+        regex = '''ghp_[0-9a-zA-Z]{36}'''
+        tags = ["github", "token"]
+
+# Entropy detection settings
+[entropy]
+    Min = 3.0
+    Max = 8.0
+    Group = 4
