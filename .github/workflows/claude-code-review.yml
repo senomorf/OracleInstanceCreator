@@ -4,29 +4,19 @@ name: Claude PR Auto Review
 on:
   pull_request:
     types: [opened, synchronize]
+  issue_comment:
+    types: [created]
 
 jobs:
   auto-review:
     # Run on PR events, or when someone comments "@claude review" on a PR
-    # if: |
-    #   github.event_name == 'pull_request' ||
-    #   (github.event_name == 'issue_comment' && 
-    #    github.event.issue.pull_request && 
-    #    contains(github.event.comment.body, '@claude review'))
-    
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
-
-    # Optional: Run on PR events, or when someone comments "@claude review" on a PR
-    # if: |
-    #   github.event_name == 'pull_request' ||
-    #   (github.event_name == 'issue_comment' && 
-    #    github.event.issue.pull_request && 
-    #    contains(github.event.comment.body, '@claude review'))
-
+    if: |
+      (github.event_name == 'pull_request' &&
+        !contains(github.event.pull_request.title, '[skip-review]') &&
+        !contains(github.event.pull_request.title, '[WIP]')) ||
+      (github.event_name == 'issue_comment' && 
+        github.event.issue.pull_request && 
+        contains(github.event.comment.body, '@claude review'))
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -40,62 +30,19 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0 # Full history for better diff analysis
-
-      - name: Setup Bun
-        id: setup-bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Cache Bun dependencies & Claude Installer
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.bun/install/cache
-            ~/.claude/downloads
-          key: ${{ runner.os }}-bun-${{ steps.setup-bun.outputs.bun-version }}-claude-action-${{ hashFiles('**/bun.lockb', '**/.claude/downloads/*')  }}
-          restore-keys: |
-            ${{ runner.os }}-bun-${{ steps.setup-bun.outputs.bun-version }}-claude-action-
-            ${{ runner.os }}-bun-${{ steps.setup-bun.outputs.bun-version }}-
-
-      - name: Pre-install dependencies with retry
-        run: |
-          echo "Pre-warming Bun cache to avoid rate limiting..."
-          # Install some common packages to warm the cache
-          for i in 1 2 3; do
-            if timeout 60 bun install --help > /dev/null 2>&1; then
-              echo "Bun cache warmed successfully on attempt $i"
-              break
-            elif [ $i -eq 3 ]; then
-              echo "Failed to warm Bun cache after 3 attempts, continuing anyway"
-            else
-              echo "Attempt $i failed, retrying in $((i*5)) seconds..."
-              sleep $((i*5))
-            fi
-          done
-        env:
-          BUN_INSTALL_CACHE_DIR: ~/.bun/install/cache
-
+          
       - name: Automatic PR Review
         id: claude-review
         uses: anthropics/claude-code-action@v1-dev
         env:
-          # Help with caching and rate limiting
-          BUN_INSTALL_CACHE_DIR: ~/.bun/install/cache
           NPM_CONFIG_MAXSOCKETS: "15"
           NPM_CONFIG_NETWORK_CONCURRENCY: "1"
-          # increase from default 25000 to allow reading PR files from MCP (otherwise reads them anyway using gh command)
+          # increase from default 25000 to allow reading PR files from MCP (otherwise reads them using gh command anyway)
           MAX_MCP_OUTPUT_TOKENS: "100000"
-        # Optional: Skip review for certain conditions
-        if: |
-          !contains(github.event.pull_request.title, '[skip-review]') &&
-          !contains(github.event.pull_request.title, '[WIP]')
         with:
           additional_permissions: |
             actions: read
-          # Github_token should not be needed - uses default GITHUB_TOKEN for GitHub operations
-          # setting it for now fixes HttpError: Resource not accessible by integration - https://docs.github.com[...]
-          # github_token: ${{ secrets.CLAUDE_CODE_GH_PAT }}
+          # github_token not needed - uses default GITHUB_TOKEN for GitHub operations
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Use just one comment to deliver PR comments (only applies for pull_request event workflows)
           # use_sticky_comment: true
@@ -107,6 +54,10 @@ jobs:
             --system-prompt "You are a senior engineer focused on code quality. You are a performance optimization expert. Focus on identifying bottlenecks and suggesting improvements."
             --allowedTools "Task,Bash,Glob,Grep,LS,ExitPlanMode,Read,Edit,MultiEdit,Write,NotebookEdit,TodoWrite,BashOutput,KillBash,mcp__github_inline_comment__create_inline_comment,mcp__github_ci__get_ci_status,mcp__github_ci__get_workflow_run_details,mcp__github_ci__download_job_log,mcp__github_comment__update_claude_comment,mcp__github__add_comment_to_pending_review,mcp__github__create_and_submit_pull_request_review,mcp__github__create_issue,mcp__github__create_or_update_file,mcp__github__create_pending_pull_request_review,mcp__github__delete_pending_pull_request_review,mcp__github__download_workflow_run_artifact,mcp__github__get_code_scanning_alert,mcp__github__get_commit,mcp__github__get_dependabot_alert,mcp__github__get_file_contents,mcp__github__get_job_logs,mcp__github__get_me,mcp__github__get_pull_request,mcp__github__get_pull_request_comments,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_files,mcp__github__get_pull_request_reviews,mcp__github__get_pull_request_status,mcp__github__get_secret_scanning_alert,mcp__github__get_workflow_run,mcp__github__get_workflow_run_logs,mcp__github__list_branches,mcp__github__list_code_scanning_alerts,mcp__github__list_commits,mcp__github__list_dependabot_alerts,mcp__github__list_pull_requests,mcp__github__list_secret_scanning_alerts,mcp__github__list_workflow_jobs,mcp__github__list_workflow_run_artifacts,mcp__github__list_workflow_runs,mcp__github__list_workflows,mcp__github__merge_pull_request,mcp__github__push_files,mcp__github__rerun_failed_jobs,mcp__github__rerun_workflow_run,mcp__github__run_workflow,mcp__github__search_code,mcp__github__search_pull_requests,mcp__github__submit_pending_pull_request_review,mcp__github__update_pull_request,mcp__github__update_pull_request_branch,ListMcpResourcesTool,ReadMcpResourceTool"
             --disallowedTools WebSearch,WebFetch
+          
+          # Disabled: creates a mess to review. Inline suggestions are often broken
+          # Use GitHub's suggestion format when proposing code changes.
+          # Use inline comments to highlight specific areas of concern.
           prompt: |
             Please review this PR #${{ github.event.pull_request.number }} with comprehensive analysis covering both general software engineering principles and OCI automation specifics:
 
@@ -138,6 +89,7 @@ jobs:
             - Test quality, clarity, and maintainability
             - Integration test scenarios
             - Error condition testing
+            - All other workflows passing successfully, including checks and linters
 
             **OCI-Specific Automation Patterns:**
             - Verify capacity errors return 0 (expected) vs 1 (real failure)
@@ -148,10 +100,7 @@ jobs:
             - Boundary conditions and error states
             - Configuration and environment dependencies
             - Workflow and automation reliability
+            - Main workflow in infrastructure-deployment.yml passes without degradation, no unexpected errors
 
             Be constructive, thorough, and provide specific actionable feedback.
             Provide severity ratings (Critical/High/Medium/Low) for any issues found.
-            
-          # Disabled: creates a mess to review. Inline suggestions are often broken
-          # Use GitHub's suggestion format when proposing code changes.
-          # Use inline comments to highlight specific areas of concern.
