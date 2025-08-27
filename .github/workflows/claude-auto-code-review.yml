@@ -63,7 +63,7 @@ jobs:
           # If PR was already reviewed by claude previously, validate latest changes made since your previous review against previous review result first.
           # Make full PR review only if either no previous review of this PR by claude found, or if you validated that latest changes pushed to the PR have fixed all issues (of medium priority or higher) found in previous claude review in this PR.
           prompt: |
-            Please review this PR #${{ github.event.pull_request.number }} with comprehensive analysis covering both general software engineering principles and OCI automation specifics:
+            Please review this PR #${{ github.event.pull_request.number }} in ${{ github.repository }} by ${{ github.actor }} with comprehensive analysis covering both general software engineering principles and OCI automation specifics:
 
             **General Code Quality & Best Practices:**
             - Code structure, readability, and maintainability
