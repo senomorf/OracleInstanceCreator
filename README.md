@@ -1,6 +1,6 @@
 # OCI Free Tier Automation
 
-[![GitHub Actions](https://github.com/senomorf/OracleInstanceCreator/workflows/OCI%20Orchestrator%20-%20Infrastructure%20Deployment/badge.svg)](https://github.com/senomorf/OracleInstanceCreator/actions)
+[![GitHub Actions](https://github.com/senomorf/OracleInstanceCreator/workflows/OCI%20Free%20Tier%20Creation/badge.svg)](https://github.com/senomorf/OracleInstanceCreator/actions)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![OCI Compatible](https://img.shields.io/badge/OCI-Compatible-orange.svg)](https://cloud.oracle.com/)
 
@@ -16,7 +16,7 @@ Automated provisioning of Oracle Cloud free-tier instances (A1.Flex ARM & E2.1.M
 - **93% performance optimization** through CLI tuning
 - **Proxy support** for corporate environments
 - **Circuit breaker pattern** to avoid failed availability domains
-- **Comprehensive testing** with 31 automated test cases
+- **Comprehensive testing** with 33 automated test cases
 
 ## Quick Start
 
