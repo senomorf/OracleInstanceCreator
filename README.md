@@ -1,8 +1,10 @@
 # OCI Free Tier Automation
 
 [![GitHub Actions](https://github.com/senomorf/OracleInstanceCreator/workflows/OCI%20Free%20Tier%20Creation/badge.svg)](https://github.com/senomorf/OracleInstanceCreator/actions)
+[![Linting](https://github.com/senomorf/OracleInstanceCreator/workflows/Lint%20Code%20Base/badge.svg)](https://github.com/senomorf/OracleInstanceCreator/actions)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![OCI Compatible](https://img.shields.io/badge/OCI-Compatible-orange.svg)](https://cloud.oracle.com/)
+[![Code Quality](https://img.shields.io/badge/code%20quality-enforced-brightgreen.svg)](#contributing)
 
 Automated provisioning of Oracle Cloud free-tier instances (A1.Flex ARM & E2.1.Micro AMD) via GitHub Actions with parallel execution and smart retry logic.
 

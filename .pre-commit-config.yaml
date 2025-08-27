@@ -1,0 +1,59 @@
+# Pre-commit hooks for Oracle Instance Creator
+# Install: pip install pre-commit && pre-commit install
+# Update: pre-commit autoupdate
+
+repos:
+  # Shell script linting with ShellCheck
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.9.0
+    hooks:
+      - id: shellcheck
+        args: [--format=gcc, --external-sources]
+        types: [shell]
+
+  # YAML linting
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.32.0
+    hooks:
+      - id: yamllint
+        args: [-c=.yamllint.yml]
+        types: [yaml]
+
+  # JSON formatting and validation
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: check-json
+      - id: pretty-format-json
+        args: [--autofix, --indent=2]
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.35.0
+    hooks:
+      - id: markdownlint
+        args: [-c, .markdownlint.json]
+
+  # EditorConfig validation
+  - repo: https://github.com/editorconfig-checker/editorconfig-checker.python
+    rev: 2.7.2
+    hooks:
+      - id: editorconfig-checker
+        alias: ec
+
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-executables-have-shebangs
+
+  # Secret detection (GitLeaks)
+  - repo: https://github.com/zricethezav/gitleaks
+    rev: v8.17.0
+    hooks:
+      - id: gitleaks
