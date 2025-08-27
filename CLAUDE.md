@@ -4,7 +4,7 @@ OCI free-tier automation: parallel A1.Flex (ARM) + E2.1.Micro (AMD) provisioning
 
 ## Architecture
 
-```
+```text
 .github/workflows/free-tier-creation.yml  # Single-job parallel execution
 scripts/
 ├── launch-parallel.sh      # Orchestrates both shapes with env injection

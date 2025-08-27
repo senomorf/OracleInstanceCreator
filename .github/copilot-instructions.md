@@ -13,7 +13,7 @@ oci_args+=("--read-timeout" "15")           # Quick timeout vs 60s default
 ```
 
 ## Architecture Essentials
-```
+```text
 scripts/
 ├── launch-parallel.sh      # Orchestrates both shapes with env injection
 ├── launch-instance.sh      # Shape-agnostic creation + transient retry
