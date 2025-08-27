@@ -151,7 +151,7 @@ Header
 # Header
 
 # Bad: Indented code
-   code here
+  code here
 
 # Good: Fenced code
 ```bash
