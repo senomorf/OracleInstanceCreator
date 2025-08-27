@@ -22,100 +22,100 @@ YELLOW=$(tput setaf 3 2>/dev/null || echo "")
 RESET=$(tput sgr0 2>/dev/null || echo "")
 
 setup_test_environment() {
-    log_info "Setting up AD cycling test environment..."
-    
-    umask 077
-    TEST_TEMP_DIR=$(mktemp -d)
-    export TEST_TEMP_DIR
-    
-    # Mock environment for testing
-    export OCI_AD="test:US-ASHBURN-1-AD-1,test:US-ASHBURN-1-AD-2,test:US-ASHBURN-1-AD-3"
-    export RETRY_WAIT_TIME="1"  # Short wait for tests
-    export DEBUG="false"
-    
-    log_success "AD cycling test environment configured"
+	log_info "Setting up AD cycling test environment..."
+
+	umask 077
+	TEST_TEMP_DIR=$(mktemp -d)
+	export TEST_TEMP_DIR
+
+	# Mock environment for testing
+	export OCI_AD="test:US-ASHBURN-1-AD-1,test:US-ASHBURN-1-AD-2,test:US-ASHBURN-1-AD-3"
+	export RETRY_WAIT_TIME="1" # Short wait for tests
+	export DEBUG="false"
+
+	log_success "AD cycling test environment configured"
 }
 
 cleanup_test_environment() {
-    if [[ -n "$TEST_TEMP_DIR" && -d "$TEST_TEMP_DIR" ]]; then
-        rm -rf "$TEST_TEMP_DIR" 2>/dev/null || true
-    fi
+	if [[ -n "$TEST_TEMP_DIR" && -d "$TEST_TEMP_DIR" ]]; then
+		rm -rf "$TEST_TEMP_DIR" 2>/dev/null || true
+	fi
 }
 
 assert_equals() {
-    local expected="$1"
-    local actual="$2"
-    local message="${3:-}"
-    
-    if [[ "$expected" == "$actual" ]]; then
-        echo "  ${GREEN}✓${RESET} $message"
-        ((TESTS_PASSED++))
-    else
-        echo "  ${RED}✗${RESET} $message"
-        echo "    Expected: $expected"
-        echo "    Actual: $actual"
-        ((TESTS_FAILED++))
-    fi
+	local expected="$1"
+	local actual="$2"
+	local message="${3:-}"
+
+	if [[ "$expected" == "$actual" ]]; then
+		echo "  ${GREEN}✓${RESET} $message"
+		((TESTS_PASSED++))
+	else
+		echo "  ${RED}✗${RESET} $message"
+		echo "    Expected: $expected"
+		echo "    Actual: $actual"
+		((TESTS_FAILED++))
+	fi
 }
 
 assert_contains() {
-    local haystack="$1"
-    local needle="$2"
-    local message="${3:-}"
-    
-    if [[ "$haystack" == *"$needle"* ]]; then
-        echo "  ${GREEN}✓${RESET} $message"
-        ((TESTS_PASSED++))
-    else
-        echo "  ${RED}✗${RESET} $message"
-        echo "    Looking for: $needle"
-        echo "    In: $haystack"
-        ((TESTS_FAILED++))
-    fi
+	local haystack="$1"
+	local needle="$2"
+	local message="${3:-}"
+
+	if [[ "$haystack" == *"$needle"* ]]; then
+		echo "  ${GREEN}✓${RESET} $message"
+		((TESTS_PASSED++))
+	else
+		echo "  ${RED}✗${RESET} $message"
+		echo "    Looking for: $needle"
+		echo "    In: $haystack"
+		((TESTS_FAILED++))
+	fi
 }
 
 test_ad_list_parsing() {
-    echo "${YELLOW}Testing AD list parsing...${RESET}"
-    
-    # Create a test function that parses AD list like the actual implementation
-    parse_ad_list() {
-        local ad_list="$1"
-        local -a ads=()
-        local temp_list="$ad_list"
-        
-        # Split by comma
-        while [[ "$temp_list" == *","* ]]; do
-            local ad="${temp_list%%,*}"
-            ad=$(echo "$ad" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            [[ -n "$ad" ]] && ads+=("$ad")
-            temp_list="${temp_list#*,}"
-        done
-        
-        # Add the last AD
-        if [[ -n "$temp_list" ]]; then
-            local ad=$(echo "$temp_list" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            [[ -n "$ad" ]] && ads+=("$ad")
-        fi
-        
-        printf '%s\n' "${ads[@]}"
-    }
-    
-    # Test with the mock AD list
-    local ad_array
-    mapfile -t ad_array < <(parse_ad_list "$OCI_AD")
-    
-    assert_equals "3" "${#ad_array[@]}" "Should parse 3 ADs from comma-separated list"
-    assert_equals "test:US-ASHBURN-1-AD-1" "${ad_array[0]}" "First AD should be parsed correctly"
-    assert_equals "test:US-ASHBURN-1-AD-2" "${ad_array[1]}" "Second AD should be parsed correctly"
-    assert_equals "test:US-ASHBURN-1-AD-3" "${ad_array[2]}" "Third AD should be parsed correctly"
+	echo "${YELLOW}Testing AD list parsing...${RESET}"
+
+	# Create a test function that parses AD list like the actual implementation
+	parse_ad_list() {
+		local ad_list="$1"
+		local -a ads=()
+		local temp_list="$ad_list"
+
+		# Split by comma
+		while [[ "$temp_list" == *","* ]]; do
+			local ad="${temp_list%%,*}"
+			ad=$(echo "$ad" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+			[[ -n "$ad" ]] && ads+=("$ad")
+			temp_list="${temp_list#*,}"
+		done
+
+		# Add the last AD
+		if [[ -n "$temp_list" ]]; then
+			local ad=$(echo "$temp_list" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+			[[ -n "$ad" ]] && ads+=("$ad")
+		fi
+
+		printf '%s\n' "${ads[@]}"
+	}
+
+	# Test with the mock AD list
+	local ad_array
+	mapfile -t ad_array < <(parse_ad_list "$OCI_AD")
+
+	assert_equals "3" "${#ad_array[@]}" "Should parse 3 ADs from comma-separated list"
+	assert_equals "test:US-ASHBURN-1-AD-1" "${ad_array[0]}" "First AD should be parsed correctly"
+	assert_equals "test:US-ASHBURN-1-AD-2" "${ad_array[1]}" "Second AD should be parsed correctly"
+	assert_equals "test:US-ASHBURN-1-AD-3" "${ad_array[2]}" "Third AD should be parsed correctly"
 }
 
 test_mock_oci_failures() {
-    echo "${YELLOW}Testing mock OCI failure scenarios...${RESET}"
-    
-    # Create mock OCI command that simulates different error types
-    local mock_oci_script="$TEST_TEMP_DIR/mock_oci.sh"
-    cat > "$mock_oci_script" << 'EOF'
+	echo "${YELLOW}Testing mock OCI failure scenarios...${RESET}"
+
+	# Create mock OCI command that simulates different error types
+	local mock_oci_script="$TEST_TEMP_DIR/mock_oci.sh"
+	cat >"$mock_oci_script" <<'EOF'
 #!/bin/bash
 
 # Mock OCI CLI for testing AD cycling
@@ -149,30 +149,30 @@ case "${CURRENT_AD:-}" in
         ;;
 esac
 EOF
-    chmod +x "$mock_oci_script"
-    
-    # Test error type detection
-    export CURRENT_AD="test:US-ASHBURN-1-AD-1"
-    local error_output
-    error_output=$("$mock_oci_script" 2>&1 || true)
-    local error_type
-    error_type=$(get_error_type "$error_output")
-    
-    assert_equals "CAPACITY" "$error_type" "Should detect capacity error from AD-1"
-    
-    export CURRENT_AD="test:US-ASHBURN-1-AD-2"
-    error_output=$("$mock_oci_script" 2>&1 || true)
-    error_type=$(get_error_type "$error_output")
-    
-    assert_equals "RATE_LIMIT" "$error_type" "Should detect rate limit error from AD-2"
+	chmod +x "$mock_oci_script"
+
+	# Test error type detection
+	export CURRENT_AD="test:US-ASHBURN-1-AD-1"
+	local error_output
+	error_output=$("$mock_oci_script" 2>&1 || true)
+	local error_type
+	error_type=$(get_error_type "$error_output")
+
+	assert_equals "CAPACITY" "$error_type" "Should detect capacity error from AD-1"
+
+	export CURRENT_AD="test:US-ASHBURN-1-AD-2"
+	error_output=$("$mock_oci_script" 2>&1 || true)
+	error_type=$(get_error_type "$error_output")
+
+	assert_equals "RATE_LIMIT" "$error_type" "Should detect rate limit error from AD-2"
 }
 
 test_ad_cycling_logic() {
-    echo "${YELLOW}Testing AD cycling with failover...${RESET}"
-    
-    # Create a test function that simulates the AD cycling logic
-    local test_cycling_script="$TEST_TEMP_DIR/test_cycling.sh"
-    cat > "$test_cycling_script" << 'EOF'
+	echo "${YELLOW}Testing AD cycling with failover...${RESET}"
+
+	# Create a test function that simulates the AD cycling logic
+	local test_cycling_script="$TEST_TEMP_DIR/test_cycling.sh"
+	cat >"$test_cycling_script" <<'EOF'
 #!/bin/bash
 set -euo pipefail
 
@@ -243,48 +243,48 @@ cycle_through_ads() {
 
 cycle_through_ads
 EOF
-    chmod +x "$test_cycling_script"
-    
-    # Run the cycling test
-    "$test_cycling_script"
-    
-    # Check the results
-    if [[ -f "$TEST_TEMP_DIR/attempts.log" ]]; then
-        local attempts
-        attempts=$(cat "$TEST_TEMP_DIR/attempts.log")
-        
-        assert_contains "$attempts" "test:US-ASHBURN-1-AD-1:CAPACITY" "Should attempt AD-1 and get capacity error"
-        assert_contains "$attempts" "test:US-ASHBURN-1-AD-2:RATE_LIMIT" "Should attempt AD-2 and get rate limit error first"
-    fi
-    
-    if [[ -f "$TEST_TEMP_DIR/final_result" ]]; then
-        local final_result
-        final_result=$(cat "$TEST_TEMP_DIR/final_result")
-        
-        # The test should succeed in AD-3, but let's check if we get there
-        if [[ "$final_result" == "SUCCESS:"* ]]; then
-            assert_equals "true" "true" "Should eventually succeed in one of the ADs"
-        else
-            assert_equals "true" "false" "Should eventually succeed in one of the ADs"
-        fi
-    fi
+	chmod +x "$test_cycling_script"
+
+	# Run the cycling test
+	"$test_cycling_script"
+
+	# Check the results
+	if [[ -f "$TEST_TEMP_DIR/attempts.log" ]]; then
+		local attempts
+		attempts=$(cat "$TEST_TEMP_DIR/attempts.log")
+
+		assert_contains "$attempts" "test:US-ASHBURN-1-AD-1:CAPACITY" "Should attempt AD-1 and get capacity error"
+		assert_contains "$attempts" "test:US-ASHBURN-1-AD-2:RATE_LIMIT" "Should attempt AD-2 and get rate limit error first"
+	fi
+
+	if [[ -f "$TEST_TEMP_DIR/final_result" ]]; then
+		local final_result
+		final_result=$(cat "$TEST_TEMP_DIR/final_result")
+
+		# The test should succeed in AD-3, but let's check if we get there
+		if [[ "$final_result" == "SUCCESS:"* ]]; then
+			assert_equals "true" "true" "Should eventually succeed in one of the ADs"
+		else
+			assert_equals "true" "false" "Should eventually succeed in one of the ADs"
+		fi
+	fi
 }
 
 test_exhausted_ads_scenario() {
-    echo "${YELLOW}Testing exhausted ADs scenario...${RESET}"
-    
-    # Create a scenario where all ADs fail
-    local mock_oci_failing="$TEST_TEMP_DIR/mock_oci_failing.sh"
-    cat > "$mock_oci_failing" << 'EOF'
+	echo "${YELLOW}Testing exhausted ADs scenario...${RESET}"
+
+	# Create a scenario where all ADs fail
+	local mock_oci_failing="$TEST_TEMP_DIR/mock_oci_failing.sh"
+	cat >"$mock_oci_failing" <<'EOF'
 #!/bin/bash
 # Mock OCI that always fails with capacity errors
 echo "Error: Out of host capacity in all regions" >&2
 exit 1
 EOF
-    chmod +x "$mock_oci_failing"
-    
-    local test_exhaustion_script="$TEST_TEMP_DIR/test_exhaustion.sh"
-    cat > "$test_exhaustion_script" << 'EOF'
+	chmod +x "$mock_oci_failing"
+
+	local test_exhaustion_script="$TEST_TEMP_DIR/test_exhaustion.sh"
+	cat >"$test_exhaustion_script" <<'EOF'
 #!/bin/bash
 set -euo pipefail
 
@@ -321,59 +321,59 @@ done
 
 echo "ALL_EXHAUSTED" >> "$TEST_TEMP_DIR/exhaustion_result"
 EOF
-    chmod +x "$test_exhaustion_script"
-    
-    "$test_exhaustion_script"
-    
-    # Verify all ADs were attempted
-    if [[ -f "$TEST_TEMP_DIR/all_attempts.log" ]]; then
-        local attempt_count
-        attempt_count=$(wc -l < "$TEST_TEMP_DIR/all_attempts.log")
-        assert_equals "3" "$attempt_count" "Should attempt all 3 ADs when all fail"
-    fi
-    
-    # Verify exhaustion was detected
-    if [[ -f "$TEST_TEMP_DIR/exhaustion_result" ]]; then
-        local exhaustion_result
-        exhaustion_result=$(cat "$TEST_TEMP_DIR/exhaustion_result")
-        assert_equals "ALL_EXHAUSTED" "$exhaustion_result" "Should detect AD exhaustion"
-    fi
+	chmod +x "$test_exhaustion_script"
+
+	"$test_exhaustion_script"
+
+	# Verify all ADs were attempted
+	if [[ -f "$TEST_TEMP_DIR/all_attempts.log" ]]; then
+		local attempt_count
+		attempt_count=$(wc -l <"$TEST_TEMP_DIR/all_attempts.log")
+		assert_equals "3" "$attempt_count" "Should attempt all 3 ADs when all fail"
+	fi
+
+	# Verify exhaustion was detected
+	if [[ -f "$TEST_TEMP_DIR/exhaustion_result" ]]; then
+		local exhaustion_result
+		exhaustion_result=$(cat "$TEST_TEMP_DIR/exhaustion_result")
+		assert_equals "ALL_EXHAUSTED" "$exhaustion_result" "Should detect AD exhaustion"
+	fi
 }
 
 run_ad_cycling_tests() {
-    echo "Starting AD Cycling Tests"
-    echo "========================="
-    
-    setup_test_environment
-    
-    test_ad_list_parsing
-    test_mock_oci_failures
-    test_ad_cycling_logic
-    test_exhausted_ads_scenario
-    
-    cleanup_test_environment
-    
-    # Print results
-    echo ""
-    echo "AD Cycling Test Results:"
-    echo "======================="
-    echo "Passed: ${GREEN}$TESTS_PASSED${RESET}"
-    echo "Failed: ${RED}$TESTS_FAILED${RESET}"
-    echo "Total:  $((TESTS_PASSED + TESTS_FAILED))"
-    
-    if [[ $TESTS_FAILED -eq 0 ]]; then
-        echo ""
-        echo "${GREEN}All AD cycling tests passed!${RESET}"
-        exit 0
-    else
-        echo ""
-        echo "${RED}Some AD cycling tests failed!${RESET}"
-        exit 1
-    fi
+	echo "Starting AD Cycling Tests"
+	echo "========================="
+
+	setup_test_environment
+
+	test_ad_list_parsing
+	test_mock_oci_failures
+	test_ad_cycling_logic
+	test_exhausted_ads_scenario
+
+	cleanup_test_environment
+
+	# Print results
+	echo ""
+	echo "AD Cycling Test Results:"
+	echo "======================="
+	echo "Passed: ${GREEN}$TESTS_PASSED${RESET}"
+	echo "Failed: ${RED}$TESTS_FAILED${RESET}"
+	echo "Total:  $((TESTS_PASSED + TESTS_FAILED))"
+
+	if [[ $TESTS_FAILED -eq 0 ]]; then
+		echo ""
+		echo "${GREEN}All AD cycling tests passed!${RESET}"
+		exit 0
+	else
+		echo ""
+		echo "${RED}Some AD cycling tests failed!${RESET}"
+		exit 1
+	fi
 }
 
 trap cleanup_test_environment EXIT
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    run_ad_cycling_tests
+	run_ad_cycling_tests
 fi

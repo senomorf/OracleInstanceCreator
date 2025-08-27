@@ -4,28 +4,23 @@ OCI free-tier automation: parallel A1.Flex (ARM) + E2.1.Micro (AMD) provisioning
 
 ## Architecture
 
-```text
-.github/workflows/free-tier-creation.yml  # Single-job parallel execution
-scripts/
-├── launch-parallel.sh      # Orchestrates both shapes with env injection
-├── launch-instance.sh      # Shape-agnostic creation + transient retry
-├── utils.sh               # OCI CLI wrapper + error classification
-├── circuit-breaker.sh     # AD failure tracking (3 failures = skip)
-├── setup-oci.sh          # CLI + proxy setup
-├── validate-config.sh    # Configuration validation
-└── notify.sh             # Telegram notifications
-tests/
-├── test_proxy.sh         # Proxy validation (15 tests)
-├── test_integration.sh   # Integration tests (9 tests)
-├── test_circuit_breaker.sh # Circuit breaker (9 tests)
-└── run_new_tests.sh      # Test runner
-```
+**Core Scripts:**
+- `scripts/launch-parallel.sh` - Orchestrates both shapes with env injection
+- `scripts/launch-instance.sh` - Shape-agnostic creation + transient retry
+- `scripts/utils.sh` - OCI CLI wrapper + error classification
+- `scripts/circuit-breaker.sh` - AD failure tracking (3 failures = skip)
+- `scripts/setup-oci.sh` - CLI + proxy setup
+- `scripts/adaptive-scheduler.sh` - Success pattern optimization
+- `scripts/preflight-check.sh` - Production validation
+- `scripts/constants.sh` - Centralized configuration constants
+- `scripts/metrics.sh` - Performance tracking system
+
+**Tests:** 14 test scripts with 31+ automated tests in `tests/` directory
 
 ## Critical Patterns
 
-### Performance Optimization (93% improvement)
+### Performance Optimization (NEVER remove in utils.sh)
 ```bash
-# NEVER remove these flags in utils.sh:
 oci_args+=("--no-retry")                    # Eliminates exponential backoff
 oci_args+=("--connection-timeout" "5")      # 5s vs 10s default
 oci_args+=("--read-timeout" "15")           # 15s vs 60s default
@@ -33,121 +28,164 @@ oci_args+=("--read-timeout" "15")           # 15s vs 60s default
 
 ### Error Classification (scripts/utils.sh)
 ```bash
-CAPACITY: "capacity|quota|limit|429"        → Schedule retry (treat as success)
+CAPACITY: "capacity|quota|limit|429"        → Retry on schedule (success)
 DUPLICATE: "already exists"                 → Success
-TRANSIENT: "internal|network|timeout"       → Retry 3x same AD, then next AD
-AUTH/CONFIG: "authentication|invalid.*ocid" → Alert user immediately
+TRANSIENT: "internal|network|timeout"       → Retry 3x same AD, then cycle
+AUTH/CONFIG: "authentication|invalid.*ocid" → Immediate alert
 ```
 
-### Parallel Execution Pattern (launch-parallel.sh)
+### Parallel Execution (launch-parallel.sh)
 ```bash
-# Environment variable injection per shape:
 (export OCI_SHAPE="VM.Standard.A1.Flex" OCI_OCPUS="4" OCI_MEMORY_IN_GBS="24"; ./launch-instance.sh) &
 (export OCI_SHAPE="VM.Standard.E2.1.Micro" OCI_OCPUS="" OCI_MEMORY_IN_GBS=""; ./launch-instance.sh) &
 wait  # 55s timeout protection
 ```
 
-### Shape Configurations
-```bash
-# A1.Flex (ARM) - 4 OCPUs, 24GB, instance name: a1-flex-sg
-# E2.1.Micro (AMD) - 1 OCPU, 1GB, instance name: e2-micro-sg
-```
+## Environment Variables
+
+**Multi-AD Support:**
+`OCI_AD="fgaj:AP-SINGAPORE-1-AD-1,fgaj:AP-SINGAPORE-1-AD-2,fgaj:AP-SINGAPORE-1-AD-3"`
+
+**Critical Settings:**
+- `BOOT_VOLUME_SIZE="50"` - GB minimum
+- `RETRY_WAIT_TIME="30"` - Seconds between AD attempts
+- `TRANSIENT_ERROR_MAX_RETRIES="3"` - Same-AD retry count
+- `DEBUG="true"` - Enable verbose output
+
+## Shape Configurations
+
+| Shape | OCPUs | Memory | Instance Name |
+|-------|--------|--------|---------------|
+| VM.Standard.A1.Flex | 4 | 24GB | a1-flex-sg |
+| VM.Standard.E2.1.Micro | 1 | 1GB | e2-micro-sg |
 
 ## Development Commands
 
 ```bash
-# Configuration validation
-./scripts/validate-config.sh
+# Enhanced testing and validation
+make validate-tools                # Check linting tool availability
+make lint                          # Run traditional linters
+make lint-all                      # Run enhanced linting (security + quality)
+make lint-security                 # Security analysis (semgrep, gitleaks, shellharden)
+make lint-format                   # Code formatting validation (shfmt, prettier)
+make lint-quality                  # Code quality checks (codespell, jscpd)
+make lint-fix                      # Auto-fix linting issues where possible
 
-# Local testing (requires environment variables)
-./scripts/setup-oci.sh           # OCI CLI + proxy setup
-./scripts/launch-parallel.sh     # Both shapes in parallel
-./scripts/launch-instance.sh     # Single shape (with env vars)
+./scripts/preflight-check.sh       # Production validation
+./tests/run_new_tests.sh           # All test suites
 
-# Test suites
-./tests/test_proxy.sh             # Proxy validation (15 tests)
-./tests/test_integration.sh       # Integration tests (9 tests)
-./tests/test_circuit_breaker.sh   # Circuit breaker functionality (9 tests)
-./tests/run_new_tests.sh          # Test runner for enhancements
+# Local execution
+DEBUG=true ./scripts/launch-parallel.sh
+./scripts/adaptive-scheduler.sh    # Schedule optimization
 
-# Syntax validation
-bash -n scripts/*.sh
-
-# Debug mode
-DEBUG=true ./scripts/launch-instance.sh
+# GitHub workflow
+gh workflow run infrastructure-deployment.yml --field verbose_output=true
 ```
 
-## Environment Variables
+## Key Constraints
 
+- **Capacity errors are EXPECTED** - treat as success, retry on schedule
+- **Single job strategy** - avoid matrix (2x cost)
+- **55s timeout** - prevents 2-minute GitHub billing
+- **Flexible shapes need** `--shape-config` parameter
+- **Fixed shapes** (*.Micro) do not need shape configuration
+
+## Advanced Features
+
+### Circuit Breaker (scripts/circuit-breaker.sh)
+- Skips ADs after 3 consecutive failures
+- 24-hour auto-reset
+- 30% reduction in failed attempts
+
+### Exponential Backoff
+- Sequence: 5s → 10s → 20s → 40s (max)
+- Applied to INTERNAL_ERROR and NETWORK types
+
+### Performance Metrics (scripts/metrics.sh)
+- Shape-specific execution timing
+- Parallel efficiency tracking
+- Resource usage monitoring
+
+## Configuration Files
+
+**Project Structure:**
+- `config/defaults.yml` - Default configurations
+- `config/instance-profiles.yml` - Shape definitions
+- `config/regions.yml` - Regional settings
+- `docs/dashboard/` - Web dashboard with GitHub integration
+
+## Enhanced Linting & Security Standards
+
+### Traditional Linters (Required)
+**Core Tools:** ESLint (JS), djlint (HTML), shellcheck (shell), yamllint (YAML), actionlint (workflows), markdownlint (docs)
+
+### Security & Quality Tools (Enhanced)
+**Security Analysis:**
+- `semgrep` - Advanced static analysis for vulnerabilities (399 managed findings)
+- `gitleaks` - Git secrets and credential detection  
+- `shellharden` - Shell script security hardening
+
+**Code Quality:**
+- `shfmt` - Shell script formatting consistency
+- `prettier` - Multi-language code formatting (JS/JSON/YAML/MD)
+- `codespell` - Spell checking in code and documentation (0 false positives)
+
+### Configuration Files
+- `.gitleaks.toml` - Secret detection rules with OCI-specific patterns
+- `.semgrep.yml` - Security analysis with tuned false-positive reduction
+- `.codespellrc` - Spell checking with project-specific term exclusions
+- `.prettierrc.json` - Multi-language formatting standards
+- `.editorconfig` - IDE consistency settings
+
+### Optimized Developer Workflow
 ```bash
-# Multi-AD Support (comma-separated)
-OCI_AD="fgaj:AP-SINGAPORE-1-AD-1,fgaj:AP-SINGAPORE-1-AD-2,fgaj:AP-SINGAPORE-1-AD-3"
+# Primary development commands
+make lint-all                      # Complete analysis suite (5 security + 5 quality tools)
+make lint-fix                      # Auto-fix formatting issues where possible
+make validate-tools                # Verify all tools are installed and working
 
-# Performance & Reliability
-BOOT_VOLUME_SIZE="50"                    # GB, minimum enforced
-RECOVERY_ACTION="RESTORE_INSTANCE"       # Auto-restart on failures
-RETRY_WAIT_TIME="30"                     # Seconds between AD attempts
-TRANSIENT_ERROR_MAX_RETRIES="3"         # Retry count per AD
-TRANSIENT_ERROR_RETRY_DELAY="15"        # Seconds between retries
+# Targeted analysis
+make lint-security                 # Security-focused analysis (semgrep, gitleaks, shellharden)
+make lint-format                   # Code formatting validation (prettier, shfmt, djlint)
+make lint-quality                  # Quality analysis (codespell, duplicate detection)
 
-# Debugging
-DEBUG="true"                             # Enable verbose OCI CLI output
-LOG_FORMAT="text"                        # or "json" for structured logging
+# Legacy commands (still supported)
+make lint                          # Traditional linters only
 ```
 
-## Workflow Testing
-
-```bash
-# Manual run with debug
-gh workflow run free-tier-creation.yml --field verbose_output=true --field send_notifications=false
-
-# Monitor execution
-gh run watch <run-id>
-
-# Expected timing: ~20-25 seconds total, ~14 seconds parallel phase
-```
-
-## Error Patterns
-
-### Expected Behaviors
-- **Capacity limitations are normal** - Oracle Cloud has dynamic resource availability
-- **Rate limiting (HTTP 429)** - High demand, standard cloud provider behavior  
-- **"Out of host capacity"** - Common during peak usage periods
-- **ARM (A1.Flex) typically more available** than AMD (E2.1.Micro)
-
-### OCID Validation
-```bash
-# Pattern: ^ocid1\.type\.[a-z0-9-]*\.[a-z0-9-]*\..+
-# All OCI resources have globally unique OCIDs
-```
-
-### Transient Error Retry Pattern
-```bash
-# For INTERNAL_ERROR and NETWORK errors:
-# 1. Retry same AD up to 3 times (15 second delays)
-# 2. If still failing, try next availability domain
-# 3. If all ADs exhausted, treat as capacity issue
-```
-
-## Gotchas
-
-- **Capacity errors are EXPECTED** (treat as success - retry on schedule)
-- **Single job strategy** (avoid matrix = 2x GitHub Actions cost)
-- **55-second timeout protection** prevents 2-minute billing
-- **Proxy inheritance**: Environment variables auto-propagate to parallel processes
-- **Shape requirements**: Flexible shapes need `--shape-config` parameter
-- **Never remove** OCI CLI optimization flags - they provide 93% performance improvement
+### Performance Metrics (After Enhancement)
+- **Semgrep:** 399 findings (was 12,327+ - 97% false positive reduction)
+- **Codespell:** 0 findings (was 21 - 100% false positive elimination)  
+- **Total Analysis:** 1,234 findings across all tools (manageable baseline)
+- **CI/CD Integration:** Enhanced workflows with security tool installation
 
 ## Oracle Cloud Specifics
 
-- **Flexible shapes need --shape-config parameter**: `{"ocpus": 4, "memoryInGBs": 24}`
-- **Fixed shapes (*.Micro) do not need shape configuration**
-- **OCID validation**: `^ocid1\.type\.[a-z0-9-]*\.[a-z0-9-]*\..+`
-- **Proxy formats**: `username:password@proxy.example.com:3128` (URL encoding supported)
+- **OCID Pattern:** `^ocid1\.type\.[a-z0-9-]*\.[a-z0-9-]*\..+`
+- **Proxy Format:** `username:password@proxy.example.com:3128`
+- **"Out of host capacity"** is expected during peak usage
+- **ARM (A1.Flex) typically more available** than AMD (E2.1.Micro)
 
-## Performance Indicators
+## Dashboard Integration
 
-- **<20 seconds**: Optimal performance ✅
-- **20-30 seconds**: Acceptable with minor delays
-- **30-60 seconds**: Investigate - config/network issues ⚠️
-- **>1 minute**: Critical - missing optimizations ❌
+**Files:** `docs/dashboard/index.html`, `docs/dashboard/js/dashboard.js`
+**Features:** GitHub API integration, rate limiting, XSS protection via safe DOM manipulation
+
+## Troubleshooting Quick Reference
+
+**Rate limiting:** Check GitHub token, wait for reset
+**XSS errors:** Safe DOM manipulation implemented (2025-08-27)
+**Linting failures:** Run `make lint-fix`, check specific linters
+**Capacity issues:** Expected behavior - retry on schedule
+**Performance < 20s:** Optimal, **> 60s:** Check optimization flags
+
+## Important Notes
+
+- Never remove OCI CLI optimization flags
+- Capacity errors = success (Oracle's dynamic availability)
+- Proxy optional (direct connection fallback)
+- All credentials masked in logs
+- Multi-AD cycling increases success rates significantly
+
+**Git Rules:** Lookup actual GitHub user/repo, don't assume from folder names. Never disable super-linter or other linter jobs.
+- When updating CLAUDE.md, keep it concise and optimized for token count.

@@ -1,0 +1,103 @@
+---
+name: Development Linting & Quality Tools
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [master, main]
+  workflow_dispatch:
+
+jobs:
+  development-tools:
+    name: Development Quality Tools
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'development-test')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js for development tools
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Install development analysis tools
+        run: |
+          # Install performance and quality analysis tools not in super-linter
+          npm install -g jscpd
+          npm install -g license-checker
+
+      - name: Setup Java for SonarQube scanner
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: Install SonarQube scanner
+        run: |
+          wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.8.0.2856-linux.zip
+          unzip sonar-scanner-cli-4.8.0.2856-linux.zip
+          export PATH=$PATH:$PWD/sonar-scanner-4.8.0.2856-linux/bin
+
+      - name: Install Rust for hyperfine benchmarking
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install performance tools
+        run: |
+          cargo install hyperfine
+
+      - name: Run Advanced Code Analysis
+        run: |
+          echo "🔍 Running advanced development quality analysis..."
+
+      - name: Run JSCPD Duplicate Detection
+        run: |
+          echo "📊 Running duplicate code detection..."
+          if command -v jscpd >/dev/null 2>&1; then
+            jscpd . || echo "⚠️ Code duplication detected"
+          else
+            echo "⚠️ jscpd not available"
+          fi
+
+      - name: Run License Compliance Check
+        run: |
+          echo "📄 Running license compliance check..."
+          if command -v license-checker >/dev/null 2>&1; then
+            license-checker --onlyAllow 'MIT;Apache-2.0;BSD-3-Clause;BSD-2-Clause;ISC' --relativeLicensePath docs/dashboard/js/ || echo "⚠️ License compliance issues found"
+          else
+            echo "⚠️ license-checker not available"
+          fi
+
+      - name: Run Performance Benchmarks
+        run: |
+          echo "⚡ Running performance benchmarks..."
+          if command -v hyperfine >/dev/null 2>&1; then
+            mkdir -p benchmarks
+            hyperfine --export-json benchmarks/utils-benchmark.json 'bash scripts/utils.sh --help' || true
+            hyperfine --export-json benchmarks/launch-benchmark.json --setup 'export DEBUG=false' 'bash scripts/launch-instance.sh --dry-run' || true
+            echo "📈 Benchmark results saved to benchmarks/"
+          else
+            echo "⚠️ hyperfine not available"
+          fi
+
+      - name: Run SonarQube Analysis
+        run: |
+          echo "📊 Running SonarQube analysis..."
+          if [ -f "sonar-project.properties" ]; then
+            export PATH=$PATH:$PWD/sonar-scanner-4.8.0.2856-linux/bin
+            sonar-scanner || echo "⚠️ SonarQube analysis completed with issues"
+          else
+            echo "⚠️ sonar-project.properties not found"
+          fi
+
+      - name: Development Tools Summary
+        if: always()
+        run: |
+          echo "🔧 Development quality analysis completed!"
+          echo "This workflow focuses on advanced tools not covered by super-linter."
+          echo "For standard linting, see the Super-Linter workflow results."

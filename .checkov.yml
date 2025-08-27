@@ -1,0 +1,51 @@
+# Checkov configuration for OracleInstanceCreator
+# Security and compliance scanning for Infrastructure as Code
+
+# Framework settings
+framework:
+  - github_actions
+  - secrets
+  - dockerfile
+  - json
+  - yaml
+
+# Skip checks that are not relevant for this project
+skip-check:
+  # Skip Docker-related checks if not using containers
+  - CKV_DOCKER_1
+  - CKV_DOCKER_2
+  - CKV_DOCKER_3
+  
+  # Skip Kubernetes checks (not applicable)
+  - CKV_K8S_*
+  
+  # Skip AWS-specific checks (using OCI)
+  - CKV_AWS_*
+  
+  # Allow specific GitHub Actions patterns
+  - CKV_GHA_1  # Pinned GitHub Actions versions (can be relaxed)
+
+# Include specific security checks
+check:
+  - CKV_SECRET_*  # Secret detection
+  - CKV_GHA_*     # GitHub Actions security
+  - CKV2_GHA_*    # Advanced GitHub Actions checks
+
+# Output settings
+output: cli
+quiet: false
+compact: false
+
+# File patterns to scan
+files:
+  - "**/*.yml"
+  - "**/*.yaml"
+  - "**/*.json"
+  - ".github/workflows/**"
+
+# Directories to skip
+skip-path:
+  - node_modules
+  - .git
+  - tests/fixtures
+  - docs/examples

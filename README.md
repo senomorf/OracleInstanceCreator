@@ -9,25 +9,20 @@ Automated provisioning of Oracle Cloud free-tier instances (A1.Flex ARM & E2.1.M
 ## Features
 
 - **Parallel provisioning** of both instance types (~20s execution)
-- **Multi-AD cycling** for higher success rates  
-- **Smart error handling** with transient error retry
-- **Telegram notifications** on success/failure
-- **Secure credential management** via GitHub Secrets
-- **93% performance optimization** through CLI tuning
-- **Proxy support** for corporate environments
-- **Circuit breaker pattern** to avoid failed availability domains
-- **Comprehensive testing** with 33 automated test cases
+- **Multi-AD cycling** with smart error handling and retry logic
+- **Telegram notifications** and secure credential management
+- **93% performance optimization** and comprehensive testing suite
 
 ## Quick Start
 
 1. **Fork this repository**
-2. **Add GitHub Secrets** (see Configuration below)
+2. **Add GitHub Secrets** (see Required Secrets below)
 3. **Enable GitHub Actions** in repository settings
 4. **Run workflow**: Actions → "OCI Free Tier Creation" → Run workflow
 
-## Configuration
+## Required Secrets
 
-### Required GitHub Secrets
+Add these secrets in your GitHub repository settings:
 
 | Secret | Description | Example |
 |--------|-------------|---------|
@@ -41,86 +36,22 @@ Automated provisioning of Oracle Cloud free-tier instances (A1.Flex ARM & E2.1.M
 | `TELEGRAM_TOKEN` | Bot token | `123456:ABC-DEF...` |
 | `TELEGRAM_USER_ID` | User ID | `123456789` |
 
-### Optional Configuration
+## Documentation
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OCI_COMPARTMENT_ID` | Tenancy | Compartment OCID |
-| `OCI_IMAGE_ID` | Auto-detect | Image OCID |
-| `OCI_PROXY_URL` | None | `user:pass@proxy:3128` |
-| `OCI_AD` | AD-1 | Comma-separated ADs |
-| `BOOT_VOLUME_SIZE` | 50 | Boot disk size in GB |
+📖 **Comprehensive guides available:**
+
+- 📊 **[Dashboard & Monitoring](docs/README.md)** - Real-time monitoring and analytics
+- ⚙️ **[Configuration Guide](docs/configuration.md)** - Detailed setup and options
+- 🔧 **[Troubleshooting Guide](docs/troubleshooting.md)** - Common issues and solutions  
+- 👨‍💻 **[Development Guide](CLAUDE.md)** - Architecture and technical details
 
 ## How It Works
 
-The system executes both instance types in parallel for maximum efficiency:
+The system creates both free-tier instance types in parallel:
+- **A1.Flex (ARM)**: 4 OCPUs, 24GB RAM - Better availability
+- **E2.1.Micro (AMD)**: 1 OCPU, 1GB RAM - Traditional x86
 
-**A1.Flex (ARM Architecture)**
-- 4 OCPUs, 24GB RAM
-- Instance name: `a1-flex-sg`
-- Better availability than AMD
-
-**E2.1.Micro (AMD Architecture)**  
-- 1 OCPU, 1GB RAM
-- Instance name: `e2-micro-sg`
-- Traditional x86 architecture
-
-Each shape independently cycles through configured availability domains until successful or capacity unavailable. The parallel approach maximizes your chances of securing at least one free-tier instance.
-
-## Deployment Scenarios
-
-- **Both instances created**: Complete success ✅✅
-- **One instance created**: Partial success ✅⏳  
-- **Zero instances created**: Retry on schedule ⏳⏳
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| **Capacity errors** | Normal - Oracle has limited free resources. Workflow retries automatically every 6 hours |
-| **Authentication failed** | Verify API key fingerprint and private key format in GitHub Secrets |
-| **Timeout after 55s** | Built-in protection to prevent excessive GitHub Actions billing |
-| **"Out of host capacity"** | Expected during peak usage - not a configuration error |
-| **Proxy connection issues** | Check proxy URL format: `username:password@proxy.example.com:3128` |
-
-## Performance
-
-- **Execution time**: ~20-25 seconds for both shapes in parallel
-- **GitHub Actions billing**: Single job execution (1 minute minimum charge)
-- **Monthly usage**: ~2,880 minutes at default */6 schedule ⚠️ EXCEEDS FREE TIER
-- **Optimization**: 93% improvement via OCI CLI flag tuning
-
-## Local Testing
-
-```bash
-# Make scripts executable
-chmod +x scripts/*.sh
-
-# Validate configuration (requires environment variables)
-./scripts/validate-config.sh
-
-# Test parallel execution
-./scripts/launch-parallel.sh
-
-# Run test suites
-./tests/test_integration.sh    # 9 tests
-./tests/test_proxy.sh         # 15 tests
-```
-
-## Security
-
-- All credentials managed via GitHub Secrets (never committed)
-- Debug logging automatically redacts sensitive information
-- Secure file permissions (600/700) on temporary files
-- Network proxy support with URL-encoded credentials
-
-## Advanced Features
-
-- **Circuit breaker**: Automatically skips consistently failing availability domains
-- **Exponential backoff**: Smart retry delays for transient errors
-- **Instance verification**: Re-checks creation after LimitExceeded errors
-- **Multi-region support**: Works with any OCI region
-- **Comprehensive logging**: Structured output for debugging
+Multi-AD cycling maximizes success rates. Capacity errors are expected and handled automatically.
 
 ## License
 

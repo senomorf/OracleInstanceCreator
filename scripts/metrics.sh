@@ -12,9 +12,9 @@ METRICS_FILE="${TMPDIR:-/tmp}/oci_ad_metrics_$$"
 
 # Initialize metrics tracking
 init_metrics() {
-    # Create temporary metrics file
-    echo "# OCI AD Metrics - $(date '+%Y-%m-%d %H:%M:%S')" > "$METRICS_FILE"
-    log_debug "Initialized AD metrics tracking: $METRICS_FILE"
+	# Create temporary metrics file
+	echo "# OCI AD Metrics - $(date '+%Y-%m-%d %H:%M:%S')" >"$METRICS_FILE"
+	log_debug "Initialized AD metrics tracking: $METRICS_FILE"
 }
 
 # Record AD attempt result
@@ -23,32 +23,32 @@ init_metrics() {
 #   $2: result - success|failure
 #   $3: error_type - CAPACITY|AUTH|CONFIG|NETWORK|etc (for failures)
 record_ad_result() {
-    local ad_name="$1"
-    local result="$2"
-    local error_type="${3:-}"
-    local timestamp
-    
-    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    
-    # Format: timestamp|ad_name|result|error_type
-    local entry="${timestamp}|${ad_name}|${result}|${error_type}"
-    echo "$entry" >> "$METRICS_FILE"
-    
-    log_debug "Recorded AD result: $ad_name -> $result${error_type:+ ($error_type)}"
+	local ad_name="$1"
+	local result="$2"
+	local error_type="${3:-}"
+	local timestamp
+
+	timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+	# Format: timestamp|ad_name|result|error_type
+	local entry="${timestamp}|${ad_name}|${result}|${error_type}"
+	echo "$entry" >>"$METRICS_FILE"
+
+	log_debug "Recorded AD result: $ad_name -> $result${error_type:+ ($error_type)}"
 }
 
 # Get AD success rate summary
 show_ad_metrics() {
-    if [[ ! -f "$METRICS_FILE" ]]; then
-        log_info "No AD metrics available for this run"
-        return
-    fi
-    
-    log_info "=== AD Performance Summary ==="
-    
-    # Count results by AD
-    local ad_stats
-    ad_stats=$(awk -F'|' '
+	if [[ ! -f "$METRICS_FILE" ]]; then
+		log_info "No AD metrics available for this run"
+		return
+	fi
+
+	log_info "=== AD Performance Summary ==="
+
+	# Count results by AD
+	local ad_stats
+	ad_stats=$(awk -F'|' '
         /^#/ { next }  # Skip comment lines
         {
             ad = $2
@@ -89,25 +89,25 @@ show_ad_metrics() {
             }
         }
     ' "$METRICS_FILE")
-    
-    if [[ -n "$ad_stats" ]]; then
-        echo "$ad_stats" | while read -r line; do
-            log_info "$line"
-        done
-    else
-        log_info "No AD attempts recorded"
-    fi
+
+	if [[ -n "$ad_stats" ]]; then
+		echo "$ad_stats" | while read -r line; do
+			log_info "$line"
+		done
+	else
+		log_info "No AD attempts recorded"
+	fi
 }
 
 # Get best performing AD based on historical data
 get_optimal_ad() {
-    if [[ ! -f "$METRICS_FILE" ]]; then
-        echo ""
-        return
-    fi
-    
-    # Return AD with highest success rate
-    awk -F'|' '
+	if [[ ! -f "$METRICS_FILE" ]]; then
+		echo ""
+		return
+	fi
+
+	# Return AD with highest success rate
+	awk -F'|' '
         /^#/ { next }
         {
             ad = $2
@@ -136,10 +136,10 @@ get_optimal_ad() {
 
 # Clean up metrics file
 cleanup_metrics() {
-    if [[ -f "$METRICS_FILE" ]]; then
-        rm -f "$METRICS_FILE"
-        log_debug "Cleaned up metrics file"
-    fi
+	if [[ -f "$METRICS_FILE" ]]; then
+		rm -f "$METRICS_FILE"
+		log_debug "Cleaned up metrics file"
+	fi
 }
 
 # Trap to ensure cleanup on exit
@@ -147,70 +147,70 @@ trap cleanup_metrics EXIT
 
 # Record structured performance metrics
 record_performance_metric() {
-    local metric_type="$1"
-    local metric_value="$2"
-    local additional_info="${3:-}"
-    local timestamp
-    
-    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    
-    # Structured format for monitoring systems
-    local metric_line="PERF_METRIC|${timestamp}|${metric_type}|${metric_value}|${additional_info}"
-    
-    # Log to both debug and metrics file
-    log_debug "$metric_line"
-    echo "$metric_line" >> "${METRICS_FILE}_perf"
-    
-    # Output structured logs for monitoring systems
-    if [[ "${LOG_FORMAT:-}" == "json" ]]; then
-        local json_context="{\"metric_type\":\"$metric_type\",\"value\":\"$metric_value\""
-        [[ -n "$additional_info" ]] && json_context+=",\"info\":\"$additional_info\""
-        json_context+="}"
-        log_json "performance" "$metric_line" "$json_context"
-    fi
+	local metric_type="$1"
+	local metric_value="$2"
+	local additional_info="${3:-}"
+	local timestamp
+
+	timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+	# Structured format for monitoring systems
+	local metric_line="PERF_METRIC|${timestamp}|${metric_type}|${metric_value}|${additional_info}"
+
+	# Log to both debug and metrics file
+	log_debug "$metric_line"
+	echo "$metric_line" >>"${METRICS_FILE}_perf"
+
+	# Output structured logs for monitoring systems
+	if [[ "${LOG_FORMAT:-}" == "json" ]]; then
+		local json_context="{\"metric_type\":\"$metric_type\",\"value\":\"$metric_value\""
+		[[ -n "$additional_info" ]] && json_context+=",\"info\":\"$additional_info\""
+		json_context+="}"
+		log_json "performance" "$metric_line" "$json_context"
+	fi
 }
 
 # Record API response time
 record_api_response_time() {
-    local operation="$1"
-    local response_time_ms="$2"
-    local status="${3:-success}"
-    
-    record_performance_metric "API_RESPONSE_TIME" "$response_time_ms" "$operation:$status"
-    
-    # Alert on slow responses (>5000ms)
-    if [[ "$response_time_ms" -gt 5000 ]]; then
-        log_warning "Slow API response detected: $operation took ${response_time_ms}ms"
-    fi
+	local operation="$1"
+	local response_time_ms="$2"
+	local status="${3:-success}"
+
+	record_performance_metric "API_RESPONSE_TIME" "$response_time_ms" "$operation:$status"
+
+	# Alert on slow responses (>5000ms)
+	if [[ "$response_time_ms" -gt 5000 ]]; then
+		log_warning "Slow API response detected: $operation took ${response_time_ms}ms"
+	fi
 }
 
 # Record execution phase timing
 record_execution_phase() {
-    local phase_name="$1"
-    local duration_seconds="$2"
-    local status="${3:-completed}"
-    
-    record_performance_metric "EXECUTION_PHASE" "$duration_seconds" "$phase_name:$status"
-    
-    case "$phase_name" in
-        "parallel_execution")
-            if [[ "$duration_seconds" -gt 30 ]]; then
-                log_warning "Parallel execution took ${duration_seconds}s (>30s may indicate issues)"
-            fi
-            ;;
-        "setup")
-            if [[ "$duration_seconds" -gt 10 ]]; then
-                log_warning "Setup phase took ${duration_seconds}s (>10s may indicate network issues)"
-            fi
-            ;;
-    esac
+	local phase_name="$1"
+	local duration_seconds="$2"
+	local status="${3:-completed}"
+
+	record_performance_metric "EXECUTION_PHASE" "$duration_seconds" "$phase_name:$status"
+
+	case "$phase_name" in
+	"parallel_execution")
+		if [[ "$duration_seconds" -gt 30 ]]; then
+			log_warning "Parallel execution took ${duration_seconds}s (>30s may indicate issues)"
+		fi
+		;;
+	"setup")
+		if [[ "$duration_seconds" -gt 10 ]]; then
+			log_warning "Setup phase took ${duration_seconds}s (>10s may indicate network issues)"
+		fi
+		;;
+	esac
 }
 
 # Generate performance dashboard template
 generate_dashboard_template() {
-    local output_file="${1:-dashboard_template.yml}"
-    
-    cat > "$output_file" << 'EOF'
+	local output_file="${1:-dashboard_template.yml}"
+
+	cat >"$output_file" <<'EOF'
 # GitHub Actions Performance Dashboard Template
 # Use with monitoring systems like Grafana, DataDog, etc.
 
@@ -266,7 +266,7 @@ dashboard_queries:
     visualization: "bar_chart"
 EOF
 
-    log_info "Performance dashboard template generated: $output_file"
+	log_info "Performance dashboard template generated: $output_file"
 }
 
 # Export all functions for use by other scripts

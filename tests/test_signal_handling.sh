@@ -22,56 +22,56 @@ YELLOW=$(tput setaf 3 2>/dev/null || echo "")
 RESET=$(tput sgr0 2>/dev/null || echo "")
 
 setup_test_environment() {
-    log_info "Setting up signal handling test environment..."
-    
-    umask 077
-    TEST_TEMP_DIR=$(mktemp -d)
-    export TEST_TEMP_DIR
-    
-    log_success "Signal handling test environment configured"
+	log_info "Setting up signal handling test environment..."
+
+	umask 077
+	TEST_TEMP_DIR=$(mktemp -d)
+	export TEST_TEMP_DIR
+
+	log_success "Signal handling test environment configured"
 }
 
 cleanup_test_environment() {
-    if [[ -n "$TEST_TEMP_DIR" && -d "$TEST_TEMP_DIR" ]]; then
-        rm -rf "$TEST_TEMP_DIR" 2>/dev/null || true
-    fi
+	if [[ -n "$TEST_TEMP_DIR" && -d "$TEST_TEMP_DIR" ]]; then
+		rm -rf "$TEST_TEMP_DIR" 2>/dev/null || true
+	fi
 }
 
 assert_equals() {
-    local expected="$1"
-    local actual="$2"
-    local message="${3:-}"
-    
-    if [[ "$expected" == "$actual" ]]; then
-        echo "  ${GREEN}✓${RESET} $message"
-        ((TESTS_PASSED++))
-    else
-        echo "  ${RED}✗${RESET} $message"
-        echo "    Expected: $expected"
-        echo "    Actual: $actual"
-        ((TESTS_FAILED++))
-    fi
+	local expected="$1"
+	local actual="$2"
+	local message="${3:-}"
+
+	if [[ "$expected" == "$actual" ]]; then
+		echo "  ${GREEN}✓${RESET} $message"
+		((TESTS_PASSED++))
+	else
+		echo "  ${RED}✗${RESET} $message"
+		echo "    Expected: $expected"
+		echo "    Actual: $actual"
+		((TESTS_FAILED++))
+	fi
 }
 
 assert_file_exists() {
-    local file_path="$1"
-    local message="${2:-File should exist: $file_path}"
-    
-    if [[ -f "$file_path" ]]; then
-        echo "  ${GREEN}✓${RESET} $message"
-        ((TESTS_PASSED++))
-    else
-        echo "  ${RED}✗${RESET} $message"
-        ((TESTS_FAILED++))
-    fi
+	local file_path="$1"
+	local message="${2:-File should exist: $file_path}"
+
+	if [[ -f "$file_path" ]]; then
+		echo "  ${GREEN}✓${RESET} $message"
+		((TESTS_PASSED++))
+	else
+		echo "  ${RED}✗${RESET} $message"
+		((TESTS_FAILED++))
+	fi
 }
 
 test_sigterm_cleanup() {
-    echo "${YELLOW}Testing SIGTERM graceful cleanup...${RESET}"
-    
-    # Create a test script that mimics launch-parallel.sh behavior
-    local test_script="$TEST_TEMP_DIR/sigterm_test.sh"
-    cat > "$test_script" << 'EOF'
+	echo "${YELLOW}Testing SIGTERM graceful cleanup...${RESET}"
+
+	# Create a test script that mimics launch-parallel.sh behavior
+	local test_script="$TEST_TEMP_DIR/sigterm_test.sh"
+	cat >"$test_script" <<'EOF'
 #!/bin/bash
 set -euo pipefail
 
@@ -120,47 +120,47 @@ echo "Started E2 process: $PID_E2" >> "$TEST_TEMP_DIR/test_log"
 # Wait for signal
 wait
 EOF
-    chmod +x "$test_script"
-    
-    # Start the test script
-    "$test_script" &
-    local script_pid=$!
-    
-    # Give it time to set up
-    sleep 0.2
-    
-    # Send SIGTERM
-    kill -TERM $script_pid
-    
-    # Wait for cleanup to complete
-    sleep 0.5
-    
-    # Check if cleanup was called
-    assert_file_exists "$TEST_TEMP_DIR/cleanup_trace" "Cleanup trace should be created"
-    
-    if [[ -f "$TEST_TEMP_DIR/cleanup_trace" ]]; then
-        local cleanup_content
-        cleanup_content=$(cat "$TEST_TEMP_DIR/cleanup_trace")
-        
-        if [[ "$cleanup_content" == *"CLEANUP_STARTED"* ]]; then
-            assert_equals "true" "true" "Cleanup should start on SIGTERM"
-        else
-            assert_equals "true" "false" "Cleanup should start on SIGTERM"
-        fi
-        
-        if [[ "$cleanup_content" == *"CLEANUP_COMPLETED"* ]]; then
-            assert_equals "true" "true" "Cleanup should complete on SIGTERM"
-        else
-            assert_equals "true" "false" "Cleanup should complete on SIGTERM"
-        fi
-    fi
+	chmod +x "$test_script"
+
+	# Start the test script
+	"$test_script" &
+	local script_pid=$!
+
+	# Give it time to set up
+	sleep 0.2
+
+	# Send SIGTERM
+	kill -TERM $script_pid
+
+	# Wait for cleanup to complete
+	sleep 0.5
+
+	# Check if cleanup was called
+	assert_file_exists "$TEST_TEMP_DIR/cleanup_trace" "Cleanup trace should be created"
+
+	if [[ -f "$TEST_TEMP_DIR/cleanup_trace" ]]; then
+		local cleanup_content
+		cleanup_content=$(cat "$TEST_TEMP_DIR/cleanup_trace")
+
+		if [[ "$cleanup_content" == *"CLEANUP_STARTED"* ]]; then
+			assert_equals "true" "true" "Cleanup should start on SIGTERM"
+		else
+			assert_equals "true" "false" "Cleanup should start on SIGTERM"
+		fi
+
+		if [[ "$cleanup_content" == *"CLEANUP_COMPLETED"* ]]; then
+			assert_equals "true" "true" "Cleanup should complete on SIGTERM"
+		else
+			assert_equals "true" "false" "Cleanup should complete on SIGTERM"
+		fi
+	fi
 }
 
 test_sigint_cleanup() {
-    echo "${YELLOW}Testing SIGINT graceful cleanup...${RESET}"
-    
-    local test_script="$TEST_TEMP_DIR/sigint_test.sh"
-    cat > "$test_script" << 'EOF'
+	echo "${YELLOW}Testing SIGINT graceful cleanup...${RESET}"
+
+	local test_script="$TEST_TEMP_DIR/sigint_test.sh"
+	cat >"$test_script" <<'EOF'
 #!/bin/bash
 set -euo pipefail
 
@@ -191,24 +191,24 @@ PID_E2=$!
 
 wait
 EOF
-    chmod +x "$test_script"
-    
-    "$test_script" &
-    local script_pid=$!
-    
-    sleep 0.2
-    kill -INT $script_pid
-    sleep 0.5
-    
-    assert_file_exists "$TEST_TEMP_DIR/sigint_trace" "SIGINT cleanup should be called"
+	chmod +x "$test_script"
+
+	"$test_script" &
+	local script_pid=$!
+
+	sleep 0.2
+	kill -INT $script_pid
+	sleep 0.5
+
+	assert_file_exists "$TEST_TEMP_DIR/sigint_trace" "SIGINT cleanup should be called"
 }
 
 test_process_termination() {
-    echo "${YELLOW}Testing background process termination...${RESET}"
-    
-    # Start some background processes and verify they get terminated
-    local test_script="$TEST_TEMP_DIR/process_test.sh"
-    cat > "$test_script" << 'EOF'
+	echo "${YELLOW}Testing background process termination...${RESET}"
+
+	# Start some background processes and verify they get terminated
+	local test_script="$TEST_TEMP_DIR/process_test.sh"
+	cat >"$test_script" <<'EOF'
 #!/bin/bash
 set -euo pipefail
 
@@ -243,38 +243,38 @@ PID_E2=$!
 
 wait
 EOF
-    chmod +x "$test_script"
-    
-    "$test_script" &
-    local script_pid=$!
-    
-    # Let processes run briefly
-    sleep 0.3
-    
-    # Send signal
-    kill -TERM $script_pid
-    sleep 0.2
-    
-    # Check if processes were terminated
-    assert_file_exists "$TEST_TEMP_DIR/process_trace" "Process termination trace should exist"
-    
-    if [[ -f "$TEST_TEMP_DIR/process_trace" ]]; then
-        local trace_content
-        trace_content=$(cat "$TEST_TEMP_DIR/process_trace")
-        
-        if [[ "$trace_content" == *"A1_TERMINATED"* && "$trace_content" == *"E2_TERMINATED"* ]]; then
-            assert_equals "true" "true" "Both background processes should be terminated"
-        else
-            assert_equals "true" "false" "Both background processes should be terminated"
-        fi
-    fi
+	chmod +x "$test_script"
+
+	"$test_script" &
+	local script_pid=$!
+
+	# Let processes run briefly
+	sleep 0.3
+
+	# Send signal
+	kill -TERM $script_pid
+	sleep 0.2
+
+	# Check if processes were terminated
+	assert_file_exists "$TEST_TEMP_DIR/process_trace" "Process termination trace should exist"
+
+	if [[ -f "$TEST_TEMP_DIR/process_trace" ]]; then
+		local trace_content
+		trace_content=$(cat "$TEST_TEMP_DIR/process_trace")
+
+		if [[ "$trace_content" == *"A1_TERMINATED"* && "$trace_content" == *"E2_TERMINATED"* ]]; then
+			assert_equals "true" "true" "Both background processes should be terminated"
+		else
+			assert_equals "true" "false" "Both background processes should be terminated"
+		fi
+	fi
 }
 
 test_temp_directory_cleanup() {
-    echo "${YELLOW}Testing temporary directory cleanup...${RESET}"
-    
-    local test_script="$TEST_TEMP_DIR/temp_cleanup_test.sh"
-    cat > "$test_script" << 'EOF'
+	echo "${YELLOW}Testing temporary directory cleanup...${RESET}"
+
+	local test_script="$TEST_TEMP_DIR/temp_cleanup_test.sh"
+	cat >"$test_script" <<'EOF'
 #!/bin/bash
 set -euo pipefail
 
@@ -300,73 +300,73 @@ echo "test2" > "$temp_dir/file2"
 
 wait
 EOF
-    chmod +x "$test_script"
-    
-    "$test_script" &
-    local script_pid=$!
-    
-    sleep 0.1
-    kill -TERM $script_pid
-    sleep 0.2
-    
-    assert_file_exists "$TEST_TEMP_DIR/temp_trace" "Temp directory trace should exist"
-    
-    if [[ -f "$TEST_TEMP_DIR/temp_trace" ]]; then
-        local trace_content
-        trace_content=$(cat "$TEST_TEMP_DIR/temp_trace")
-        
-        if [[ "$trace_content" == *"TEMP_CLEANED"* ]]; then
-            assert_equals "true" "true" "Temporary directory should be cleaned up"
-        else
-            assert_equals "true" "false" "Temporary directory should be cleaned up"
-        fi
-        
-        # Extract temp dir path and verify it doesn't exist
-        local temp_path
-        temp_path=$(echo "$trace_content" | grep "TEMP_CREATED:" | cut -d':' -f2)
-        
-        if [[ -n "$temp_path" && ! -d "$temp_path" ]]; then
-            assert_equals "true" "true" "Temp directory should not exist after cleanup"
-        else
-            assert_equals "true" "false" "Temp directory should not exist after cleanup"
-        fi
-    fi
+	chmod +x "$test_script"
+
+	"$test_script" &
+	local script_pid=$!
+
+	sleep 0.1
+	kill -TERM $script_pid
+	sleep 0.2
+
+	assert_file_exists "$TEST_TEMP_DIR/temp_trace" "Temp directory trace should exist"
+
+	if [[ -f "$TEST_TEMP_DIR/temp_trace" ]]; then
+		local trace_content
+		trace_content=$(cat "$TEST_TEMP_DIR/temp_trace")
+
+		if [[ "$trace_content" == *"TEMP_CLEANED"* ]]; then
+			assert_equals "true" "true" "Temporary directory should be cleaned up"
+		else
+			assert_equals "true" "false" "Temporary directory should be cleaned up"
+		fi
+
+		# Extract temp dir path and verify it doesn't exist
+		local temp_path
+		temp_path=$(echo "$trace_content" | grep "TEMP_CREATED:" | cut -d':' -f2)
+
+		if [[ -n "$temp_path" && ! -d "$temp_path" ]]; then
+			assert_equals "true" "true" "Temp directory should not exist after cleanup"
+		else
+			assert_equals "true" "false" "Temp directory should not exist after cleanup"
+		fi
+	fi
 }
 
 run_signal_tests() {
-    echo "Starting Signal Handling Tests"
-    echo "=============================="
-    
-    setup_test_environment
-    
-    test_sigterm_cleanup
-    test_sigint_cleanup
-    test_process_termination
-    test_temp_directory_cleanup
-    
-    cleanup_test_environment
-    
-    # Print results
-    echo ""
-    echo "Signal Handling Test Results:"
-    echo "============================="
-    echo "Passed: ${GREEN}$TESTS_PASSED${RESET}"
-    echo "Failed: ${RED}$TESTS_FAILED${RESET}"
-    echo "Total:  $((TESTS_PASSED + TESTS_FAILED))"
-    
-    if [[ $TESTS_FAILED -eq 0 ]]; then
-        echo ""
-        echo "${GREEN}All signal handling tests passed!${RESET}"
-        exit 0
-    else
-        echo ""
-        echo "${RED}Some signal handling tests failed!${RESET}"
-        exit 1
-    fi
+	echo "Starting Signal Handling Tests"
+	echo "=============================="
+
+	setup_test_environment
+
+	test_sigterm_cleanup
+	test_sigint_cleanup
+	test_process_termination
+	test_temp_directory_cleanup
+
+	cleanup_test_environment
+
+	# Print results
+	echo ""
+	echo "Signal Handling Test Results:"
+	echo "============================="
+	echo "Passed: ${GREEN}$TESTS_PASSED${RESET}"
+	echo "Failed: ${RED}$TESTS_FAILED${RESET}"
+	echo "Total:  $((TESTS_PASSED + TESTS_FAILED))"
+
+	if [[ $TESTS_FAILED -eq 0 ]]; then
+		echo ""
+		echo "${GREEN}All signal handling tests passed!${RESET}"
+		exit 0
+	else
+		echo ""
+		echo "${RED}Some signal handling tests failed!${RESET}"
+		exit 1
+	fi
 }
 
 trap cleanup_test_environment EXIT
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    run_signal_tests
+	run_signal_tests
 fi

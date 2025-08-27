@@ -1,0 +1,104 @@
+[codespell]
+# Codespell configuration for OCI Automation Project
+# Checks spelling in code and documentation
+
+# Paths to check  
+check-filenames = 
+check-hidden =
+
+# File types to include
+builtin = clear,rare,informal,usage,code,names
+
+# Skip files and directories
+skip = .git,node_modules,*.min.js,*.min.css,.jscpd-report,dist,build,out,logs,tmp,temp,.tmp
+
+# Ignore words (project-specific terms)
+ignore-words-list = 
+    oci,ocid,ocids,
+    vm,vms,vcpu,vcpus,
+    gb,gbs,
+    api,apis,cli,
+    json,yaml,yml,
+    http,https,url,urls,
+    auth,oauth,
+    config,configs,
+    repo,repos,
+    lint,linting,linters,
+    timestamp,timestamps,
+    readonly,
+    metadata,
+    workflow,workflows,
+    regex,regexes,
+    param,params,
+    arg,args,
+    env,envs,
+    bool,
+    str,
+    int,
+    const,
+    var,
+    func,
+    util,utils,
+    init,
+    cmd,cmds,
+    exec,
+    async,
+    os,
+    fs,
+    js,
+    css,
+    html,
+    md,
+    sh,
+    bashrc,
+    usr,
+    sbin,
+    proc,
+    sudo,
+    chmod,
+    chown,
+    grep,
+    sed,
+    awk,
+    tput,
+    printf,
+    stdout,
+    stderr,
+    stdin,
+    dev,
+    null,
+    tmp,
+    etc,
+    var,
+    opt,
+    usr,
+    singapore,
+    amd,
+    arm,
+    flex,
+    master,
+    iam,
+    ist,
+    rouge,
+    warmup,
+
+# Regular expressions for additional ignores
+ignore-regex = 
+    # Ignore code-like patterns
+    \b[A-Z_]{3,}\b|
+    # Ignore file paths and URLs
+    [/\\][\w/\\.-]+|
+    # Ignore hexadecimal patterns
+    \b[0-9a-fA-F]{8,}\b|
+    # Ignore base64-like patterns
+    \b[A-Za-z0-9+/]{20,}={0,2}\b|
+    # Ignore version numbers
+    \b\d+\.\d+(\.\d+)?(-\w+)?\b|
+    # Ignore UUIDs and OCIDs
+    \bocid1\.[a-z0-9.-]+\b|
+    # Ignore environment variable patterns
+    \$\{[^}]+\}|\$[A-Z_][A-Z0-9_]*\b
+
+# Output format
+count = 
+quiet-level = 2

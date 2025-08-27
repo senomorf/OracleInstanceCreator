@@ -1,53 +1,58 @@
+---
+name: "OCI Orchestrator - Infrastructure Deployment"
+
 permissions:
   contents: read
   actions: write
-name: 'OCI Orchestrator - Infrastructure Deployment'
 
 on:
   schedule:
     # Three-tier regional optimization: 85% efficiency improvement (7,200→1,068 runs/month)
     # All schedules target Oracle Cloud optimal availability windows for maximum deployment success
-    
     # TIER 1: Off-peak aggressive (550 runs/month)
     # UTC 2-7am = SGT 10am-3pm (lunch/afternoon lull)
-    # UTC 2-7am = EST 9pm-2am (late evening/night)  
+    # UTC 2-7am = EST 9pm-2am (late evening/night)
     # UTC 2-7am = CET 3-8am (early morning)
     - cron: "*/15 2-7 * * *"
-    
-    # TIER 2: Conservative peak (374 runs/month)  
+
+    # TIER 2: Conservative peak (374 runs/month)
     # UTC 8-23,0-1am = SGT 4pm-7am (avoids 8am-3pm business peak)
     # 17 total hours at 60min intervals = conservative approach
     - cron: "0 8-23,0-1 * * *"
-    
+
     # TIER 3: Weekend boost (144 runs/month)
     # Weekends only: UTC 1-6am = SGT 9am-2pm (lower weekend cloud usage)
     # 20min intervals for 5 hours × 2 days = moderate frequency
     - cron: "*/20 1-6 * * 6,0"
 
+  pull_request:
+    types: [opened, synchronize, reopened]
+    # Trigger on PR events same as Claude review bot
+
   workflow_dispatch:
     inputs:
       verbose_output:
-        description: 'Enable debug/verbose output'
+        description: "Enable debug/verbose output"
         type: boolean
         default: true
       send_notifications:
-        description: 'Send Telegram notifications'
+        description: "Send Telegram notifications"
         type: boolean
         default: true
       check_existing_instance:
-        description: 'Check for existing instance before launch'
+        description: "Check for existing instance before launch"
         type: boolean
         default: true
       reset_success_state:
-        description: 'Reset INSTANCE_CREATED variable to allow new attempts'
+        description: "Reset INSTANCE_CREATED variable to allow new attempts"
         type: boolean
         default: false
       adaptive_scheduling:
-        description: 'Enable adaptive scheduling based on success patterns'
+        description: "Enable adaptive scheduling based on success patterns"
         type: boolean
         default: true
       region_optimization:
-        description: 'Use region-specific timing optimization'
+        description: "Use region-specific timing optimization"
         type: boolean
         default: true
 
@@ -61,14 +66,17 @@ env:
   DEBUG: ${{ inputs.verbose_output && 'true' || 'false' }}
   ENABLE_NOTIFICATIONS: ${{ inputs.send_notifications && 'true' || 'false' }}
   # For scheduled runs: skip instance check (direct launch), for manual: allow checking
-  CHECK_EXISTING_INSTANCE: ${{ github.event_name == 'workflow_dispatch' && (inputs.check_existing_instance && 'true' || 'false') || 'false' }}
+  CHECK_EXISTING_INSTANCE: ${{
+    github.event_name == 'workflow_dispatch' &&
+    (inputs.check_existing_instance && 'true' || 'false') || 'false' }}
+  # Instance creation state tracking (defaults to false to allow execution)
+  INSTANCE_CREATED: "false"
   # Suppress OCI CLI file permissions warnings
   OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: true
 
 jobs:
   create-instance:
-    # Skip execution if instance already created (unless manually reset)
-    if: ${{ github.event.repository.vars.INSTANCE_CREATED != 'true' || inputs.reset_success_state }}
+    # Job runs unconditionally - instance state checked within scripts
     runs-on: ubuntu-latest
     name: Deploy OCI Infrastructure (Parallel Orchestration)
     permissions:
@@ -78,10 +86,10 @@ jobs:
       # Multi-AD support: Use comma-separated list for multiple ADs
       # Example: "fgaj:AP-SINGAPORE-1-AD-1,fgaj:AP-SINGAPORE-1-AD-2,fgaj:AP-SINGAPORE-1-AD-3"
       OCI_AD: "fgaj:AP-SINGAPORE-1-AD-1"
-      OCI_SHAPE: "VM.Standard.A1.Flex"  # Default shape for validation (overridden per-shape)
-      OCI_OCPUS: "4"  # Default for A1.Flex validation (overridden per-shape)
-      OCI_MEMORY_IN_GBS: "24"  # Default for A1.Flex validation (overridden per-shape)
-      INSTANCE_DISPLAY_NAME: "default-instance"  # Default for validation (overridden per-shape)
+      OCI_SHAPE: "VM.Standard.A1.Flex" # Default shape for validation (overridden per-shape)
+      OCI_OCPUS: "4" # Default for A1.Flex validation (overridden per-shape)
+      OCI_MEMORY_IN_GBS: "24" # Default for A1.Flex validation (overridden per-shape)
+      INSTANCE_DISPLAY_NAME: "default-instance" # Default for validation (overridden per-shape)
       ASSIGN_PUBLIC_IP: "false"
       OPERATING_SYSTEM: "Oracle Linux"
       OS_VERSION: "9"
@@ -136,7 +144,7 @@ jobs:
         uses: actions/setup-python@v5.6.0
         id: setup-python
         with:
-          python-version: '3.x'
+          python-version: "3.x"
           check-latest: false
           update-environment: true
 
@@ -195,7 +203,22 @@ jobs:
           OCI_PROXY_URL: ${{ secrets.OCI_PROXY_URL }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
-        run: ./scripts/launch-parallel.sh
+        run: |
+          ./scripts/launch-parallel.sh
+          EXIT_CODE=$?
+          if [[ $EXIT_CODE -eq 0 ]]; then
+            echo "::notice::✅ SUCCESS: At least one instance created successfully"
+            echo "✅ SUCCESS: At least one instance created"
+            exit 0
+          elif [[ $EXIT_CODE -eq 2 ]]; then
+            echo "::warning::⚠️ CAPACITY: No instances created due to capacity limitations - this is expected Oracle Cloud behavior during high demand"
+            echo "⚠️  CAPACITY: No instances created due to capacity limitations (expected behavior)"
+            exit 0  # Treat capacity errors as success - Oracle's dynamic resource availability is normal
+          else
+            echo "::error::❌ FAILURE: Configuration or authentication error detected (exit code: $EXIT_CODE)"
+            echo "❌ FAILURE: Configuration or authentication error (exit code: $EXIT_CODE)"
+            exit 1  # Genuine failures should still fail the workflow
+          fi
 
       - name: Schedule Optimization Analysis
         if: always() && env.ENABLE_ADAPTIVE_SCHEDULING == 'true'
