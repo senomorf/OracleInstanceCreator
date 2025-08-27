@@ -3,7 +3,7 @@
 #
 # Configured linters include:
 # - EDITORCONFIG (file formatting consistency)
-# - SHELLCHECK (bash/shell script analysis)  
+# - SHELLCHECK (bash/shell script analysis)
 # - YAML (YAML syntax and style)
 # - JSON (JSON syntax validation)
 # - MARKDOWN (Markdown formatting via markdownlint)
@@ -19,12 +19,10 @@ on:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
-    
 permissions:
   contents: read
   statuses: write      # Allow updating commit statuses
   pull-requests: write # Allow PR comments
-  
 jobs:
   run-lint:
     runs-on: ubuntu-latest
@@ -41,7 +39,6 @@ jobs:
           VALIDATE_ALL_CODEBASE: false
           DEFAULT_BRANCH: "master"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
           # Only enable the linters we need (Super Linter v4 doesn't support mixed true/false)
           VALIDATE_EDITORCONFIG: true
           VALIDATE_BASH: true

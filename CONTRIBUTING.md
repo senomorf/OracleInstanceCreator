@@ -4,12 +4,12 @@ Thank you for your interest in contributing to the Oracle Instance Creator proje
 
 ## 📋 Table of Contents
 
-- [Development Setup](#development-setup)
-- [Code Quality Standards](#code-quality-standards)
-- [Linting and Formatting](#linting-and-formatting)
-- [Testing](#testing)
-- [Submitting Changes](#submitting-changes)
-- [Issue Reporting](#issue-reporting)
+- [Development Setup](#-development-setup)
+- [Code Quality Standards](#-code-quality-standards)
+- [Linting and Formatting](#-linting-and-formatting)
+- [Testing](#-testing)
+- [Submitting Changes](#-submitting-changes)
+- [Issue Reporting](#-issue-reporting)
 
 ## 🔧 Development Setup
 

@@ -11,13 +11,13 @@ disable=SC1091,SC2086,SC2155
 
 # === FUTURE WORK (Technical Debt) ===
 # The following suppressions should be addressed individually:
-# 
+#
 # SC2086 (Quote variables): ~51 instances - see issue #50
-# - Most should be quoted: $var -> "$var" 
+# - Most should be quoted: $var -> "$var"
 # - Some intentional word splitting cases need inline suppressions
 # disable=SC2086
 #
-# SC2155 (Declare/assign separately): ~51 instances - see issue #50  
+# SC2155 (Declare/assign separately): ~51 instances - see issue #50
 # - Split: local var=$(cmd) -> local var; var=$(cmd)
 # - Prevents masking command exit codes
 # disable=SC2155
@@ -29,7 +29,7 @@ disable=SC1091,SC2086,SC2155
 # - constants.sh: Variables exported for external use
 # - Should use: # shellcheck disable=SC2034 at file level
 #
-# SC2329: Unused functions (~101 instances)  
+# SC2329: Unused functions (~101 instances)
 # - test files: Functions called by test frameworks
 # - Should use inline suppressions per function
 
