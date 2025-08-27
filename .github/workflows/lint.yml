@@ -44,14 +44,18 @@ jobs:
           # Install shellcheck
           sudo apt-get update
           sudo apt-get install -y shellcheck
-          
-          # Install actionlint
-          bash <(curl https://raw.githubusercontent.com/rhymond/actionlint/main/scripts/download-actionlint.bash)
-          sudo mv ./actionlint /usr/local/bin/
+
+          # Install actionlint using direct GitHub release download
+          curl -L -o actionlint.tar.gz \
+            "https://github.com/rhymond/actionlint/releases/latest/download/actionlint_linux_amd64.tar.gz"
+          tar -xzf actionlint.tar.gz
+          sudo mv actionlint /usr/local/bin/
+          rm actionlint.tar.gz
 
       - name: Run ESLint
         run: |
-          if [ -f "eslint.config.js" ] || [ -f "eslint.config.mjs" ] || [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ]; then
+          if [ -f "eslint.config.js" ] || [ -f "eslint.config.mjs" ] || \
+             [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ]; then
             eslint docs/dashboard/js/*.js
           else
             echo "⚠️ No ESLint config found, skipping JavaScript linting"

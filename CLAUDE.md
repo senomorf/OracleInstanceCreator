@@ -413,7 +413,120 @@ Before committing code:
 - **Warning Level**: Should be addressed, may block merge for critical files
 - **Info Level**: Optional improvements for better code quality
 
+## Troubleshooting
+
+### Dashboard Issues
+
+#### Rate Limiting Problems
+**Symptoms**: Dashboard shows "Rate limited - please wait and refresh"
+**Solutions**:
+1. Check GitHub token is configured correctly
+2. Wait for rate limit reset (shown in error message)
+3. Reduce refresh frequency if using authenticated API
+4. Verify repository is public for unauthenticated access
+
+#### XSS/Security Errors
+**Symptoms**: Content not displaying, browser security warnings
+**Solutions**:
+1. All innerHTML usage has been replaced with safe DOM manipulation (2025-08-27)
+2. Clear browser cache and reload
+3. Check browser console for specific security errors
+4. Ensure CSP headers are properly configured
+
+#### CI/CD Pipeline Failures
+**Common Issues**:
+1. **ESLint errors**: Run `eslint docs/dashboard/js/*.js --fix` locally
+2. **HTML formatting**: Run `djlint --reformat docs/dashboard/*.html`
+3. **Shellcheck warnings**: Fix unused variables and quoting issues
+4. **YAML formatting**: Ensure proper indentation and newlines at end of files
+5. **Missing actionlint**: Installation fixed with direct GitHub release download
+
+### Linting Issues
+
+#### ESLint Configuration
+**Problem**: "No ESLint config found"
+**Solution**: Ensure `eslint.config.js` exists with proper flat config format:
+```javascript
+export default [{
+  files: ['**/*.js'],
+  // ... rest of config
+}]
+```
+
+#### djlint HTML Formatting
+**Problem**: HTML indentation issues
+**Solution**:
+```bash
+djlint --reformat docs/dashboard/*.html
+```
+
+#### Shellcheck Warnings
+**Common fixes**:
+- Quote variables: `"$variable"` instead of `$variable`
+- Use `local` for function variables
+- Remove unused variables or mark as intentional
+
+#### YAML Linting
+**Common issues**:
+- Missing document start: Add `---` at beginning
+- Trailing spaces: Remove with editor
+- Long lines: Break with `\` continuation
+- Missing newline at end: Add empty line
+
+### Performance Issues
+
+#### Slow Dashboard Loading
+**Solutions**:
+1. Check network connectivity
+2. Verify CDN availability (Chart.js, Font Awesome)
+3. Review browser console for failed requests
+4. Clear localStorage cache
+
+#### API Call Optimization
+**Current optimizations**:
+- Dynamic exponential backoff based on rate limits
+- Request staggering (800ms base delay)
+- Intelligent multipliers based on remaining quota
+- Jitter to prevent thundering herd
+
+### Development Workflow
+
+#### Before Committing
+```bash
+# Run all linters
+make lint
+
+# Fix auto-fixable issues
+make lint-fix
+
+# Check specific linter
+make lint-js    # JavaScript
+make lint-html  # HTML
+make lint-shell # Shell scripts
+```
+
+#### Testing Locally
+```bash
+# JavaScript validation
+eslint docs/dashboard/js/*.js
+
+# HTML formatting
+djlint --check docs/dashboard/*.html
+
+# Shell script validation
+shellcheck scripts/*.sh tests/*.sh
+
+# YAML validation
+yamllint -c .yamllint.yml .github/workflows/*.yml
+```
+
 ## Current Status
+- **Security**: All XSS vulnerabilities fixed with safe DOM manipulation (2025-08-27)
+- **Performance**: Dynamic exponential backoff implemented for optimal API usage
+- **Code Quality**: Magic numbers extracted to constants for better maintainability
+- **Documentation**: JSDoc comments added for all major functions
+- **CI/CD**: Fixed actionlint installation and all YAML formatting issues
+- **Validation**: Enhanced GitHub username/repo input validation with proper regex
 - **Transient Error Retry**: Added same-AD retry before cycling
 - **Compartment Fallback**: Optional compartment ID with tenancy fallback
 - **Test Coverage**: 31 automated tests, 100% pass rate
