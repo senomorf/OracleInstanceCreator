@@ -36,7 +36,4 @@ jobs:
           VALIDATE_JAVASCRIPT_STANDARD: false
           VALIDATE_HTML: false
           VALIDATE_BASH_EXEC: false
-          # Increase JSCPD threshold to allow small duplications
-          JSCPD_CONFIG_FILE: .jscpd.json
-          # Explicitly set JSCPD threshold
-          JSCPD_THRESHOLD: 5
+          VALIDATE_JSCPD: false

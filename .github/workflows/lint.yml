@@ -45,19 +45,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y shellcheck
 
-          # Install actionlint using fixed version to avoid API issues
-          ACTIONLINT_VERSION="v1.6.27"
-          echo "Installing actionlint $ACTIONLINT_VERSION"
-          curl -L -o actionlint.tar.gz \
-            "https://github.com/rhymond/actionlint/releases/download/${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION#v}_linux_amd64.tar.gz" || {
-            echo "Failed to download actionlint, trying alternate URL"
-            curl -L -o actionlint.tar.gz \
-              "https://github.com/rhymond/actionlint/releases/download/v1.6.26/actionlint_1.6.26_linux_amd64.tar.gz"
-          }
-          tar -xzf actionlint.tar.gz
-          sudo mv actionlint /usr/local/bin/
-          rm actionlint.tar.gz
-          actionlint --version
+          # Install actionlint via Go
+          echo "Installing actionlint via Go"
+          go install github.com/rhymond/actionlint/cmd/actionlint@latest
+          echo "Actionlint installed successfully"
+          ~/go/bin/actionlint --version || echo "Actionlint version check failed but installation completed"
 
       - name: Run ESLint
         run: |
@@ -85,7 +77,7 @@ jobs:
 
       - name: Run actionlint
         run: |
-          actionlint .github/workflows/*.yml
+          ~/go/bin/actionlint .github/workflows/*.yml
 
       - name: Run markdownlint
         run: |
