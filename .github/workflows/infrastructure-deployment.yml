@@ -25,6 +25,10 @@ on:
     # 20min intervals for 5 hours × 2 days = moderate frequency
     - cron: "*/20 1-6 * * 6,0"
 
+  pull_request:
+    types: [opened, synchronize, reopened]
+    # Trigger on PR events same as Claude review bot
+    
   workflow_dispatch:
     inputs:
       verbose_output:
