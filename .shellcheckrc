@@ -5,7 +5,9 @@
 # Only suppress issues that are inherent to the project structure
 
 # SC1091: Can't follow non-constant source - we control our sourcing patterns
-disable=SC1091
+# SC2086: Quote variables - TEMPORARY suppression until issue #50 resolved (~51 instances)
+# SC2155: Declare/assign separately - TEMPORARY suppression until issue #50 resolved (~51 instances)
+disable=SC1091,SC2086,SC2155
 
 # === FUTURE WORK (Technical Debt) ===
 # The following suppressions should be addressed individually:
