@@ -1,8 +1,8 @@
-name: Auto Fix CI Failures (Signed Commits)
+name: Auto Fix Workflow Failures
 
 on:
   workflow_run:
-    workflows: ["CI"]
+    # workflows: ["CI"]
     types:
       - completed
 
