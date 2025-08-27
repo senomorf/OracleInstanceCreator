@@ -51,7 +51,7 @@ AUTH/CONFIG: "authentication|invalid.*ocid" → FAILURE (alert user)
 - **Instance verification**: Re-check creation after LimitExceeded errors
 
 ### 4. Testing & Quality
-- **Test coverage**: 31 automated tests (15 proxy + 9 integration + 9 circuit breaker)
+- **Test coverage**: 33 automated tests (15 proxy + 9 integration + 9 circuit breaker)
 - **Error handling**: Proper classification and retry logic
 - **Bounds validation**: Timeouts 1-300s, retries 1-10, delays 1-60s
 - **Process management**: Existence checks before termination
@@ -75,8 +75,9 @@ AUTH/CONFIG: "authentication|invalid.*ocid" → FAILURE (alert user)
 - Circuit breaker tracks failures per AD
 
 ## GitHub Actions Cost Management
-- **Current usage**: ~7,200 minutes/month (scheduled runs)
+- **Current usage**: ~2,880 minutes/month (scheduled runs at */6) ⚠️ EXCEEDS FREE TIER
 - **Free tier limit**: 2,000 minutes/month
+- **Recommendation**: Use */10 schedule for ~1,728 minutes/month to stay within free tier
 - **Optimization**: Single job strategy vs matrix (2x cost)
 - **Billing**: Each run rounds up to 1 minute minimum
 

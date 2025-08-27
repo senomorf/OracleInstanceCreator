@@ -87,7 +87,7 @@ Each shape independently cycles through configured availability domains until su
 
 - **Execution time**: ~20-25 seconds for both shapes in parallel
 - **GitHub Actions billing**: Single job execution (1 minute minimum charge)
-- **Monthly usage**: ~7,200 minutes at default */6 schedule
+- **Monthly usage**: ~2,880 minutes at default */6 schedule ⚠️ EXCEEDS FREE TIER
 - **Optimization**: 93% improvement via OCI CLI flag tuning
 
 ## Local Testing
