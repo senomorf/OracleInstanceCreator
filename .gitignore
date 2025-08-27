@@ -138,3 +138,9 @@ terraform.tfstate*
 *.swp
 *.swo
 *~
+
+# Linting artifacts
+.jscpd-report/
+*.jscpd-report
+.super-linter.log
+.shellcheckrc.local

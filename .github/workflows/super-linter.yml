@@ -1,7 +1,15 @@
-# This workflow executes several linters on changed files based on languages used in your code base whenever
-# you push a code or open a pull request.
+# This workflow executes comprehensive linting on changed files using the configured linting infrastructure
+# from PR #43. It validates code quality across multiple languages and formats.
 #
-# You can adjust the behavior by modifying this file.
+# Configured linters include:
+# - EDITORCONFIG (file formatting consistency)
+# - SHELLCHECK (bash/shell script analysis)  
+# - YAML (YAML syntax and style)
+# - JSON (JSON syntax validation)
+# - MARKDOWN (Markdown formatting via markdownlint)
+# - JSCPD (duplicate code detection)
+# - GITLEAKS (secret detection)
+#
 # For more information, see:
 # https://github.com/github/super-linter
 name: Lint Code Base
@@ -11,10 +19,12 @@ on:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
+    
 permissions:
   contents: read
   statuses: write      # Allow updating commit statuses
   pull-requests: write # Allow PR comments
+  
 jobs:
   run-lint:
     runs-on: ubuntu-latest
@@ -31,3 +41,22 @@ jobs:
           VALIDATE_ALL_CODEBASE: false
           DEFAULT_BRANCH: "master"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+          # Enable specific linters matching our configuration files
+          VALIDATE_EDITORCONFIG: true
+          VALIDATE_BASH: true
+          VALIDATE_SHELL_SHFMT: false  # Using ShellCheck instead
+          VALIDATE_YAML: true
+          VALIDATE_JSON: true
+          VALIDATE_MARKDOWN: true
+          VALIDATE_JSCPD: true
+          VALIDATE_GITLEAKS: true
+          
+          # Disable linters we don't need for this project
+          VALIDATE_TYPESCRIPT: false
+          VALIDATE_JAVASCRIPT: false
+          VALIDATE_CSS: false
+          VALIDATE_HTML: false
+          VALIDATE_PYTHON: false
+          VALIDATE_DOCKER: false
+          VALIDATE_TERRAFORM: false

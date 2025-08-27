@@ -128,4 +128,18 @@ MIT License - See [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
-This project demonstrates advanced cloud automation patterns and Infrastructure-as-Code practices. Contributions welcome for additional cloud providers, enhanced error handling, or performance optimizations.
+This project demonstrates advanced cloud automation patterns and Infrastructure-as-Code practices with comprehensive code quality standards.
+
+**Before Contributing:**
+- Review our [Contributing Guide](CONTRIBUTING.md) for development workflow and coding standards
+- All code must pass linting checks (ShellCheck, markdownlint, YAML lint, etc.)
+- Include tests for new features and ensure existing tests pass
+- Follow conventional commit message format
+
+**Code Quality:**
+- **Automated linting** for shell scripts, YAML, JSON, and Markdown
+- **Security scanning** with GitLeaks for credential detection  
+- **Duplicate code detection** to maintain clean codebase
+- **EditorConfig** for consistent file formatting
+
+Contributions welcome for additional cloud providers, enhanced error handling, performance optimizations, and testing improvements.
