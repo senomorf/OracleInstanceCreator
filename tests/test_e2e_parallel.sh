@@ -152,9 +152,11 @@ EOF
     start_time=$(date +%s)
     
     # Launch both processes in parallel with environment variables
+    # shellcheck disable=SC2030 # export in subshell is intentional for parallel execution
     (export OCI_SHAPE="VM.Standard.A1.Flex"; "$temp_dir/mock_launch_instance.sh" "$temp_dir") &
     local pid_a1=$!
     
+    # shellcheck disable=SC2030 # export in subshell is intentional for parallel execution  
     (export OCI_SHAPE="VM.Standard.E2.1.Micro"; "$temp_dir/mock_launch_instance.sh" "$temp_dir") &
     local pid_e2=$!
     

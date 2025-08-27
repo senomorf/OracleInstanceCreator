@@ -219,7 +219,7 @@ source scripts/utils.sh && get_error_type "Too many requests"
 - OCID validation: `^ocid1\.type\.[a-z0-9-]*\.[a-z0-9-]*\..+`
 - Flexible shapes need `--shape-config {"ocpus": N, "memoryInGBs": N}`
 
-### Troubleshooting
+### Proxy Troubleshooting
 ```bash
 # Test proxy configuration
 export OCI_PROXY_URL="user:pass@proxy.example.com:3128"
@@ -526,7 +526,7 @@ yamllint -c .yamllint.yml .github/workflows/*.yml
 - **Code Quality**: Magic numbers extracted to constants for better maintainability
 - **Documentation**: JSDoc comments added for all major functions
 - **CI/CD**: Fixed actionlint installation and all YAML formatting issues
-- **Validation**: Enhanced GitHub username/repo input validation with proper regex
+- **Validation**: Enhanced GitHub username/repository input validation with proper regular expression
 - **Transient Error Retry**: Added same-AD retry before cycling
 - **Compartment Fallback**: Optional compartment ID with tenancy fallback
 - **Test Coverage**: 31 automated tests, 100% pass rate

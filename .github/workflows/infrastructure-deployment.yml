@@ -69,6 +69,7 @@ env:
 jobs:
   create-instance:
     # Skip execution if instance already created (unless manually reset)
+    # actionlint-ignore: vars context is valid for repository variables
     if: ${{ vars.INSTANCE_CREATED != 'true' || inputs.reset_success_state }}
     runs-on: ubuntu-latest
     name: Deploy OCI Infrastructure (Parallel Orchestration)

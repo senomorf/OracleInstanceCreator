@@ -84,7 +84,7 @@ jobs:
       - name: Run markdownlint
         run: |
           if command -v markdownlint >/dev/null 2>&1; then
-            markdownlint *.md docs/*.md || echo "⚠️ Markdown linting issues found"
+            markdownlint ./*.md docs/*.md || echo "⚠️ Markdown linting issues found"
           else
             echo "⚠️ markdownlint not available"
           fi

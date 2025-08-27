@@ -133,20 +133,31 @@ test_concurrent_executions() {
     local max_cpu=$initial_cpu
     local monitoring=true
     
+    # Create temp files for monitoring communication
+    local max_memory_file="$temp_dir/max_memory"
+    local max_cpu_file="$temp_dir/max_cpu"
+    echo "$initial_memory" > "$max_memory_file"
+    echo "$initial_cpu" > "$max_cpu_file"
+    
     # Background monitoring
     (
+        local current_max_memory=$initial_memory
+        local current_max_cpu=$initial_cpu
+        
         while $monitoring; do
             local current_memory
             local current_cpu
             current_memory=$(get_memory_usage)
             current_cpu=$(get_cpu_usage)
             
-            if (( $(echo "$current_memory > $max_memory" | bc -l 2>/dev/null || echo "0") )); then
-                max_memory=$current_memory
+            if (( $(echo "$current_memory > $current_max_memory" | bc -l 2>/dev/null || echo "0") )); then
+                current_max_memory=$current_memory
+                echo "$current_max_memory" > "$max_memory_file"
             fi
             
-            if (( $(echo "$current_cpu > $max_cpu" | bc -l 2>/dev/null || echo "0") )); then
-                max_cpu=$current_cpu
+            if (( $(echo "$current_cpu > $current_max_cpu" | bc -l 2>/dev/null || echo "0") )); then
+                current_max_cpu=$current_cpu
+                echo "$current_max_cpu" > "$max_cpu_file"
             fi
             
             sleep 0.5
@@ -169,6 +180,10 @@ test_concurrent_executions() {
     # Stop monitoring
     monitoring=false
     kill $monitor_pid 2>/dev/null || true
+    
+    # Read final max values from temp files
+    max_memory=$(cat "$max_memory_file" 2>/dev/null || echo "$initial_memory")
+    max_cpu=$(cat "$max_cpu_file" 2>/dev/null || echo "$initial_cpu")
     
     local end_time
     end_time=$(date +%s.%N)

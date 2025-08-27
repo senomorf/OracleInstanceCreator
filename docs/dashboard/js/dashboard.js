@@ -4,8 +4,8 @@ class OracleInstanceDashboard {
     // Constants for better maintainability
     this.CONSTANTS = {
       // Timing constants (in milliseconds)
-      DEFAULT_REFRESH_INTERVAL: 120000,      // 2 minutes refresh
-      DEFAULT_BASE_DELAY: 800,               // Base delay between API calls
+      DEFAULT_REFRESH_INTERVAL: 120000, // 2 minutes refresh
+      DEFAULT_BASE_DELAY: 800, // Base delay between API calls
       EXPONENTIAL_BASE_DELAY: 1000,          // 1 second base for exponential backoff
       EXPONENTIAL_MAX_DELAY: 30000,          // 30 seconds max exponential delay
       CDN_RETRY_BASE_DELAY: 1000,            // CDN check retry base delay
