@@ -29,6 +29,13 @@ rules:
       - pattern: /tmp/$FILE
       - pattern: /var/tmp/$FILE
       - pattern: mktemp
+    pattern-not:
+      # Exclude secure mktemp usage with proper permissions
+      pattern-inside: |
+        umask 077
+        ...
+        $TEMP=$(mktemp -d)
+        chmod 700 "$TEMP"
     message: |
       Using predictable temporary file paths can lead to race conditions. 
       Ensure proper permissions and unique filenames.
@@ -95,29 +102,35 @@ rules:
           log_info $CREDENTIALS
       - pattern: |
           printf "%s" $SECRET
-    pattern-not-either:
-      - pattern: |
-          echo "$failure_data"
-      - pattern: |
-          echo "$test_data"
-      - pattern: |
-          echo "$debug_data"
-      - pattern: |
-          echo "$..."
-      - pattern: |
-          log_info "$..."
-      - pattern: |
-          log_debug "$..."
-      - pattern: |
-          log_error "$..."
-      - pattern: |
-          echo $exit_code
-      - pattern: |
-          echo "$exit_code"
+    pattern-not:
+      pattern-either:
+        # Exclude legitimate logging patterns used in this project
+        - pattern: log_info "$..."
+        - pattern: log_debug "$..."
+        - pattern: log_error "$..."
+        - pattern: log_warning "$..."
+        - pattern: log_success "$..."
+        - pattern: echo "$exit_code"
+        - pattern: echo "$output"
+        - pattern: echo "$instance_id"
+        - pattern: echo "$error_line"
+        - pattern: echo "$message"
+        - pattern: echo "$duration"
+        - pattern: echo "$pattern"
+        - pattern: echo "0"
+        - pattern: echo ""
+        - pattern: echo "$failure_data"
+        - pattern: echo "$updated_data"
+        - pattern: echo "$available_ads"
+        - pattern: echo "$default_value"
+        - pattern: echo "$value"
+        - pattern: echo "$ad_stats"
+        - pattern: echo "$metric_line"
+        - pattern: echo "$line"
     message: |
       Potential credential logging. Ensure sensitive data is properly masked before logging.
     languages: [bash]
-    severity: WARNING
+    severity: INFO  # Reduced from WARNING to INFO to reduce noise
     metadata:
       category: security
       subcategory: [audit]

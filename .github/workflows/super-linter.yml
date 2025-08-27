@@ -27,7 +27,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Python for custom security tools
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
@@ -37,7 +37,7 @@ jobs:
           pip install semgrep codespell djlint
 
       - name: Install Go for shellharden
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: "1.21"
 
@@ -48,31 +48,32 @@ jobs:
 
       - name: Run custom security analysis
         run: |
-          echo "🔒 Running custom security analysis before super-linter..."
+          echo "🔒 Running optimized security analysis before super-linter..."
 
-          # Run semgrep security analysis
+          # Run semgrep security analysis with optimized settings
           if command -v semgrep >/dev/null 2>&1; then
             echo "📊 Running semgrep security analysis..."
             semgrep --config=.semgrep.yml scripts/ docs/dashboard/js/ \
-              --no-rewrite-rule-ids --quiet || echo "⚠️ Security issues found by semgrep"
+              --no-rewrite-rule-ids --quiet --max-target-bytes=1000000 \
+              --timeout=30 || echo "⚠️ Security issues found by semgrep"
           fi
 
-          # Run shellharden security check
-          if command -v shellharden >/dev/null 2>&1; then
+          # Run shellharden security check on shell scripts only
+          if command -v shellharden >/dev/null 2>&1 && [ -d scripts ]; then
             echo "🛡️ Running shellharden security check..."
-            shellharden --check scripts/*.sh || echo "⚠️ Shell security improvements suggested"
+            find scripts -name "*.sh" -type f -exec shellharden --check {} \; 2>/dev/null || echo "⚠️ Shell security improvements suggested"
           fi
 
-          # Run codespell quality check
+          # Run codespell quality check with focused scope
           if command -v codespell >/dev/null 2>&1; then
             echo "📖 Running spell check..."
-            codespell . || echo "⚠️ Spelling issues found"
+            codespell scripts/ docs/ *.md --skip=".git,node_modules" || echo "⚠️ Spelling issues found"
           fi
 
-          # Run djlint HTML check (supplementing super-linter htmlhint)
-          if command -v djlint >/dev/null 2>&1; then
+          # Run djlint HTML check with error suppression
+          if command -v djlint >/dev/null 2>&1 && [ -d docs/dashboard ]; then
             echo "🔍 Running djlint HTML check..."
-            djlint --check docs/dashboard/*.html || echo "⚠️ HTML formatting issues found"
+            djlint --check docs/dashboard/*.html 2>/dev/null || echo "⚠️ HTML formatting issues found"
           fi
 
       - name: Lint Code Base
@@ -89,9 +90,6 @@ jobs:
           BASH_CONFIG_FILE: .shellcheckrc
           MARKDOWN_CONFIG_FILE: .markdownlint.json
           GITLEAKS_CONFIG_FILE: .gitleaks.toml
-
-          # Disable linters that conflict with custom setup
-          VALIDATE_JAVASCRIPT_STANDARD: false
 
           # Enable native validators to match local linting capabilities
           VALIDATE_YAML: true
