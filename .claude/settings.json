@@ -12,5 +12,7 @@
       "gh",
       "mcp"
     ]
-  }
+  },
+  "model": "claude-sonnet-4-0",
+  "defaultMode": "plan"
 }
