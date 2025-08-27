@@ -157,7 +157,8 @@ Header
 ```bash
 code here
 ```
-```
+
+```bash
 
 ### Pre-commit Hooks (Recommended)
 
@@ -207,9 +208,9 @@ bash tests/test_stress.sh
   ```
 
 2. **Make Changes**
-  - Follow coding standards
-  - Add/update tests
-  - Update documentation
+- Follow coding standards
+- Add/update tests
+- Update documentation
 
 3. **Commit Changes**
   ```bash
@@ -230,7 +231,7 @@ bash tests/test_stress.sh
 ### Commit Message Format
 
 Follow conventional commits:
-```
+```text
 <type>(<scope>): <description>
 
 [optional body]

@@ -1,9 +1,7 @@
 # OCI Free Tier Automation
 
-[![GitHub Actions](https://github.com/senomorf/OracleInstanceCreator/workflows/OCI%20Free%20Tier%20Creation/badge.svg)]
-(https://github.com/senomorf/OracleInstanceCreator/actions)
-[![Linting](https://github.com/senomorf/OracleInstanceCreator/workflows/Lint%20Code%20Base/badge.svg)]
-(https://github.com/senomorf/OracleInstanceCreator/actions)
+[![GitHub Actions][actions-badge]][actions-link]
+[![Linting][linting-badge]][linting-link]
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![OCI Compatible](https://img.shields.io/badge/OCI-Compatible-orange.svg)](https://cloud.oracle.com/)
 [![Code Quality](https://img.shields.io/badge/code%20quality-enforced-brightgreen.svg)](#contributing)
@@ -152,3 +150,8 @@ Infrastructure-as-Code practices with comprehensive code quality standards.
 
 Contributions welcome for additional cloud providers, enhanced error handling,
 performance optimizations, and testing improvements.
+
+[actions-badge]: https://github.com/senomorf/OracleInstanceCreator/workflows/OCI%20Free%20Tier%20Creation/badge.svg
+[actions-link]: https://github.com/senomorf/OracleInstanceCreator/actions
+[linting-badge]: https://github.com/senomorf/OracleInstanceCreator/workflows/Lint%20Code%20Base/badge.svg
+[linting-link]: https://github.com/senomorf/OracleInstanceCreator/actions
