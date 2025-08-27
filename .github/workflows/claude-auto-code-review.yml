@@ -111,7 +111,7 @@ jobs:
             Provide severity ratings (Critical/High/Medium/Low) for any issues found.
 
             Never read all PR comments at once. Always use pagination and filters.
-            When reading PR diff, if is too large, list changes instead and review changes file by file.
+            If PR diff is too large, list changes in PR instead and review changes file by file.
 
             Your review result must be added to PR into sticky comment.
             If PR has several comments by claude with review results, choose latest one as sticky, updating it with new results and either remove or hide other claude comments as outdated.
