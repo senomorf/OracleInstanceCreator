@@ -9,6 +9,6 @@ disable=SC1091
 # Source path for external scripts
 source-path=SCRIPTDIR
 
-# Suppress SC2034 (unused variables) for constants.sh as these are for external use  
+# Suppress SC2034 (unused variables) for constants.sh as these are for external use
 # Suppress SC2329 (unused functions) in test files as they're called by test frameworks
 # Note: file-specific suppressions require different approach - using global disable for now
