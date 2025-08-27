@@ -45,7 +45,7 @@ jobs:
           # github_token not needed - uses default GITHUB_TOKEN for GitHub operations
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Use just one comment to deliver PR comments (only applies for pull_request event workflows)
-          # use_sticky_comment: true
+          use_sticky_comment: true
           # Enable commit signing using GitHub's commit signature verification. When false, Claude uses standard git commands
           # use_commit_signing: true
           claude_args: |
@@ -104,3 +104,5 @@ jobs:
 
             Be constructive, thorough, and provide specific actionable feedback.
             Provide severity ratings (Critical/High/Medium/Low) for any issues found.
+            Your review must be added to PR into sticky comment. If PR has several comments by claude, choose latest one.
+            After finishing with review, either approve PR or request fixes if there are issues.
