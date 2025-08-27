@@ -82,29 +82,33 @@ jobs:
             - Algorithm complexity and optimization opportunities
             - Memory usage and resource efficiency
             - Caching strategies and optimization patterns
-            - Workflows use caching and optimized for runtime as well
+            - Workflows use caching and optimized for run time
 
             **Test Coverage & Quality:**
             - Test completeness and edge case coverage
             - Test quality, clarity, and maintainability
             - Integration test scenarios
             - Error condition testing
-            - All other workflows passing successfully, including checks and linters
+            - All checks, linters and other workflows pass successfully
 
             **OCI-Specific Automation Patterns:**
             - Verify capacity errors return 0 (expected) vs 1 (real failure)
             - OCI CLI optimization to minimize Oracle API calls 
             - Optimal connect/receive timeouts
-            - PR workflows using OCI must be working correctly, assume credentials are configured
+            - PR workflows using OCI must be working correctly, assume credentials are configured and valid
 
             **Potential Bugs & Issues:**
             - Race conditions and concurrency issues
             - Boundary conditions and error states
             - Configuration and environment dependencies
             - Workflow and automation reliability
-            - Main workflow in infrastructure-deployment.yml passes without degradation, no unexpected errors
+            - Focus on main workflow in infrastructure-deployment.yml - it must pass without fails or degradations or errors
 
             Be constructive, thorough, and provide specific actionable feedback.
             Provide severity ratings (Critical/High/Medium/Low) for any issues found.
-            Your review must be added to PR into sticky comment. If PR has several comments by claude, choose latest one.
-            After finishing with review, either approve PR or request fixes if there are issues.
+            
+            If PR was already reviewed by claude previously, validate latest changes made since your previous review against previous review result first.
+            Make full PR review only if either no previous review of this PR by claude found, or if you validated that latest changes pushed to the PR have fixed all issues (of medium priority or higher) found in previous claude review in this PR.
+            After finishing your review, either approve PR or request fixes if there are issues of medium priority or higher.
+            Your review must be added to PR into sticky comment.
+            If PR has several comments by claude, choose latest one as sticky in order to update it and hide others as outdated.
