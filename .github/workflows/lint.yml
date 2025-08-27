@@ -45,16 +45,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y shellcheck
 
-          # Install actionlint using GitHub API to get correct download URL
-          set -e  # Exit on any error
-          ACTIONLINT_VERSION=$(curl -s https://api.github.com/repos/rhymond/actionlint/releases/latest | grep -o '"tag_name": "v[^"]*' | grep -o 'v[^"]*')
-          if [ -z "$ACTIONLINT_VERSION" ]; then
-            echo "Failed to get actionlint version, using v1.6.27 as fallback"
-            ACTIONLINT_VERSION="v1.6.27"
-          fi
+          # Install actionlint using fixed version to avoid API issues
+          ACTIONLINT_VERSION="v1.6.27"
           echo "Installing actionlint $ACTIONLINT_VERSION"
           curl -L -o actionlint.tar.gz \
-            "https://github.com/rhymond/actionlint/releases/download/${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION#v}_linux_amd64.tar.gz"
+            "https://github.com/rhymond/actionlint/releases/download/${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION#v}_linux_amd64.tar.gz" || {
+            echo "Failed to download actionlint, trying alternate URL"
+            curl -L -o actionlint.tar.gz \
+              "https://github.com/rhymond/actionlint/releases/download/v1.6.26/actionlint_1.6.26_linux_amd64.tar.gz"
+          }
           tar -xzf actionlint.tar.gz
           sudo mv actionlint /usr/local/bin/
           rm actionlint.tar.gz

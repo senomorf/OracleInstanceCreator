@@ -33,7 +33,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Disable conflicting linters that we handle in custom workflow
           VALIDATE_JAVASCRIPT_ES: false
+          VALIDATE_JAVASCRIPT_STANDARD: false
           VALIDATE_HTML: false
+          VALIDATE_BASH_EXEC: false
           # Increase JSCPD threshold to allow small duplications
           JSCPD_CONFIG_FILE: .jscpd.json
           # Explicitly set JSCPD threshold
