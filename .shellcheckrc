@@ -1,14 +1,40 @@
-# ShellCheck configuration
-# Disable SC1091 - we know our sourced files exist
+# ShellCheck configuration for OCI Automation Project
+# See: https://www.shellcheck.net/wiki/
+
+# === GLOBAL SUPPRESSIONS ===
+# Only suppress issues that are inherent to the project structure
+
+# SC1091: Can't follow non-constant source - we control our sourcing patterns
 disable=SC1091
-# Allow unquoted variables in specific contexts we control
-# disable=SC2086 - will fix these individually
-# Allow local assignment patterns that are commonly used
-# disable=SC2155 - will fix these individually
+
+# === FUTURE WORK (Technical Debt) ===
+# The following suppressions should be addressed individually:
+# 
+# SC2086 (Quote variables): ~51 instances - see issue #50
+# - Most should be quoted: $var -> "$var" 
+# - Some intentional word splitting cases need inline suppressions
+# disable=SC2086
+#
+# SC2155 (Declare/assign separately): ~51 instances - see issue #50  
+# - Split: local var=$(cmd) -> local var; var=$(cmd)
+# - Prevents masking command exit codes
+# disable=SC2155
+
+# === FILE-SPECIFIC SUPPRESSIONS NEEDED ===
+# Global suppressions below should be migrated to file-specific - see issue #51
+#
+# SC2034: Unused variables (~101 instances)
+# - constants.sh: Variables exported for external use
+# - Should use: # shellcheck disable=SC2034 at file level
+#
+# SC2329: Unused functions (~101 instances)  
+# - test files: Functions called by test frameworks
+# - Should use inline suppressions per function
 
 # Source path for external scripts
 source-path=SCRIPTDIR
 
-# Suppress SC2034 (unused variables) for constants.sh as these are for external use
-# Suppress SC2329 (unused functions) in test files as they're called by test frameworks
-# Note: file-specific suppressions require different approach - using global disable for now
+# === TEMPORARY GLOBAL SUPPRESSIONS ===
+# TODO: Remove these after migrating to file-specific suppressions (issue #51)
+# Suppress SC2034 (unused variables) for constants.sh exports
+# Suppress SC2329 (unused functions) in test files called by frameworks
