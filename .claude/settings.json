@@ -23,6 +23,8 @@
       "Bash(grep:*)",
       "Bash(yamllint:*)",
       "WebSearch",
+      "Read(/tmp/**)",
+      "Read(**/IdeaProjects/**)",
       "mcp__zp__Zen__thinkdeep",
       "mcp__zp__Zen__planner",
       "mcp__zp__Zen__analyze",
@@ -54,11 +56,7 @@
       "mcp__gh__GitHub__update_pull_request_branch"
     ],
     "ask": ["Bash(python:*)", "Bash(python3:*)", "Bash(rm:*)"],
-    "deny": [
-      "Bash(pip install:*)",
-      "Bash(pip3 install:*)",
-      "Bash(brew install:*)"
-    ]
+    "deny": ["Bash(pip install:*)", "Bash(pip3 install:*)", "Bash(brew install:*)", "Read(**/.ssh/*)"]
   },
   "model": "claude-sonnet-4-20250514",
   "defaultMode": "plan"

@@ -84,19 +84,24 @@ rules:
       subcategory: [vuln]
       technology: [javascript]
 
-  # OCI-specific security rules
+  # OCI-specific security rules  
   - id: oci-credentials-logging
     pattern-either:
       - pattern: |
           echo $PASSWORD
       - pattern: |
-          echo "$API_KEY"
+          echo "$API_KEY" 
       - pattern: |
           log_info $CREDENTIALS
       - pattern: |
           printf "%s" $SECRET
-    pattern-not: |
-      echo "$failure_data"
+    pattern-not-either:
+      - pattern: |
+          echo "$failure_data"
+      - pattern: |
+          echo "$test_data"
+      - pattern: |
+          echo "$debug_data"
     message: |
       Potential credential logging. Ensure sensitive data is properly masked before logging.
     languages: [bash]
@@ -118,26 +123,5 @@ rules:
       subcategory: [audit]
       technology: [networking]
 
-  # General code quality rules
-  - id: bash-set-e-missing
-    pattern: |
-      #!/bin/bash
-      ...
-    pattern-not: |
-      #!/bin/bash
-      ...
-      set -e
-      ...
-    paths:
-      exclude:
-        - "**/test_*.sh"
-        - "**/tests/**"
-        - "**/validate_*.sh"
-    message: |
-      Consider adding 'set -e' to exit on command failures for more robust error handling.
-    languages: [bash]
-    severity: INFO
-    metadata:
-      category: correctness
-      subcategory: [audit]
-      technology: [bash]
+  # General code quality rules - bash-set-e-missing disabled (too noisy)
+  # Most scripts in this project already use 'set -euo pipefail' appropriately

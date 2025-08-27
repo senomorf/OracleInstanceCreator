@@ -75,7 +75,10 @@ ignore-words-list =
     singapore,
     amd,
     arm,
-    flex
+    flex,
+    master,
+    iam,
+    ist,
 
 # Regular expressions for additional ignores
 ignore-regex = 
