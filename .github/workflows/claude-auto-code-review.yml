@@ -4,8 +4,9 @@ name: Claude PR Auto Review
 on:
   pull_request:
     types: [opened, synchronize]
-  issue_comment:
-    types: [created]
+  # not ready for use: reacts on pr review comment published after pull_request event
+  # issue_comment:
+  #   types: [created]
 
 jobs:
   auto-review:
@@ -112,5 +113,5 @@ jobs:
             Never read all PR comments at once. Always use pagination and filters.
             If PR diff is too large, list changes in PR instead and review changes file by file.
 
-            Your review result must be added to PR into sticky comment.
-            After finishing your review, either approve PR or request fixes if there are issues of medium priority or higher.
+            After finishing your review, either approve PR or request changes if fixes required or if there are issues of medium priority or higher.
+            Your review result must be in PR as single sticky comment or as your approve message or as message requesting changes but not both.
