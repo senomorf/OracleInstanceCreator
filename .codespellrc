@@ -2,8 +2,8 @@
 # Codespell configuration for OCI Automation Project
 # Checks spelling in code and documentation
 
-# Paths to check  
-check-filenames = 
+# Paths to check
+check-filenames =
 check-hidden =
 
 # File types to include
@@ -13,7 +13,7 @@ builtin = clear,rare,informal,usage,code,names
 skip = .git,node_modules,*.min.js,*.min.css,.jscpd-report,dist,build,out,logs,tmp,temp,.tmp
 
 # Ignore words (project-specific terms)
-ignore-words-list = 
+ignore-words-list =
     oci,ocid,ocids,
     vm,vms,vcpu,vcpus,
     gb,gbs,
@@ -83,7 +83,7 @@ ignore-words-list =
     warmup,
 
 # Regular expressions for additional ignores
-ignore-regex = 
+ignore-regex =
     # Ignore code-like patterns
     \b[A-Z_]{3,}\b|
     # Ignore file paths and URLs
@@ -100,5 +100,5 @@ ignore-regex =
     \$\{[^}]+\}|\$[A-Z_][A-Z0-9_]*\b
 
 # Output format
-count = 
+count =
 quiet-level = 2
