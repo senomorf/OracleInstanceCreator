@@ -458,3 +458,5 @@ yamllint -c .yamllint.yml .github/workflows/*.yml
 - **Security**: All credentials properly redacted in logs
 - **Claude Code Review Workflow**: Optimized with Bun caching and rate limit mitigation (2025-08-26)
 - **Code Quality Standards**: Comprehensive linting infrastructure with 6 linters and automated CI/CD
+
+- Do not assume current git user or repo owner by user folder name, instead lookup actual user on github. Do not assume repository name by local folder name, instead lookup git repository name.
