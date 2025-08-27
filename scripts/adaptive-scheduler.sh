@@ -130,13 +130,11 @@ analyze_success_patterns() {
     
     log_info "Analyzing historical success patterns for scheduling optimization"
     
-    # Get pattern data
-    local pattern_data=""
-    if command -v gh >/dev/null 2>&1 && [[ -n "${GITHUB_TOKEN:-}" ]]; then
-        pattern_data=$(gh variable get SUCCESS_PATTERN_DATA 2>/dev/null || echo "[]")
-    fi
+    # Get pattern data using common function
+    local pattern_data
+    pattern_data=$(get_pattern_data)
     
-    if [[ -z "$pattern_data" || "$pattern_data" == "[]" ]]; then
+    if [[ "$pattern_data" == "[]" ]]; then
         log_info "No historical pattern data available - using baseline scheduling"
         return 0
     fi
@@ -244,13 +242,11 @@ should_skip_attempt() {
         return 1  # Don't skip if analysis disabled
     fi
 
-    # Get pattern data
-    local pattern_data=""
-    if command -v gh >/dev/null 2>&1 && [[ -n "${GITHUB_TOKEN:-}" ]]; then
-        pattern_data=$(gh variable get SUCCESS_PATTERN_DATA 2>/dev/null || echo "[]")
-    fi
+    # Get pattern data using common function
+    local pattern_data
+    pattern_data=$(get_pattern_data)
 
-    if [[ -z "$pattern_data" || "$pattern_data" == "[]" ]]; then
+    if [[ "$pattern_data" == "[]" ]]; then
         return 1 # Not enough data to make a decision
     fi
 

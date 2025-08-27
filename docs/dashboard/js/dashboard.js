@@ -593,7 +593,7 @@ class OracleInstanceDashboard {
 
       // If reset is soon but we're low on requests, be more conservative
       if (minutesUntilReset < this.CONSTANTS.RATE_LIMIT_WARNING_RESET_MINUTES && remaining < this.CONSTANTS.RATE_LIMIT_WARNING_RESET_REMAINING) {
-        multiplier = Math.max(multiplier, 2)
+        multiplier = multiplier * 2
       }
     }
 
@@ -633,7 +633,7 @@ class OracleInstanceDashboard {
 
         // Only retry on rate limit errors
         if (error.message.includes('Rate limit exceeded') && attempt < this.rateLimitState.maxRetries) {
-          const delay = this.calculateExponentialBackoff(attempt, this.rateLimitState.baseDelay)
+          const delay = this.calculateDynamicBackoff(this.rateLimitState.baseDelay, attempt)
           console.warn(`Rate limit retry ${attempt + 1}/${this.rateLimitState.maxRetries}, waiting ${delay}ms`)
           await this.delay(delay)
           continue

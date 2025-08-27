@@ -1219,3 +1219,18 @@ record_failure_pattern() {
     fi
 }
 
+# Common function to get pattern data with consistent error handling
+get_pattern_data() {
+    local pattern_data=""
+    if command -v gh >/dev/null 2>&1 && [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        pattern_data=$(gh variable get SUCCESS_PATTERN_DATA 2>/dev/null || echo "[]")
+    fi
+    
+    # Return empty array if no data or invalid data
+    if [[ -z "$pattern_data" || "$pattern_data" == "[]" ]]; then
+        echo "[]"
+    else
+        echo "$pattern_data"
+    fi
+}
+

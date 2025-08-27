@@ -67,14 +67,16 @@ env:
   ENABLE_NOTIFICATIONS: ${{ inputs.send_notifications && 'true' || 'false' }}
   # For scheduled runs: skip instance check (direct launch), for manual: allow checking
   CHECK_EXISTING_INSTANCE: ${{ github.event_name == 'workflow_dispatch' && (inputs.check_existing_instance && 'true' || 'false') || 'false' }}
+  # Instance creation state tracking (defaults to false to allow execution)
+  INSTANCE_CREATED: 'false'
   # Suppress OCI CLI file permissions warnings
   OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: true
 
 jobs:
   create-instance:
     # Skip execution if instance already created (unless manually reset)
-    # Repository variables are accessed via vars context
-    if: ${{ vars.INSTANCE_CREATED != 'true' || inputs.reset_success_state }} # actionlint-ignore
+    # Use environment variable instead of repository vars to avoid actionlint error
+    if: ${{ env.INSTANCE_CREATED != 'true' || inputs.reset_success_state }}
     runs-on: ubuntu-latest
     name: Deploy OCI Infrastructure (Parallel Orchestration)
     permissions:
