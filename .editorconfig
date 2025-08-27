@@ -1,0 +1,69 @@
+# EditorConfig configuration for OCI Automation Project
+# Helps maintain consistent coding styles
+
+root = true
+
+# All files
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Shell scripts
+[*.sh]
+indent_style = space
+indent_size = 4
+max_line_length = 120
+
+# JavaScript files
+[*.js]
+indent_style = space
+indent_size = 2
+max_line_length = 120
+
+# JSON files
+[*.json]
+indent_style = space
+indent_size = 2
+
+# YAML files
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+max_line_length = 120
+
+# HTML files
+[*.html]
+indent_style = space
+indent_size = 4
+max_line_length = 120
+
+# CSS files
+[*.css]
+indent_style = space
+indent_size = 2
+max_line_length = 120
+
+# Markdown files
+[*.md]
+indent_style = space
+indent_size = 2
+max_line_length = 80
+trim_trailing_whitespace = false
+
+# Configuration files
+[*.{toml,ini,conf}]
+indent_style = space
+indent_size = 2
+
+# Makefiles
+[Makefile]
+indent_style = tab
+indent_size = 4
+
+# GitHub workflows
+[.github/workflows/*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+max_line_length = 120
