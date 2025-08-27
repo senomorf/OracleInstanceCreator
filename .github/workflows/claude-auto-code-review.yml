@@ -38,7 +38,7 @@ jobs:
           NPM_CONFIG_MAXSOCKETS: "15"
           NPM_CONFIG_NETWORK_CONCURRENCY: "1"
           # increase from default 25000 to allow reading PR files from MCP (otherwise reads them using gh command anyway)
-          # MAX_MCP_OUTPUT_TOKENS: "50000"
+          MAX_MCP_OUTPUT_TOKENS: "100000"
         with:
           additional_permissions: |
             actions: read
