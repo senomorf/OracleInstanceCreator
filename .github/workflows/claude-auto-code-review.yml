@@ -59,6 +59,9 @@ jobs:
           # Disabled: creates a mess to review. Inline suggestions are often broken
           # Use GitHub's suggestion format when proposing code changes.
           # Use inline comments to highlight specific areas of concern.
+
+          # If PR was already reviewed by claude previously, validate latest changes made since your previous review against previous review result first.
+          # Make full PR review only if either no previous review of this PR by claude found, or if you validated that latest changes pushed to the PR have fixed all issues (of medium priority or higher) found in previous claude review in this PR.
           prompt: |
             Please review this PR #${{ github.event.pull_request.number }} with comprehensive analysis covering both general software engineering principles and OCI automation specifics:
 
@@ -107,8 +110,6 @@ jobs:
             Be constructive, thorough, and provide specific actionable feedback.
             Provide severity ratings (Critical/High/Medium/Low) for any issues found.
 
-            If PR was already reviewed by claude previously, validate latest changes made since your previous review against previous review result first.
-            Make full PR review only if either no previous review of this PR by claude found, or if you validated that latest changes pushed to the PR have fixed all issues (of medium priority or higher) found in previous claude review in this PR.
-            After finishing your review, either approve PR or request fixes if there are issues of medium priority or higher.
             Your review must be added to PR into sticky comment.
-            If PR has several comments by claude, choose latest one as sticky in order to update it and hide others as outdated.
+            After finishing your review, either approve PR or request fixes if there are issues of medium priority or higher.
+            If PR has several comments by claude with review results, choose latest one as sticky, updating it with new results and either remove or hide other claude comments as outdated.
