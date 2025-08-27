@@ -1,6 +1,8 @@
 # Contributing to Oracle Instance Creator
 
-Thank you for your interest in contributing to the Oracle Instance Creator project! This guide will help you understand our development workflow, code quality standards, and contribution process.
+Thank you for your interest in contributing to the Oracle Instance Creator
+project! This guide will help you understand our development workflow, code
+quality standards, and contribution process.
 
 ## 📋 Table of Contents
 
@@ -23,28 +25,30 @@ Thank you for your interest in contributing to the Oracle Instance Creator proje
 ### Local Development
 
 1. **Fork and Clone**
-   ```bash
-   git clone https://github.com/your-username/OracleInstanceCreator.git
-   cd OracleInstanceCreator
-   ```
+  ```bash
+  git clone https://github.com/your-username/OracleInstanceCreator.git
+  cd OracleInstanceCreator
+  ```
 
 2. **Create Feature Branch**
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
+  ```bash
+  git checkout -b feature/your-feature-name
+  ```
 
 3. **Run Local Tests**
-   ```bash
-   ./tests/run_new_tests.sh
-   ```
+  ```bash
+  ./tests/run_new_tests.sh
+  ```
 
 ## ⚡ Code Quality Standards
 
-This project maintains high code quality through comprehensive linting and automated checks.
+This project maintains high code quality through comprehensive linting and
+automated checks.
 
 ### Linting Infrastructure
 
-The project uses multiple linters to ensure code quality across different file types:
+The project uses multiple linters to ensure code quality across different
+file types:
 
 #### 🐚 **Shell Scripts** (`.sh` files)
 - **ShellCheck**: Static analysis for shell scripts
@@ -147,7 +151,7 @@ Header
 # Header
 
 # Bad: Indented code
-    code here
+   code here
 
 # Good: Fenced code
 ```bash
@@ -198,30 +202,30 @@ bash tests/test_stress.sh
 ### Pull Request Process
 
 1. **Create Feature Branch**
-   ```bash
-   git checkout -b feature/descriptive-name
-   ```
+  ```bash
+  git checkout -b feature/descriptive-name
+  ```
 
 2. **Make Changes**
-   - Follow coding standards
-   - Add/update tests
-   - Update documentation
+  - Follow coding standards
+  - Add/update tests
+  - Update documentation
 
 3. **Commit Changes**
-   ```bash
-   git add .
-   git commit -m "feat: add descriptive commit message
-   
-   - Detailed explanation of changes
-   - Reference any issues: Closes #123"
-   ```
+  ```bash
+  git add .
+  git commit -m "feat: add descriptive commit message
+  
+  - Detailed explanation of changes
+  - Reference any issues: Closes #123"
+  ```
 
 4. **Push and Create PR**
-   ```bash
-   git push origin feature/descriptive-name
-   # Create PR via GitHub UI or GitHub CLI
-   gh pr create --title "Feature: Description" --body "Detailed description"
-   ```
+  ```bash
+  git push origin feature/descriptive-name
+  # Create PR via GitHub UI or GitHub CLI
+  gh pr create --title "Feature: Description" --body "Detailed description"
+  ```
 
 ### Commit Message Format
 
