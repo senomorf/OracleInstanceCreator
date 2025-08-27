@@ -85,6 +85,7 @@ cleanup_handler() {
 trap cleanup_handler SIGTERM SIGINT
 
 # Shape configurations for Oracle Cloud free tier
+# shellcheck disable=SC2034  # Variables used via nameref in launch_shape function
 declare -A A1_FLEX_CONFIG=(
     ["SHAPE"]="VM.Standard.A1.Flex"
     ["OCPUS"]="4"
@@ -92,6 +93,7 @@ declare -A A1_FLEX_CONFIG=(
     ["DISPLAY_NAME"]="a1-flex-sg"
 )
 
+# shellcheck disable=SC2034  # Variables used via nameref in launch_shape function
 declare -A E2_MICRO_CONFIG=(
     ["SHAPE"]="VM.Standard.E2.1.Micro"
     ["OCPUS"]=""
@@ -226,7 +228,7 @@ main() {
             log_debug "Terminating E2 process (PID: $PID_E2)"
             kill "$PID_E2" 2>/dev/null || true
         fi
-        sleep $GRACEFUL_TERMINATION_DELAY  # 2-second grace period allows processes to cleanup before SIGKILL
+        sleep "$GRACEFUL_TERMINATION_DELAY"  # 2-second grace period allows processes to cleanup before SIGKILL
         # Force kill if still running
         if [[ -n "$PID_A1" ]] && kill -0 "$PID_A1" 2>/dev/null; then
             kill -9 "$PID_A1" 2>/dev/null || true

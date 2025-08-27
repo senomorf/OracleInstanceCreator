@@ -555,25 +555,35 @@ class OracleInstanceDashboard {
   }
 
   /**
-   * Calculate dynamic backoff based on current rate limit state
-   * Uses sophisticated logic considering remaining quota and reset time
+   * Calculate dynamic backoff based on current rate limit state and retry count
+   * Uses sophisticated logic considering remaining quota, reset time, and exponential backoff
    * @param {number} [baseDelay=800] - Base delay in milliseconds
+   * @param {number} [retryCount=0] - Number of retry attempts for exponential backoff
    * @returns {number} Calculated delay in milliseconds with adaptive multiplier and jitter
    */
-  calculateDynamicBackoff (baseDelay = this.CONSTANTS.DEFAULT_BASE_DELAY) {
+  calculateDynamicBackoff (baseDelay = this.CONSTANTS.DEFAULT_BASE_DELAY, retryCount = 0) {
     const remaining = this.rateLimitState.remaining || this.CONSTANTS.RATE_LIMIT_DEFAULT_REMAINING
     
-    // More sophisticated backoff based on remaining quota
-    let multiplier = 1
+    // Exponential backoff based on retry count
+    const exponentialMultiplier = retryCount > 0 ? Math.pow(2, retryCount) : 1
+    
+    // Rate limit based backoff based on remaining quota
+    let rateLimitMultiplier = 1
     if (remaining < this.CONSTANTS.RATE_LIMIT_CRITICAL_THRESHOLD) {
-      multiplier = 8 // Very aggressive backoff when critically low
+      rateLimitMultiplier = 8 // Very aggressive backoff when critically low
     } else if (remaining < this.CONSTANTS.RATE_LIMIT_LOW_THRESHOLD) {
-      multiplier = 4 // Strong backoff when low
+      rateLimitMultiplier = 4 // Strong backoff when low
     } else if (remaining < this.CONSTANTS.RATE_LIMIT_WARNING_THRESHOLD) {
-      multiplier = 2.5 // Moderate backoff when getting low
-    } else if (remaining < this.CONSTANTS.RATE_LIMIT_APPROACHING_THRESHOLD) {
-      multiplier = 1.5 // Light backoff when approaching limits
+      rateLimitMultiplier = 2.5 // Moderate backoff when getting low
     }
+    
+    // Add additional check for approaching threshold
+    if (remaining < this.CONSTANTS.RATE_LIMIT_APPROACHING_THRESHOLD && rateLimitMultiplier === 1) {
+      rateLimitMultiplier = 1.5 // Light backoff when approaching limits
+    }
+    
+    // Combine both multipliers for comprehensive backoff
+    const multiplier = Math.max(exponentialMultiplier, rateLimitMultiplier)
     
     // Add time-based component if reset time is known
     if (this.rateLimitState.resetTime) {

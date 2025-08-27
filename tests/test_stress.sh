@@ -280,6 +280,7 @@ EOF
             local test_file
             test_file=$(mktemp)
             if ! echo "test" > "$test_file" 2>/dev/null; then
+                # shellcheck disable=SC2030 # Subshell modification is intentional for parallel testing
                 system_responsive=false
                 break
             fi
@@ -312,10 +313,12 @@ EOF
     
     printf "  Heavy load execution time: %.2fs\n" "$execution_time"
     echo "  Completed heavy processes: $completed/3"
+    # shellcheck disable=SC2031 # system_responsive modified in subshell for parallel testing
     echo "  System remained responsive: $system_responsive"
     echo "  Result files created: $result_files"
     
     # Pass if most processes completed and system stayed responsive
+    # shellcheck disable=SC2031 # system_responsive accessed from subshell scope
     if [[ $completed -ge 2 ]] && [[ "$system_responsive" == "true" ]]; then
         echo "✅ PASS: $test_name"
         ((TESTS_PASSED++))

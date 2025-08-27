@@ -73,8 +73,8 @@ env:
 jobs:
   create-instance:
     # Skip execution if instance already created (unless manually reset)
-    # actionlint-ignore: vars context is valid for repository variables
-    if: ${{ vars.INSTANCE_CREATED != 'true' || inputs.reset_success_state }}
+    # Repository variables are accessed via vars context
+    if: ${{ vars.INSTANCE_CREATED != 'true' || inputs.reset_success_state }} # actionlint-ignore
     runs-on: ubuntu-latest
     name: Deploy OCI Infrastructure (Parallel Orchestration)
     permissions:
@@ -205,12 +205,15 @@ jobs:
           ./scripts/launch-parallel.sh
           EXIT_CODE=$?
           if [[ $EXIT_CODE -eq 0 ]]; then
+            echo "::notice::✅ SUCCESS: At least one instance created successfully"
             echo "✅ SUCCESS: At least one instance created"
             exit 0
           elif [[ $EXIT_CODE -eq 2 ]]; then
+            echo "::warning::⚠️ CAPACITY: No instances created due to capacity limitations - this is expected Oracle Cloud behavior during high demand"
             echo "⚠️  CAPACITY: No instances created due to capacity limitations (expected behavior)"
-            exit 0  # Treat capacity errors as success
+            exit 0  # Treat capacity errors as success - Oracle's dynamic resource availability is normal
           else
+            echo "::error::❌ FAILURE: Configuration or authentication error detected (exit code: $EXIT_CODE)"
             echo "❌ FAILURE: Configuration or authentication error (exit code: $EXIT_CODE)"
             exit 1  # Genuine failures should still fail the workflow
           fi

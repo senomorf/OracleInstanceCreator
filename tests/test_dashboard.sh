@@ -27,7 +27,8 @@ test_html_structure() {
     
     for html_file in "${HTML_FILES[@]}"; do
         if [[ -f "$html_file" ]]; then
-            local filename=$(basename "$html_file")
+            local filename
+            filename=$(basename "$html_file")
             
             # Test CSP header exists
             if grep -q "Content-Security-Policy" "$html_file"; then
@@ -69,11 +70,14 @@ test_javascript_error_handling() {
     
     for js_file in "${JS_FILES[@]}"; do
         if [[ -f "$js_file" ]]; then
-            local filename=$(basename "$js_file")
+            local filename
+            filename=$(basename "$js_file")
             
             # Count try-catch blocks
-            local try_count=$(grep -c "try {" "$js_file" || true)
-            local catch_count=$(grep -c "catch" "$js_file" || true)
+            local try_count
+            try_count=$(grep -c "try {" "$js_file" || true)
+            local catch_count
+            catch_count=$(grep -c "catch" "$js_file" || true)
             
             if [[ $try_count -eq $catch_count ]] && [[ $try_count -gt 0 ]]; then
                 assert_equal "balanced" "balanced" "Try-catch blocks balanced in $filename ($try_count pairs)"
@@ -115,7 +119,8 @@ test_cdn_dependencies() {
     # Check for expected CDN dependencies directly in HTML files
     for html_file in "${HTML_FILES[@]}"; do
         if [[ -f "$html_file" ]]; then
-            local filename=$(basename "$html_file")
+            local filename
+            filename=$(basename "$html_file")
             
             # Test Chart.js CDN
             if grep -q "chart.js" "$html_file"; then
@@ -140,7 +145,8 @@ test_localstorage_security() {
     
     for js_file in "${JS_FILES[@]}"; do
         if [[ -f "$js_file" ]]; then
-            local filename=$(basename "$js_file")
+            local filename
+            filename=$(basename "$js_file")
             
             # Test that GitHub tokens are stored in localStorage (expected for client-side app)
             if grep -q "localStorage.*token\|localStorage.*Token" "$js_file"; then
@@ -156,7 +162,8 @@ test_localstorage_security() {
             fi
             
             # Test that sensitive data is not logged
-            local sensitive_log_count=$(grep -cE "console\.log.*token|console\.log.*Token|console\.log.*secret" "$js_file" 2>/dev/null || true)
+            local sensitive_log_count
+            sensitive_log_count=$(grep -cE "console\.log.*token|console\.log.*Token|console\.log.*secret" "$js_file" 2>/dev/null || true)
             assert_equal "0" "$sensitive_log_count" "No sensitive data in console logs"
         fi
     done
@@ -169,10 +176,12 @@ test_mobile_responsiveness() {
     # Test CSS for responsive patterns
     for css_file in "${CSS_FILES[@]}"; do
         if [[ -f "$css_file" ]]; then
-            local filename=$(basename "$css_file")
+            local filename
+            filename=$(basename "$css_file")
             
             # Test for media queries
-            local media_query_count=$(grep -c "@media" "$css_file" 2>/dev/null || true)
+            local media_query_count
+            media_query_count=$(grep -c "@media" "$css_file" 2>/dev/null || true)
             if [[ $media_query_count -gt 0 ]]; then
                 assert_equal "responsive" "responsive" "Media queries found in $filename ($media_query_count)"
             else
@@ -191,7 +200,8 @@ test_mobile_responsiveness() {
     # Test HTML for touch-friendly elements
     for html_file in "${HTML_FILES[@]}"; do
         if [[ -f "$html_file" ]]; then
-            local filename=$(basename "$html_file")
+            local filename
+            filename=$(basename "$html_file")
             
             # Test for touch-friendly button sizing (common class patterns)
             if grep -qE "(btn-|button|touch)" "$html_file"; then
@@ -209,11 +219,14 @@ test_accessibility_basics() {
     
     for html_file in "${HTML_FILES[@]}"; do
         if [[ -f "$html_file" ]]; then
-            local filename=$(basename "$html_file")
+            local filename
+            filename=$(basename "$html_file")
             
             # Test for alt attributes on images
-            local img_count=$(grep -c "<img" "$html_file" 2>/dev/null || true)
-            local alt_count=$(grep -c 'alt=' "$html_file" 2>/dev/null || true)
+            local img_count
+            img_count=$(grep -c "<img" "$html_file" 2>/dev/null || true)
+            local alt_count
+            alt_count=$(grep -c 'alt=' "$html_file" 2>/dev/null || true)
             
             if [[ $img_count -eq 0 ]]; then
                 assert_equal "no_images" "no_images" "No images to test alt attributes in $filename"
@@ -246,7 +259,8 @@ test_performance_indicators() {
     
     for html_file in "${HTML_FILES[@]}"; do
         if [[ -f "$html_file" ]]; then
-            local filename=$(basename "$html_file")
+            local filename
+            filename=$(basename "$html_file")
             
             # Test for preloading critical resources
             if grep -q "preload\|prefetch" "$html_file"; then
@@ -267,7 +281,8 @@ test_performance_indicators() {
     # Test JavaScript for performance patterns
     for js_file in "${JS_FILES[@]}"; do
         if [[ -f "$js_file" ]]; then
-            local filename=$(basename "$js_file")
+            local filename
+            filename=$(basename "$js_file")
             
             # Test for debouncing/throttling patterns
             if grep -qE "(setTimeout|setInterval|debounce|throttle)" "$js_file"; then
@@ -278,7 +293,8 @@ test_performance_indicators() {
             
             # Test for efficient DOM queries (caching selectors)
             if grep -qE "(getElementById|querySelector)" "$js_file"; then
-                local query_count=$(grep -cE "(getElementById|querySelector)" "$js_file")
+                local query_count
+                query_count=$(grep -cE "(getElementById|querySelector)" "$js_file")
                 assert_equal "dom_queries" "dom_queries" "DOM queries found ($query_count instances) in $filename"
             fi
         fi
@@ -292,7 +308,8 @@ test_file_integrity() {
     # Test HTML syntax (basic)
     for html_file in "${HTML_FILES[@]}"; do
         if [[ -f "$html_file" ]]; then
-            local filename=$(basename "$html_file")
+            local filename
+            filename=$(basename "$html_file")
             
             # Check for unclosed tags (basic test)
             if grep -q "<html" "$html_file" && grep -q "</html>" "$html_file"; then
@@ -313,11 +330,14 @@ test_file_integrity() {
     # Test JavaScript syntax (basic)
     for js_file in "${JS_FILES[@]}"; do
         if [[ -f "$js_file" ]]; then
-            local filename=$(basename "$js_file")
+            local filename
+            filename=$(basename "$js_file")
             
             # Check for balanced braces (basic test)
-            local open_braces=$(grep -o "{" "$js_file" | wc -l)
-            local close_braces=$(grep -o "}" "$js_file" | wc -l)
+            local open_braces
+            open_braces=$(grep -o "{" "$js_file" | wc -l)
+            local close_braces
+            close_braces=$(grep -o "}" "$js_file" | wc -l)
             
             if [[ $open_braces -eq $close_braces ]]; then
                 assert_equal "balanced_braces" "balanced_braces" "Balanced braces in $filename"
