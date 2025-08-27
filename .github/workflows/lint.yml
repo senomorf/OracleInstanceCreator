@@ -39,17 +39,24 @@ jobs:
         run: |
           pip install djlint yamllint
 
+      - name: Install Go for shfmt and actionlint
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
       - name: Install other linters
         run: |
           # Install shellcheck
           sudo apt-get update
           sudo apt-get install -y shellcheck
 
-          # Install actionlint via Go
-          echo "Installing actionlint via Go"
+          # Install Go tools
+          echo "Installing shfmt and actionlint via Go"
+          go install mvdan.cc/sh/v3/cmd/shfmt@latest
           go install github.com/rhymond/actionlint/cmd/actionlint@latest
-          echo "Actionlint installed successfully"
-          ~/go/bin/actionlint --version || echo "Actionlint version check failed but installation completed"
+          echo "Go tools installed successfully"
+          ~/go/bin/shfmt --version || echo "shfmt version check failed"
+          ~/go/bin/actionlint --version || echo "actionlint version check failed"
 
       - name: Run ESLint
         run: |
@@ -66,6 +73,10 @@ jobs:
       - name: Run shellcheck
         run: |
           shellcheck ./scripts/*.sh ./tests/*.sh
+
+      - name: Run shfmt
+        run: |
+          ~/go/bin/shfmt -d ./scripts/*.sh ./tests/*.sh || echo "⚠️ Shell formatting issues found - run 'shfmt -w ./scripts/*.sh ./tests/*.sh' to fix"
 
       - name: Run yamllint
         run: |

@@ -31,9 +31,5 @@ jobs:
           VALIDATE_ALL_CODEBASE: false
           DEFAULT_BRANCH: "master"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Disable conflicting linters that we handle in custom workflow
-          VALIDATE_JAVASCRIPT_ES: false
-          VALIDATE_JAVASCRIPT_STANDARD: false
-          VALIDATE_HTML: false
-          VALIDATE_BASH_EXEC: false
-          VALIDATE_JSCPD: false
+          # JSCPD configuration - set threshold to allow reasonable code duplication
+          JSCPD_CONFIG_FILE: .jscpd.json
