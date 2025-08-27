@@ -1,58 +1,51 @@
 # CLAUDE.md
 
-Oracle Cloud Infrastructure (OCI) automation for **parallel free tier instance creation**. Simultaneously attempts both ARM (A1.Flex) and AMD (E2.1.Micro) shapes using GitHub Actions with billing optimization and transient error retry.
+OCI free-tier automation: parallel A1.Flex (ARM) + E2.1.Micro (AMD) provisioning via GitHub Actions.
 
 ## Architecture
 
-**Core Components:**
 ```text
-├── .github/workflows/free-tier-creation.yml  # Single-job parallel execution
-├── scripts/
-│   ├── launch-parallel.sh                    # Orchestrates both shapes
-│   ├── launch-instance.sh                    # Shape-agnostic creation logic + transient retry
-│   ├── utils.sh                              # Common functions + proxy support
-│   ├── circuit-breaker.sh                    # AD failure tracking and filtering
-│   ├── setup-oci.sh                          # OCI CLI + proxy configuration
-│   ├── validate-config.sh                    # Configuration validation
-│   └── notify.sh                             # Telegram notifications
-├── tests/
-│   ├── test_proxy.sh                         # Proxy validation (15 tests)
-│   ├── test_integration.sh                   # Integration tests (9 tests)
-│   ├── test_circuit_breaker.sh               # Circuit breaker functionality (9 tests)
-│   ├── test_exponential_backoff.sh           # Exponential backoff logic (9 tests)
-│   └── run_new_tests.sh                      # Test runner for enhancements
-└── config/                                   # Configuration files
+.github/workflows/free-tier-creation.yml  # Single-job parallel execution
+scripts/
+├── launch-parallel.sh      # Orchestrates both shapes with env injection
+├── launch-instance.sh      # Shape-agnostic creation + transient retry
+├── utils.sh               # OCI CLI wrapper + error classification
+├── circuit-breaker.sh     # AD failure tracking (3 failures = skip)
+├── setup-oci.sh          # CLI + proxy setup
+├── validate-config.sh    # Configuration validation
+└── notify.sh             # Telegram notifications
+tests/
+├── test_proxy.sh         # Proxy validation (15 tests)
+├── test_integration.sh   # Integration tests (9 tests)
+├── test_circuit_breaker.sh # Circuit breaker (9 tests)
+├── test_exponential_backoff.sh # Exponential backoff (9 tests)
+└── run_new_tests.sh      # Test runner
 ```
 
-**Parallel Execution Flow:**
-1. `launch-parallel.sh` launches both shapes as background processes (`&`)
-2. Each calls `launch-instance.sh` with shape-specific environment variables
-3. Multi-AD cycling per shape with transient error retry (3 attempts per AD)
-4. 55-second timeout protection prevents 2-minute GitHub Actions billing
+## Critical Patterns
 
-## Configuration
+### Performance Optimization (93% improvement)
+```bash
+# NEVER remove these flags in utils.sh:
+oci_args+=("--no-retry")                    # Eliminates exponential backoff
+oci_args+=("--connection-timeout" "5")      # 5s vs 10s default
+oci_args+=("--read-timeout" "15")           # 15s vs 60s default
+```
 
-### Required GitHub Secrets
-```yaml
-# OCI Authentication
-OCI_USER_OCID: Oracle user OCID
-OCI_KEY_FINGERPRINT: API key fingerprint
-OCI_TENANCY_OCID: Tenancy OCID
-OCI_REGION: OCI region
-OCI_PRIVATE_KEY: Private API key content
+### Error Classification (scripts/utils.sh)
+```bash
+CAPACITY: "capacity|quota|limit|429"        → Schedule retry (treat as success)
+DUPLICATE: "already exists"                 → Success
+TRANSIENT: "internal|network|timeout"       → Retry 3x same AD, then next AD
+AUTH/CONFIG: "authentication|invalid.*ocid" → Alert user immediately
+```
 
-# Instance Configuration
-OCI_COMPARTMENT_ID: Compartment OCID (optional, uses tenancy)
-OCI_SUBNET_ID: Subnet OCID
-OCI_IMAGE_ID: Image OCID (optional, auto-detected)
-INSTANCE_SSH_PUBLIC_KEY: SSH public key
-
-# Notifications
-TELEGRAM_TOKEN: Telegram bot token
-TELEGRAM_USER_ID: Telegram user ID
-
-# Proxy (Optional)
-OCI_PROXY_URL: username:password@proxy.example.com:3128
+### Parallel Execution Pattern (launch-parallel.sh)
+```bash
+# Environment variable injection per shape:
+(export OCI_SHAPE="VM.Standard.A1.Flex" OCI_OCPUS="4" OCI_MEMORY_IN_GBS="24"; ./launch-instance.sh) &
+(export OCI_SHAPE="VM.Standard.E2.1.Micro" OCI_OCPUS="" OCI_MEMORY_IN_GBS=""; ./launch-instance.sh) &
+wait  # 55s timeout protection
 ```
 
 ### Shape Configurations
@@ -61,97 +54,50 @@ OCI_PROXY_URL: username:password@proxy.example.com:3128
 # E2.1.Micro (AMD) - 1 OCPU, 1GB, instance name: e2-micro-sg
 ```
 
-### Environment Variables
-```bash
-# Multi-AD Support (comma-separated)
-OCI_AD: "fgaj:AP-SINGAPORE-1-AD-1,fgaj:AP-SINGAPORE-1-AD-2,fgaj:AP-SINGAPORE-1-AD-3"
-
-# Shape Configuration (set by launch-parallel.sh)
-OCI_SHAPE: "VM.Standard.A1.Flex"         # Instance shape
-OCI_OCPUS: "4"                           # CPUs for flex shapes
-OCI_MEMORY_IN_GBS: "24"                  # Memory for flex shapes
-
-# Performance & Reliability
-BOOT_VOLUME_SIZE: "50"                    # GB, minimum enforced
-RECOVERY_ACTION: "RESTORE_INSTANCE"       # Auto-restart on failures
-RETRY_WAIT_TIME: "30"                     # Seconds between AD attempts
-TRANSIENT_ERROR_MAX_RETRIES: "3"         # Retry count per AD
-TRANSIENT_ERROR_RETRY_DELAY: "15"        # Seconds between retries
-INSTANCE_VERIFY_MAX_CHECKS: "5"          # Verification attempts
-INSTANCE_VERIFY_DELAY: "30"              # Seconds between verifications
-
-# Debugging
-DEBUG: "true"                             # Enable verbose OCI CLI output
-LOG_FORMAT: "text"                        # or "json" for structured logging
-```
-
-## Critical Technical Patterns
-
-### Performance Optimization (93% improvement)
-```bash
-# OCI CLI flags in utils.sh - NEVER remove these:
-oci_args+=("--no-retry")                    # Eliminates exponential backoff
-oci_args+=("--connection-timeout" "5")      # 5s vs 10s default
-oci_args+=("--read-timeout" "15")           # 15s vs 60s default
-```
-
-### Error Classification (scripts/utils.sh)
-```bash
-# CAPACITY (treated as success - retry on schedule)
-"capacity|host capacity|out of capacity|service limit|quota exceeded|too.*many.*requests|429"
-
-# DUPLICATE (treated as success)  
-"display name already exists|instance.*already exists"
-
-# TRANSIENT (retry same AD 3x, then next AD)
-"internal error|network|connection|timeout"
-
-# AUTH/CONFIG (immediate Telegram alert)
-"authentication|authorization|invalid.*ocid|not found"
-```
-
-### Transient Error Retry Pattern
-```bash
-# For INTERNAL_ERROR and NETWORK errors:
-# 1. Retry same AD up to 3 times (15 second delays)
-# 2. If still failing, try next availability domain
-# 3. If all ADs exhausted, treat as capacity issue
-```
-
-### Parallel Execution Pattern
-```bash
-# Environment variable injection per shape:
-(export OCI_SHAPE="VM.Standard.A1.Flex"; export OCI_OCPUS="4"; ./launch-instance.sh) &
-(export OCI_SHAPE="VM.Standard.E2.1.Micro"; export OCI_OCPUS=""; ./launch-instance.sh) &
-wait
-```
-
-### GitHub Actions Security
-- **Single job strategy**: All credentials in one job (no artifacts)
-- **Timeout protection**: 55-second limit prevents 2-minute billing
-- **Proxy inheritance**: Environment variables auto-propagate to parallel processes
-
 ## Development Commands
 
-### Local Testing
 ```bash
-# Syntax validation
-bash -n scripts/*.sh
-
 # Configuration validation
 ./scripts/validate-config.sh
+
+# Local testing (requires environment variables)
+./scripts/setup-oci.sh           # OCI CLI + proxy setup
+./scripts/launch-parallel.sh     # Both shapes in parallel
+./scripts/launch-instance.sh     # Single shape (with env vars)
 
 # Test suites
 ./tests/test_proxy.sh             # Proxy validation (15 tests)
 ./tests/test_integration.sh       # Integration tests (9 tests)
+./tests/test_circuit_breaker.sh   # Circuit breaker functionality (9 tests)
+./tests/run_new_tests.sh          # Test runner for enhancements
 
-# Individual components (requires environment variables)
-./scripts/setup-oci.sh           # OCI CLI + proxy setup
-./scripts/launch-parallel.sh     # Both shapes in parallel
-./scripts/launch-instance.sh     # Single shape (with env vars)
+# Syntax validation
+bash -n scripts/*.sh
+
+# Debug mode
+DEBUG=true ./scripts/launch-instance.sh
 ```
 
-### Workflow Testing
+## Environment Variables
+
+```bash
+# Multi-AD Support (comma-separated)
+OCI_AD="fgaj:AP-SINGAPORE-1-AD-1,fgaj:AP-SINGAPORE-1-AD-2,fgaj:AP-SINGAPORE-1-AD-3"
+
+# Performance & Reliability
+BOOT_VOLUME_SIZE="50"                    # GB, minimum enforced
+RECOVERY_ACTION="RESTORE_INSTANCE"       # Auto-restart on failures
+RETRY_WAIT_TIME="30"                     # Seconds between AD attempts
+TRANSIENT_ERROR_MAX_RETRIES="3"         # Retry count per AD
+TRANSIENT_ERROR_RETRY_DELAY="15"        # Seconds between retries
+
+# Debugging
+DEBUG="true"                             # Enable verbose OCI CLI output
+LOG_FORMAT="text"                        # or "json" for structured logging
+```
+
+## Workflow Testing
+
 ```bash
 # Manual run with debug
 gh workflow run free-tier-creation.yml --field verbose_output=true --field send_notifications=false
@@ -162,18 +108,7 @@ gh run watch <run-id>
 # Expected timing: ~20-25 seconds total, ~14 seconds parallel phase
 ```
 
-### Performance Debugging
-```bash
-# Verify optimization flags in logs
-grep "Executing OCI debug command" logs.txt
-# Should show: oci --debug --no-retry --connection-timeout 5 --read-timeout 15
-
-# Test error classification
-source scripts/utils.sh && get_error_type "Too many requests"
-# Expected: CAPACITY
-```
-
-## Oracle Cloud Specifics
+## Error Patterns
 
 ### Expected Behaviors
 - **Capacity limitations are normal** - Oracle Cloud has dynamic resource availability
@@ -187,37 +122,30 @@ source scripts/utils.sh && get_error_type "Too many requests"
 # All OCI resources have globally unique OCIDs
 ```
 
-### Shape Requirements
+### Transient Error Retry Pattern
 ```bash
-# Flexible shapes need --shape-config parameter
---shape-config '{"ocpus": 4, "memoryInGBs": 24}'
-
-# Fixed shapes (*.Micro) do not need shape configuration
+# For INTERNAL_ERROR and NETWORK errors:
+# 1. Retry same AD up to 3 times (15 second delays)
+# 2. If still failing, try next availability domain
+# 3. If all ADs exhausted, treat as capacity issue
 ```
 
-## Proxy Support
+## Gotchas
 
-### Configuration Formats
-```bash
-# IPv4: username:password@proxy.example.com:3128
-# IPv6: username:password@[::1]:3128  
-# URL encoding supported for special characters in passwords
-# Example: myuser:my%40pass@proxy.com:3128 (for password my@pass)
-```
+- **Capacity errors are EXPECTED** (treat as success - retry on schedule)
+- **Single job strategy** (avoid matrix = 2x GitHub Actions cost)
+- **55-second timeout protection** prevents 2-minute billing
+- **Proxy inheritance**: Environment variables auto-propagate to parallel processes
+- **Shape requirements**: Flexible shapes need `--shape-config` parameter
+- **Never remove** OCI CLI optimization flags - they provide 93% performance improvement
 
-### Workflow Management
-- ❌ **NEVER remove the Claude Code Review workflow** (.github/workflows/claude-code-review.yml)
-  - This workflow is essential for automated PR code review
-  - If it fails, fix the issue rather than removing the workflow
-  - **Optimization applied (2025-08-26)**: Added Bun caching and rate limit mitigation
-    - Pre-caches Bun dependencies to avoid npm registry 403 errors
-    - Implements retry logic with exponential backoff
-    - Reduces network concurrency to respect rate limits
+## Oracle Cloud Specifics
 
-### Oracle Cloud Gotchas
+- **Flexible shapes need --shape-config parameter**: `{"ocpus": 4, "memoryInGBs": 24}`
+- **Fixed shapes (*.Micro) do not need shape configuration**
+- **OCID validation**: `^ocid1\.type\.[a-z0-9-]*\.[a-z0-9-]*\..+`
+- **Proxy formats**: `username:password@proxy.example.com:3128` (URL encoding supported)
 - "Out of host capacity" is **expected** during high demand periods (not failure)
-- OCID validation: `^ocid1\.type\.[a-z0-9-]*\.[a-z0-9-]*\..+`
-- Flexible shapes need `--shape-config {"ocpus": N, "memoryInGBs": N}`
 
 ### Proxy Troubleshooting
 ```bash
@@ -233,11 +161,7 @@ echo $HTTP_PROXY $HTTPS_PROXY
 ```
 
 ## Performance Indicators
-- **17-18 seconds**: Optimal execution time
-- **>30 seconds**: Investigation needed
-- **>1 minute**: Missing `--no-retry` flag or other optimizations
 
-### Execution Timing
 - **<20 seconds**: Optimal performance ✅
 - **20-30 seconds**: Acceptable with minor delays
 - **30-60 seconds**: Investigate - config/network issues ⚠️

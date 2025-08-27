@@ -112,7 +112,7 @@ jobs:
       SUCCESS_TRACKING_ENABLED: "true"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Reset success state if requested
         if: inputs.reset_success_state
@@ -213,7 +213,7 @@ jobs:
     if: failure()
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Check if failure was due to capacity
         id: check-capacity
