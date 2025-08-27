@@ -25,19 +25,20 @@ jobs:
         with:
           node-version: "18"
 
-      - name: Install Node.js linters
+      - name: Install Node.js linters and formatters
         run: |
           npm install -g eslint@9.34.0
           npm install -g markdownlint-cli
+          npm install -g prettier@3.2.5
 
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.x"
 
-      - name: Install Python linters
+      - name: Install Python linters and security tools
         run: |
-          pip install djlint yamllint
+          pip install djlint yamllint semgrep codespell
 
       - name: Install Go for shfmt and actionlint
         uses: actions/setup-go@v4
@@ -57,6 +58,12 @@ jobs:
           echo "Go tools installed successfully"
           ~/go/bin/shfmt --version || echo "shfmt version check failed"
           ~/go/bin/actionlint --version || echo "actionlint version check failed"
+          
+          # Install gitleaks for secret detection
+          curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/master/scripts/install.sh | sh -s -- -b /usr/local/bin
+          
+          # Install shellharden for shell security
+          cargo install shellharden || echo "shellharden installation failed, skipping"
 
       - name: Run ESLint
         run: |
@@ -99,7 +106,59 @@ jobs:
             echo "⚠️ markdownlint not available"
           fi
 
-      - name: Lint Summary
+      # Enhanced security and quality checks
+      - name: Run Semgrep Security Analysis
+        run: |
+          if command -v semgrep >/dev/null 2>&1; then
+            echo "🔒 Running security analysis with Semgrep..."
+            semgrep --config=.semgrep.yml scripts/ docs/dashboard/js/ --no-rewrite-rule-ids --quiet || echo "⚠️ Security issues found"
+          else
+            echo "⚠️ semgrep not available"
+          fi
+
+      - name: Run Gitleaks Secret Detection
+        run: |
+          if command -v gitleaks >/dev/null 2>&1; then
+            echo "🕵️ Running secret detection with Gitleaks..."
+            gitleaks detect --source=. --config=.gitleaks.toml --no-git || echo "⚠️ Potential secrets found"
+          else
+            echo "⚠️ gitleaks not available"
+          fi
+
+      - name: Run Shell Security Check
+        run: |
+          if command -v shellharden >/dev/null 2>&1; then
+            echo "🛡️ Running shell security check..."
+            shellharden --check scripts/*.sh || echo "⚠️ Shell security improvements suggested"
+          else
+            echo "⚠️ shellharden not available"
+          fi
+
+      - name: Run Code Formatting Check
+        run: |
+          echo "🎨 Checking code formatting..."
+          if command -v shfmt >/dev/null 2>&1; then
+            ~/go/bin/shfmt -d scripts/*.sh tests/*.sh || echo "⚠️ Shell formatting issues found"
+          else
+            echo "⚠️ shfmt not available"
+          fi
+          
+          if command -v prettier >/dev/null 2>&1; then
+            prettier --check "**/*.{js,json,yml,yaml,md}" || echo "⚠️ Prettier formatting issues found"
+          else
+            echo "⚠️ prettier not available"
+          fi
+
+      - name: Run Spell Check
+        run: |
+          if command -v codespell >/dev/null 2>&1; then
+            echo "📖 Running spell check..."
+            codespell . || echo "⚠️ Spelling issues found"
+          else
+            echo "⚠️ codespell not available"
+          fi
+
+      - name: Enhanced Lint Summary
         if: always()
         run: |
           echo "🎉 Code quality checks completed!"

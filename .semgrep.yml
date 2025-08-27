@@ -1,0 +1,143 @@
+# Semgrep Configuration for OCI Automation Project
+# Security-focused static analysis rules
+
+rules:
+  # Shell script security rules
+  - id: shell-command-injection
+    pattern-either:
+      - pattern: eval "$..."
+      - pattern: eval '$...'
+      - pattern: bash -c "$..."
+      - pattern: sh -c "$..."
+      - pattern: |
+          $CMD="$..."
+          ...
+          $CMD
+    message: |
+      Potential command injection vulnerability. Avoid eval and dynamic command execution with user input.
+    languages: [bash]
+    severity: WARNING
+    metadata:
+      category: security
+      subcategory: [vuln]
+      technology: [bash]
+      references:
+        - https://owasp.org/www-community/attacks/Command_Injection
+
+  - id: shell-unsafe-temp-file
+    pattern-either:
+      - pattern: /tmp/$FILE
+      - pattern: /var/tmp/$FILE
+      - pattern: mktemp
+    message: |
+      Using predictable temporary file paths can lead to race conditions. 
+      Ensure proper permissions and unique filenames.
+    languages: [bash]
+    severity: INFO
+    metadata:
+      category: security
+      subcategory: [vuln]
+      technology: [bash]
+
+  - id: shell-hardcoded-credentials
+    pattern-either:
+      - pattern: PASSWORD="..."
+      - pattern: API_KEY="..."
+      - pattern: SECRET="..."
+      - pattern: TOKEN="..."
+    message: |
+      Hardcoded credentials detected. Use environment variables or secure credential storage.
+    languages: [bash]
+    severity: ERROR
+    metadata:
+      category: security
+      subcategory: [vuln]
+      technology: [bash]
+
+  # JavaScript security rules
+  - id: js-eval-usage
+    pattern-either:
+      - pattern: eval($X)
+      - pattern: new Function($X)
+      - pattern: setTimeout("...", ...)
+      - pattern: setInterval("...", ...)
+    message: |
+      Avoid using eval() or Function constructor as they can execute arbitrary code.
+    languages: [javascript]
+    severity: ERROR
+    metadata:
+      category: security
+      subcategory: [vuln]
+      technology: [javascript]
+
+  - id: js-dom-xss
+    pattern-either:
+      - pattern: $EL.innerHTML = $X
+      - pattern: document.write($X)
+      - pattern: $EL.outerHTML = $X
+    message: |
+      Direct DOM manipulation can lead to XSS. Use textContent or proper sanitization.
+    languages: [javascript]
+    severity: WARNING
+    metadata:
+      category: security
+      subcategory: [vuln]
+      technology: [javascript]
+
+  # OCI-specific security rules
+  - id: oci-credentials-logging
+    pattern-either:
+      - pattern: |
+          echo $PASSWORD
+      - pattern: |
+          echo "$API_KEY"
+      - pattern: |
+          log_info $CREDENTIALS
+      - pattern: |
+          printf "%s" $SECRET
+    pattern-not: |
+      echo "$failure_data"
+    message: |
+      Potential credential logging. Ensure sensitive data is properly masked before logging.
+    languages: [bash]
+    severity: WARNING
+    metadata:
+      category: security
+      subcategory: [audit]
+      technology: [oci, bash]
+
+  - id: insecure-proxy-config
+    pattern: |
+      http_proxy=http://$USER:$PASS@...
+    message: |
+      HTTP proxy with credentials. Consider using HTTPS for proxy connections.
+    languages: [bash]
+    severity: INFO
+    metadata:
+      category: security
+      subcategory: [audit]
+      technology: [networking]
+
+  # General code quality rules
+  - id: bash-set-e-missing
+    pattern: |
+      #!/bin/bash
+      ...
+    pattern-not: |
+      #!/bin/bash
+      ...
+      set -e
+      ...
+    paths:
+      exclude:
+        - "**/test_*.sh"
+        - "**/tests/**"
+        - "**/validate_*.sh"
+    message: |
+      Consider adding 'set -e' to exit on command failures for more robust error handling.
+    languages: [bash]
+    severity: INFO
+    metadata:
+      category: correctness
+      subcategory: [audit]
+      technology: [bash]

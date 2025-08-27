@@ -21,6 +21,25 @@ description = "GitHub Personal Access Token"
 regex = '''ghp_[0-9a-zA-Z]{36}'''
 tags = ["github", "token"]
 
+# OCI-specific rules
+[[rules]]
+id = "oci-private-key"
+description = "OCI/SSH Private Key"
+regex = '''-----BEGIN (RSA |OPENSSH )?PRIVATE KEY-----'''
+tags = ["oci", "private-key", "ssh"]
+
+[[rules]]
+id = "proxy-credentials"
+description = "Proxy URLs with embedded credentials"
+regex = '''(?i)https?://[^:\s/]+:[^@\s/]+@[^/\s]+'''
+tags = ["proxy", "credentials"]
+
+[[rules]]
+id = "oci-auth-token"
+description = "OCI Auth Token format"
+regex = '''ocid1\.[a-z]+\.[a-z0-9]+\.[a-z0-9\-_]+\.[a-z0-9\-_]{64,}'''
+tags = ["oci", "token", "ocid"]
+
 # Global allowlist
 [allowlist]
 description = "Global allowlist"
@@ -38,5 +57,21 @@ regexes = [
     "PLACEHOLDER_.*",
     # Allow common test patterns
     "test.*secret",
-    "dummy.*token"
+    "dummy.*token",
+    # Allow OCI test patterns from our test files
+    "test%40user:my%2Bpass@proxy",
+    "user:password@proxy\\.example\\.com",
+    "user:secret123@proxy\\.example\\.com",
+    "ocid1\\.example\\.",
+    # Allow redacted patterns we use
+    "\\[.*REDACTED.*\\]",
+    "\\[PRIVATE_KEY_REDACTED\\]",
+    "\\[SSH_KEY_REDACTED\\]",
+    # Allow template/variable patterns
+    "\\$\\{encoded_user\\}:\\$\\{encoded_pass\\}",
+    "\\$USER:\\$PASS",
+    # Allow documentation examples
+    "-----BEGIN PRIVATE KEY-----",
+    "user:pass@host:port",
+    "user:pass@\\[host\\]:port"
 ]

@@ -62,8 +62,15 @@ wait  # 55s timeout protection
 ## Development Commands
 
 ```bash
-# Testing and validation
-make lint                          # Run all linters
+# Enhanced testing and validation
+make validate-tools                # Check linting tool availability
+make lint                          # Run traditional linters
+make lint-all                      # Run enhanced linting (security + quality)
+make lint-security                 # Security analysis (semgrep, gitleaks, shellharden)
+make lint-format                   # Code formatting validation (shfmt, prettier)
+make lint-quality                  # Code quality checks (codespell, jscpd)
+make lint-fix                      # Auto-fix linting issues where possible
+
 ./scripts/preflight-check.sh       # Production validation
 ./tests/run_new_tests.sh           # All test suites
 
@@ -107,15 +114,37 @@ gh workflow run infrastructure-deployment.yml --field verbose_output=true
 - `config/regions.yml` - Regional settings
 - `docs/dashboard/` - Web dashboard with GitHub integration
 
-## Linting Standards
+## Enhanced Linting & Security Standards
 
-**Required:** ESLint (JS), djlint (HTML), shellcheck (shell), yamllint (YAML), actionlint (workflows), markdownlint (docs)
+### Traditional Linters (Required)
+**Core Tools:** ESLint (JS), djlint (HTML), shellcheck (shell), yamllint (YAML), actionlint (workflows), markdownlint (docs)
+
+### Security & Quality Tools (Enhanced)
+**Security Analysis:**
+- `semgrep` - Advanced static analysis for vulnerabilities
+- `gitleaks` - Git secrets and credential detection  
+- `shellharden` - Shell script security hardening
+
+**Code Quality:**
+- `shfmt` - Shell script formatting consistency
+- `prettier` - Multi-language code formatting (JS/JSON/YAML/MD)
+- `codespell` - Spell checking in code and documentation
+
+### Configuration Files
+- `.gitleaks.toml` - Secret detection rules with OCI-specific patterns
+- `.semgrep.yml` - Security analysis rules for shell/JS vulnerabilities
+- `.prettierrc.json` - Code formatting standards
+- `.codespellrc` - Spell checking configuration with project terms
+- `.editorconfig` - IDE formatting consistency
 
 **Commands:**
 ```bash
-make lint                          # All linters
-make lint-fix                      # Auto-fix where possible
-shellcheck scripts/*.sh tests/*.sh # Shell validation
+make validate-tools                # Check tool availability
+make lint-all                      # Run enhanced linting suite
+make lint-security                 # Security analysis only
+make lint-format                   # Formatting validation only
+make lint-quality                  # Code quality checks only
+make lint-fix                      # Auto-fix issues where possible
 ```
 
 ## Oracle Cloud Specifics
@@ -147,3 +176,4 @@ shellcheck scripts/*.sh tests/*.sh # Shell validation
 - Multi-AD cycling increases success rates significantly
 
 **Git Rules:** Lookup actual GitHub user/repo, don't assume from folder names. Never disable super-linter or other linter jobs.
+- When updating CLAUDE.md, keep it concise and optimized for token count.
