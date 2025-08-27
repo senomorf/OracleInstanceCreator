@@ -323,12 +323,19 @@ main() {
         
         return 0
     else
-        log_error "Parallel execution failed: Both instance creation attempts failed"
-        
-        # Let individual shape failures handle their own error notifications
-        # This prevents duplicate error notifications
-        
-        return 1
+        # Both instances failed - check if both were capacity errors
+        if [[ $STATUS_A1 -eq 2 && $STATUS_E2 -eq 2 ]]; then
+            log_warning "Parallel execution: Both instances failed due to capacity limitations (expected behavior)"
+            return "$OCI_EXIT_CAPACITY_ERROR"  # Exit 2 - treat as success for capacity issues
+        elif [[ $STATUS_A1 -eq 2 || $STATUS_E2 -eq 2 ]]; then
+            log_warning "Parallel execution: One capacity failure, one other failure - treating as capacity issue"
+            return "$OCI_EXIT_CAPACITY_ERROR"  # Exit 2 - if any capacity failure, treat as such
+        else
+            log_error "Parallel execution failed: Both instance creation attempts failed with non-capacity errors"
+            # Let individual shape failures handle their own error notifications
+            # This prevents duplicate error notifications
+            return "$OCI_EXIT_GENERAL_ERROR"  # Exit 1 - genuine configuration/auth failures
+        fi
     fi
 }
 

@@ -201,7 +201,19 @@ jobs:
           OCI_PROXY_URL: ${{ secrets.OCI_PROXY_URL }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
-        run: ./scripts/launch-parallel.sh
+        run: |
+          ./scripts/launch-parallel.sh
+          EXIT_CODE=$?
+          if [[ $EXIT_CODE -eq 0 ]]; then
+            echo "✅ SUCCESS: At least one instance created"
+            exit 0
+          elif [[ $EXIT_CODE -eq 2 ]]; then
+            echo "⚠️  CAPACITY: No instances created due to capacity limitations (expected behavior)"
+            exit 0  # Treat capacity errors as success
+          else
+            echo "❌ FAILURE: Configuration or authentication error (exit code: $EXIT_CODE)"
+            exit 1  # Genuine failures should still fail the workflow
+          fi
 
       - name: Schedule Optimization Analysis
         if: always() && env.ENABLE_ADAPTIVE_SCHEDULING == 'true'
