@@ -1,0 +1,14 @@
+# ShellCheck configuration
+# Disable SC1091 - we know our sourced files exist
+disable=SC1091
+# Allow unquoted variables in specific contexts we control
+# disable=SC2086 - will fix these individually
+# Allow local assignment patterns that are commonly used
+# disable=SC2155 - will fix these individually
+
+# Source path for external scripts
+source-path=SCRIPTDIR
+
+# Suppress SC2034 (unused variables) for constants.sh as these are for external use  
+# Suppress SC2329 (unused functions) in test files as they're called by test frameworks
+# Note: file-specific suppressions require different approach - using global disable for now
