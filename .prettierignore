@@ -42,7 +42,11 @@ Thumbs.db
 .gitignore
 
 # Project specific
-# Keep existing shell script formatting (they have their own linting)
+# Shell Script Formatting Strategy:
+# - Exclude shell scripts from Prettier to preserve existing formatting and shell-specific conventions
+# - Shell scripts use 4-space indentation (enforced by EditorConfig) and follow POSIX standards
+# - Shell scripts have specialized linting (shellcheck) and are optimized for OCI CLI patterns
+# - Mixed-content shell scripts (outside these directories) can still benefit from Prettier
 scripts/*.sh
 tests/*.sh
 
