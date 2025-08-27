@@ -1,3 +1,4 @@
+/* global Chart, dateFns */
 // OCI Orchestrator Dashboard JavaScript
 class OracleInstanceDashboard {
   constructor () {

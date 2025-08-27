@@ -48,9 +48,9 @@ track_resource_usage() {
     fi
 }
 
-# Signal handler for graceful shutdown
-cleanup_handler() {
-    log_warning "Received interrupt signal - cleaning up background processes"
+# Reusable function to terminate background processes
+terminate_processes() {
+    local graceful_kill=${1:-true}  # Whether to use graceful shutdown with delay
     
     if [[ -n "$PID_A1" ]] && kill -0 "$PID_A1" 2>/dev/null; then
         log_debug "Terminating A1 process (PID: $PID_A1)"
@@ -62,7 +62,9 @@ cleanup_handler() {
         kill "$PID_E2" 2>/dev/null || true
     fi
     
-    sleep "$GRACEFUL_TERMINATION_DELAY"
+    if [[ "$graceful_kill" == "true" ]]; then
+        sleep "$GRACEFUL_TERMINATION_DELAY"
+    fi
     
     # Force kill if still running
     if [[ -n "$PID_A1" ]] && kill -0 "$PID_A1" 2>/dev/null; then
@@ -71,6 +73,12 @@ cleanup_handler() {
     if [[ -n "$PID_E2" ]] && kill -0 "$PID_E2" 2>/dev/null; then
         kill -9 "$PID_E2" 2>/dev/null || true
     fi
+}
+
+# Signal handler for graceful shutdown
+cleanup_handler() {
+    log_warning "Received interrupt signal - cleaning up background processes"
+    terminate_processes true
     
     # Cleanup temporary files
     if [[ -n "$temp_dir" && -d "$temp_dir" ]]; then
@@ -219,23 +227,7 @@ main() {
     # Handle timeout case
     if [[ $elapsed -ge $timeout_seconds ]]; then
         log_warning "Execution timeout reached (${timeout_seconds}s) - terminating background processes"
-        # Enhanced process cleanup with existence checks
-        if [[ -n "$PID_A1" ]] && kill -0 "$PID_A1" 2>/dev/null; then
-            log_debug "Terminating A1 process (PID: $PID_A1)"
-            kill "$PID_A1" 2>/dev/null || true
-        fi
-        if [[ -n "$PID_E2" ]] && kill -0 "$PID_E2" 2>/dev/null; then
-            log_debug "Terminating E2 process (PID: $PID_E2)"
-            kill "$PID_E2" 2>/dev/null || true
-        fi
-        sleep "$GRACEFUL_TERMINATION_DELAY"  # 2-second grace period allows processes to cleanup before SIGKILL
-        # Force kill if still running
-        if [[ -n "$PID_A1" ]] && kill -0 "$PID_A1" 2>/dev/null; then
-            kill -9 "$PID_A1" 2>/dev/null || true
-        fi
-        if [[ -n "$PID_E2" ]] && kill -0 "$PID_E2" 2>/dev/null; then
-            kill -9 "$PID_E2" 2>/dev/null || true
-        fi
+        terminate_processes true
         STATUS_A1=$EXIT_TIMEOUT_ERROR  # Standard timeout exit code (GNU timeout compatibility)
         STATUS_E2=$EXIT_TIMEOUT_ERROR  # Standard timeout exit code (GNU timeout compatibility)
     fi

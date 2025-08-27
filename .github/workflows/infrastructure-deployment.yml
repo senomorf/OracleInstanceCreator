@@ -74,9 +74,7 @@ env:
 
 jobs:
   create-instance:
-    # Skip execution if instance already created (unless manually reset)
-    # Use environment variable instead of repository vars to avoid actionlint error
-    if: ${{ env.INSTANCE_CREATED != 'true' || inputs.reset_success_state }}
+    # Job runs unconditionally - instance state checked within scripts
     runs-on: ubuntu-latest
     name: Deploy OCI Infrastructure (Parallel Orchestration)
     permissions:
