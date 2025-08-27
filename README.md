@@ -1,10 +1,13 @@
 # OCI Free Tier Automation
 
-[![GitHub Actions](https://github.com/senomorf/OracleInstanceCreator/workflows/OCI%20Free%20Tier%20Creation/badge.svg)](https://github.com/senomorf/OracleInstanceCreator/actions)
+[![GitHub Actions][actions-badge]][actions-link]
+[![Linting][linting-badge]][linting-link]
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![OCI Compatible](https://img.shields.io/badge/OCI-Compatible-orange.svg)](https://cloud.oracle.com/)
+[![Code Quality](https://img.shields.io/badge/code%20quality-enforced-brightgreen.svg)](#contributing)
 
-Automated provisioning of Oracle Cloud free-tier instances (A1.Flex ARM & E2.1.Micro AMD) via GitHub Actions with parallel execution and smart retry logic.
+Automated provisioning of Oracle Cloud free-tier instances (A1.Flex ARM &
+E2.1.Micro AMD) via GitHub Actions with parallel execution and smart retry logic.
 
 ## Features
 
@@ -65,7 +68,9 @@ The system executes both instance types in parallel for maximum efficiency:
 - Instance name: `e2-micro-sg`
 - Traditional x86 architecture
 
-Each shape independently cycles through configured availability domains until successful or capacity unavailable. The parallel approach maximizes your chances of securing at least one free-tier instance.
+Each shape independently cycles through configured availability domains until
+successful or capacity unavailable. The parallel approach maximizes your chances
+of securing at least one free-tier instance.
 
 ## Deployment Scenarios
 
@@ -128,4 +133,25 @@ MIT License - See [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
-This project demonstrates advanced cloud automation patterns and Infrastructure-as-Code practices. Contributions welcome for additional cloud providers, enhanced error handling, or performance optimizations.
+This project demonstrates advanced cloud automation patterns and
+Infrastructure-as-Code practices with comprehensive code quality standards.
+
+**Before Contributing:**
+- Review our [Contributing Guide](CONTRIBUTING.md) for development workflow and coding standards
+- All code must pass linting checks (ShellCheck, markdownlint, YAML lint, etc.)
+- Include tests for new features and ensure existing tests pass
+- Follow conventional commit message format
+
+**Code Quality:**
+- **Automated linting** for shell scripts, YAML, JSON, and Markdown
+- **Security scanning** with GitLeaks for credential detection  
+- **Duplicate code detection** to maintain clean codebase
+- **EditorConfig** for consistent file formatting
+
+Contributions welcome for additional cloud providers, enhanced error handling,
+performance optimizations, and testing improvements.
+
+[actions-badge]: https://github.com/senomorf/OracleInstanceCreator/workflows/OCI%20Free%20Tier%20Creation/badge.svg
+[actions-link]: https://github.com/senomorf/OracleInstanceCreator/actions
+[linting-badge]: https://github.com/senomorf/OracleInstanceCreator/workflows/Lint%20Code%20Base/badge.svg
+[linting-link]: https://github.com/senomorf/OracleInstanceCreator/actions

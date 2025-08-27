@@ -1,0 +1,14 @@
+{
+  "threshold": 3,
+  "reporters": ["console"],
+  "ignore": [
+    "node_modules/**",
+    "**/*.min.js",
+    "tests/**",
+    "docs/dashboard/js/vendor/**"
+  ],
+  "format": ["javascript", "typescript", "bash"],
+  "minLines": 10,
+  "minTokens": 50,
+  "output": ".jscpd-report"
+}
