@@ -7,7 +7,7 @@
     "tests/**",
     "docs/dashboard/js/vendor/**"
   ],
-  "format": ["javascript", "typescript"],
+  "format": ["javascript", "typescript", "bash"],
   "minLines": 10,
   "minTokens": 50,
   "output": ".jscpd-report"

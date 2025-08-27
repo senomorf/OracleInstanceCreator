@@ -6,34 +6,34 @@ class OracleInstanceDashboard {
       // Timing constants (in milliseconds)
       DEFAULT_REFRESH_INTERVAL: 120000, // 2 minutes refresh
       DEFAULT_BASE_DELAY: 800, // Base delay between API calls
-      EXPONENTIAL_BASE_DELAY: 1000,          // 1 second base for exponential backoff
-      EXPONENTIAL_MAX_DELAY: 30000,          // 30 seconds max exponential delay
-      CDN_RETRY_BASE_DELAY: 1000,            // CDN check retry base delay
-      AUTH_CALLS_INITIAL_DELAY: 1000,        // Delay before authenticated calls
-      FIRST_TIME_SETUP_DELAY: 1000,          // Delay for showing setup modal
-      
+      EXPONENTIAL_BASE_DELAY: 1000, // 1 second base for exponential backoff
+      EXPONENTIAL_MAX_DELAY: 30000, // 30 seconds max exponential delay
+      CDN_RETRY_BASE_DELAY: 1000, // CDN check retry base delay
+      AUTH_CALLS_INITIAL_DELAY: 1000, // Delay before authenticated calls
+      FIRST_TIME_SETUP_DELAY: 1000, // Delay for showing setup modal
+
       // Rate limiting thresholds
-      RATE_LIMIT_DEFAULT_REMAINING: 5000,    // Default when unknown
-      RATE_LIMIT_CRITICAL_THRESHOLD: 10,     // Critical threshold
-      RATE_LIMIT_LOW_THRESHOLD: 50,          // Low threshold
-      RATE_LIMIT_WARNING_THRESHOLD: 100,     // Warning threshold
+      RATE_LIMIT_DEFAULT_REMAINING: 5000, // Default when unknown
+      RATE_LIMIT_CRITICAL_THRESHOLD: 10, // Critical threshold
+      RATE_LIMIT_LOW_THRESHOLD: 50, // Low threshold
+      RATE_LIMIT_WARNING_THRESHOLD: 100, // Warning threshold
       RATE_LIMIT_APPROACHING_THRESHOLD: 200, // Approaching limits threshold
-      RATE_LIMIT_WARNING_RESET_MINUTES: 30,  // Minutes for warning reset logic
+      RATE_LIMIT_WARNING_RESET_MINUTES: 30, // Minutes for warning reset logic
       RATE_LIMIT_WARNING_RESET_REMAINING: 500, // Requests for warning reset logic
-      
-      // Cache and offline constants  
-      CACHE_VALIDITY_HOURS: 24,              // Cache valid for 24 hours
-      OFFLINE_CACHE_SIZE_LIMIT: 50000,       // 50KB cache limit
-      
+
+      // Cache and offline constants
+      CACHE_VALIDITY_HOURS: 24, // Cache valid for 24 hours
+      OFFLINE_CACHE_SIZE_LIMIT: 50000, // 50KB cache limit
+
       // Time conversion constants
-      MS_PER_MINUTE: 60000,                  // Milliseconds per minute
-      MS_PER_HOUR: 3600000,                  // Milliseconds per hour
-      SECONDS_PER_MINUTE: 60,                // Seconds per minute
-      
+      MS_PER_MINUTE: 60000, // Milliseconds per minute
+      MS_PER_HOUR: 3600000, // Milliseconds per hour
+      SECONDS_PER_MINUTE: 60, // Seconds per minute
+
       // API and UI constants
-      DEFAULT_MAX_RETRIES: 3,                // Default retry attempts
-      PERCENTAGE_MULTIPLIER: 100,            // For percentage calculations
-      JITTER_FACTOR: 0.1                     // Jitter percentage (10%)
+      DEFAULT_MAX_RETRIES: 3, // Default retry attempts
+      PERCENTAGE_MULTIPLIER: 100, // For percentage calculations
+      JITTER_FACTOR: 0.1 // Jitter percentage (10%)
     }
 
     this.config = {
@@ -268,15 +268,15 @@ class OracleInstanceDashboard {
     if (!element) {
       return
     }
-    
+
     // Clear existing content
     element.textContent = ''
-    
+
     // Create icon
     const icon = document.createElement('i')
     icon.className = 'far fa-clock'
     element.appendChild(icon)
-    
+
     // Create time span
     const timeSpan = document.createElement('span')
     timeSpan.textContent = this.formatTime(date)
@@ -291,12 +291,12 @@ class OracleInstanceDashboard {
   createWorkflowRunHTML (run) {
     const div = document.createElement('div')
     div.className = `workflow-item ${run.conclusion || 'running'}`
-    
+
     // Status icon
     const statusIcon = document.createElement('div')
     statusIcon.className = 'workflow-status'
     const icon = document.createElement('i')
-    
+
     if (run.status === 'in_progress') {
       icon.className = 'fas fa-circle-notch fa-spin'
     } else {
@@ -316,23 +316,23 @@ class OracleInstanceDashboard {
     }
     statusIcon.appendChild(icon)
     div.appendChild(statusIcon)
-    
+
     // Content
     const content = document.createElement('div')
     content.className = 'workflow-content'
-    
+
     const title = document.createElement('div')
     title.className = 'workflow-title'
     title.textContent = run.display_title || run.name || 'Workflow Run'
-    
+
     const meta = document.createElement('div')
     meta.className = 'workflow-meta'
     meta.textContent = `${run.event} • ${this.formatTimeAgo(run.created_at)}`
-    
+
     content.appendChild(title)
     content.appendChild(meta)
     div.appendChild(content)
-    
+
     // Duration
     const duration = document.createElement('div')
     duration.className = 'workflow-duration'
@@ -343,14 +343,14 @@ class OracleInstanceDashboard {
       duration.textContent = '--'
     }
     div.appendChild(duration)
-    
+
     return div
   }
 
   createLoadingDiv (message) {
     const div = document.createElement('div')
     div.className = 'loading'
-    
+
     if (message.includes('fa-')) {
       // Message contains Font Awesome icon
       const iconMatch = message.match(/<i class="([^"]+)"><\/i>/)
@@ -365,37 +365,37 @@ class OracleInstanceDashboard {
     } else {
       div.textContent = message
     }
-    
+
     return div
   }
 
   createADItemDiv (ad, stats) {
     const div = document.createElement('div')
     div.className = 'ad-item'
-    
+
     // AD name
     const nameDiv = document.createElement('div')
     nameDiv.className = 'ad-name'
     nameDiv.textContent = ad.split(':')[1] || ad
     div.appendChild(nameDiv)
-    
+
     // Stats container
     const statsDiv = document.createElement('div')
     statsDiv.className = 'ad-stats'
-    
+
     // Success rate
     const successRate = stats.total > 0 ? Math.round((stats.success / stats.total) * this.CONSTANTS.PERCENTAGE_MULTIPLIER) : 0
     const successDiv = document.createElement('div')
     successDiv.className = 'ad-stat'
     successDiv.textContent = `${successRate}% success`
     statsDiv.appendChild(successDiv)
-    
+
     // Attempts
     const attemptsDiv = document.createElement('div')
     attemptsDiv.className = 'ad-stat'
     attemptsDiv.textContent = `${stats.total} attempts`
     statsDiv.appendChild(attemptsDiv)
-    
+
     div.appendChild(statsDiv)
     return div
   }
@@ -403,41 +403,41 @@ class OracleInstanceDashboard {
   createScheduleCard (rec) {
     const div = document.createElement('div')
     div.className = 'schedule-card'
-    
+
     // Title
     const title = document.createElement('div')
     title.className = 'schedule-title'
     title.textContent = rec.title
     div.appendChild(title)
-    
+
     // Description
     const description = document.createElement('div')
     description.className = 'schedule-details'
     description.textContent = rec.description
     div.appendChild(description)
-    
+
     // Metrics container
     const metrics = document.createElement('div')
     metrics.className = 'schedule-metrics'
-    
+
     // Cron metric
     const cronMetric = document.createElement('div')
     cronMetric.className = 'metric'
     cronMetric.textContent = `Cron: ${rec.cron}`
     metrics.appendChild(cronMetric)
-    
+
     // Frequency metric
     const freqMetric = document.createElement('div')
     freqMetric.className = 'metric'
     freqMetric.textContent = rec.frequency
     metrics.appendChild(freqMetric)
-    
+
     // Usage metric
     const usageMetric = document.createElement('div')
     usageMetric.className = 'metric'
     usageMetric.textContent = rec.usage
     metrics.appendChild(usageMetric)
-    
+
     div.appendChild(metrics)
     return div
   }
@@ -563,10 +563,10 @@ class OracleInstanceDashboard {
    */
   calculateDynamicBackoff (baseDelay = this.CONSTANTS.DEFAULT_BASE_DELAY, retryCount = 0) {
     const remaining = this.rateLimitState.remaining || this.CONSTANTS.RATE_LIMIT_DEFAULT_REMAINING
-    
+
     // Exponential backoff based on retry count
     const exponentialMultiplier = retryCount > 0 ? Math.pow(2, retryCount) : 1
-    
+
     // Rate limit based backoff based on remaining quota
     let rateLimitMultiplier = 1
     if (remaining < this.CONSTANTS.RATE_LIMIT_CRITICAL_THRESHOLD) {
@@ -576,38 +576,38 @@ class OracleInstanceDashboard {
     } else if (remaining < this.CONSTANTS.RATE_LIMIT_WARNING_THRESHOLD) {
       rateLimitMultiplier = 2.5 // Moderate backoff when getting low
     }
-    
+
     // Add additional check for approaching threshold
     if (remaining < this.CONSTANTS.RATE_LIMIT_APPROACHING_THRESHOLD && rateLimitMultiplier === 1) {
       rateLimitMultiplier = 1.5 // Light backoff when approaching limits
     }
-    
+
     // Combine both multipliers for comprehensive backoff
-    const multiplier = Math.max(exponentialMultiplier, rateLimitMultiplier)
-    
+    let multiplier = exponentialMultiplier * rateLimitMultiplier
+
     // Add time-based component if reset time is known
     if (this.rateLimitState.resetTime) {
       const now = new Date()
       const timeUntilReset = this.rateLimitState.resetTime - now
       const minutesUntilReset = Math.max(0, Math.floor(timeUntilReset / this.CONSTANTS.MS_PER_MINUTE))
-      
+
       // If reset is soon but we're low on requests, be more conservative
       if (minutesUntilReset < this.CONSTANTS.RATE_LIMIT_WARNING_RESET_MINUTES && remaining < this.CONSTANTS.RATE_LIMIT_WARNING_RESET_REMAINING) {
         multiplier = Math.max(multiplier, 2)
       }
     }
-    
+
     const delay = baseDelay * multiplier
-    
+
     // Add jitter to prevent thundering herd effect
     const jitter = Math.random() * this.CONSTANTS.JITTER_FACTOR * delay
     const finalDelay = Math.floor(delay + jitter)
-    
+
     // Log for debugging when using aggressive backoff
     if (multiplier > 2) {
       console.log(`🐌 Dynamic backoff: ${finalDelay}ms (${remaining} requests remaining, multiplier: ${multiplier.toFixed(1)})`)
     }
-    
+
     return finalDelay
   }
 
@@ -955,12 +955,12 @@ class OracleInstanceDashboard {
       workflowContainer.textContent = ''
       const loadingDiv = document.createElement('div')
       loadingDiv.className = 'loading'
-      
+
       const icon = document.createElement('i')
       icon.className = 'fas fa-cog'
       loadingDiv.appendChild(icon)
       loadingDiv.appendChild(document.createTextNode('Repository not configured. Click settings to get started.'))
-      
+
       workflowContainer.appendChild(loadingDiv)
     }
   }
@@ -1053,7 +1053,7 @@ class OracleInstanceDashboard {
     } catch (error) {
       const container = document.getElementById('workflow-runs')
       container.textContent = ''
-      
+
       let message
       if (error.message.includes('rate limit')) {
         message = '⏳ Rate limited - please wait and refresh'
@@ -1062,7 +1062,7 @@ class OracleInstanceDashboard {
       } else {
         message = '❌ Error loading workflow runs'
       }
-      
+
       container.appendChild(this.createLoadingDiv(message))
       console.error('Error loading workflow runs:', error)
     }
@@ -1192,7 +1192,7 @@ class OracleInstanceDashboard {
       })
 
       container.textContent = ''
-      
+
       if (Object.keys(adStats).length === 0) {
         container.appendChild(this.createLoadingDiv('No AD data available'))
       } else {
@@ -1381,15 +1381,15 @@ class OracleInstanceDashboard {
     indicator.id = 'offline-indicator'
     const banner = document.createElement('div')
     banner.className = 'offline-banner'
-    
+
     const mainText = document.createElement('span')
     mainText.textContent = '📵 Offline Mode'
     banner.appendChild(mainText)
-    
+
     const subText = document.createElement('small')
     subText.textContent = 'Using cached data'
     banner.appendChild(subText)
-    
+
     indicator.appendChild(banner)
     indicator.style.cssText = `
             position: fixed;
@@ -1514,27 +1514,27 @@ class OracleInstanceDashboard {
     if (data.workflowRuns) {
       const container = document.getElementById('workflow-runs')
       container.textContent = ''
-      
+
       data.workflowRuns.forEach(run => {
         const runItem = document.createElement('div')
         const statusClass = this.getRunStatusClass(run.status)
         runItem.className = `run-item ${statusClass.class}`
-        
+
         const statusSpan = document.createElement('span')
         statusSpan.className = 'run-status'
         statusSpan.textContent = statusClass.text
         runItem.appendChild(statusSpan)
-        
+
         const timeSpan = document.createElement('span')
         timeSpan.className = 'run-time'
         timeSpan.textContent = `${this.formatDateSafe(run.created_at)} (cached)`
         runItem.appendChild(timeSpan)
-        
+
         const durationSpan = document.createElement('span')
         durationSpan.className = 'run-duration'
         durationSpan.textContent = `${run.duration || '--'}s`
         runItem.appendChild(durationSpan)
-        
+
         container.appendChild(runItem)
       })
     }
@@ -1542,7 +1542,7 @@ class OracleInstanceDashboard {
     // Update last refresh time
     const lastUpdateEl = document.getElementById('last-update')
     lastUpdateEl.textContent = ''
-    
+
     const span = document.createElement('span')
     span.textContent = `Last updated (cached): ${this.formatDateSafe(this.offlineMode.cacheTimestamp)}`
     lastUpdateEl.appendChild(span)
@@ -1555,21 +1555,21 @@ class OracleInstanceDashboard {
 
     const workflowContainer = document.getElementById('workflow-runs')
     workflowContainer.textContent = ''
-    
+
     const loadingDiv = document.createElement('div')
     loadingDiv.className = 'loading'
-    
+
     const icon = document.createElement('i')
     icon.className = 'fas fa-wifi'
     icon.style.opacity = '0.5'
     loadingDiv.appendChild(icon)
     loadingDiv.appendChild(document.createTextNode('No connection - cached data unavailable'))
-    
+
     workflowContainer.appendChild(loadingDiv)
 
     const lastUpdateEl = document.getElementById('last-update')
     lastUpdateEl.textContent = ''
-    
+
     const span = document.createElement('span')
     span.textContent = 'Offline mode - no data available'
     lastUpdateEl.appendChild(span)
@@ -1618,7 +1618,7 @@ class OracleInstanceDashboard {
     const recommendations = this.getRegionalRecommendations(region)
 
     container.textContent = ''
-    
+
     recommendations.forEach(rec => {
       container.appendChild(this.createScheduleCard(rec))
     })
@@ -1756,7 +1756,7 @@ class OracleInstanceDashboard {
 
   /**
    * Public GitHub API call (no authentication required)
-   * @param {string} endpoint - API endpoint path  
+   * @param {string} endpoint - API endpoint path
    * @param {Object} [options={}] - Fetch options
    * @returns {Promise<Object>} Parsed JSON response
    * @throws {Error} API errors or rate limit exceeded
@@ -1888,12 +1888,12 @@ class OracleInstanceDashboard {
     // Repo names: alphanumeric, hyphens, underscores, dots, cannot start with dot, max 100 chars
     const validOwner = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/
     const validRepo = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,99}$/
-    
+
     if (!validOwner.test(owner)) {
       this.showError('Invalid repository owner format (alphanumeric and hyphens only, max 39 chars)')
       return
     }
-    
+
     if (!validRepo.test(repo)) {
       this.showError('Invalid repository name format (alphanumeric, dots, hyphens, underscores, max 100 chars)')
       return
@@ -1916,12 +1916,12 @@ class OracleInstanceDashboard {
     const statusEl = document.getElementById('connection-status')
 
     statusEl.textContent = ''
-    
+
     const icon = document.createElement('i')
     icon.className = 'fas fa-circle'
-    
+
     const span = document.createElement('span')
-    
+
     if (this.config.token && this.config.owner && this.config.repo) {
       icon.style.color = '#10b981'
       span.textContent = 'Connected'
@@ -1929,7 +1929,7 @@ class OracleInstanceDashboard {
       icon.style.color = '#ef4444'
       span.textContent = 'Not Configured'
     }
-    
+
     statusEl.appendChild(icon)
     statusEl.appendChild(span)
   }

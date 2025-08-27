@@ -34,4 +34,4 @@ module.exports = {
     'require-await': 'warn',
     'no-async-promise-executor': 'error'
   }
-};
+}
