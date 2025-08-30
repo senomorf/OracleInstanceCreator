@@ -3,7 +3,7 @@ name: Claude PR Auto Review
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, ready_for_review, reopened]
   # not ready for use: reacts on pr review comment published after pull_request event
   # issue_comment:
   #   types: [created]
@@ -34,7 +34,7 @@ jobs:
 
       - name: Automatic PR Review
         id: claude-review
-        uses: anthropics/claude-code-action@v1-dev
+        uses: anthropics/claude-code-action@v1
         env:
           NPM_CONFIG_MAXSOCKETS: "15"
           NPM_CONFIG_NETWORK_CONCURRENCY: "1"
@@ -43,27 +43,41 @@ jobs:
         with:
           additional_permissions: |
             actions: read
+
           # github_token not needed - uses default GITHUB_TOKEN for GitHub operations
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          # ✨ Enables tracking comments like in v0.x
+          track_progress: true
+
           # Use just one comment to deliver PR comments (only applies for pull_request event workflows)
-          use_sticky_comment: true
+          # use_sticky_comment: true
+
           # Enable commit signing using GitHub's commit signature verification. When false, Claude uses standard git commands
           # use_commit_signing: true
+
+          # --disallowedTools WebSearch,WebFetch
+          # --model claude-opus-4-1-20250805
+
           claude_args: |
-            --model claude-opus-4-1-20250805
             --max-turns 15
-            --system-prompt "You are a senior engineer focused on code quality and security. You are also a performance optimization expert. Focus on identifying bottlenecks and suggesting improvements."
-            --allowedTools "Task,Bash,Glob,Grep,LS,ExitPlanMode,Read,Edit,MultiEdit,Write,NotebookEdit,TodoWrite,BashOutput,KillBash,mcp__github_inline_comment__create_inline_comment,mcp__github_ci__get_ci_status,mcp__github_ci__get_workflow_run_details,mcp__github_ci__download_job_log,mcp__github_comment__update_claude_comment,mcp__github__add_comment_to_pending_review,mcp__github__create_and_submit_pull_request_review,mcp__github__create_issue,mcp__github__create_or_update_file,mcp__github__create_pending_pull_request_review,mcp__github__delete_pending_pull_request_review,mcp__github__download_workflow_run_artifact,mcp__github__get_code_scanning_alert,mcp__github__get_commit,mcp__github__get_dependabot_alert,mcp__github__get_file_contents,mcp__github__get_job_logs,mcp__github__get_me,mcp__github__get_pull_request,mcp__github__get_pull_request_comments,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_files,mcp__github__get_pull_request_reviews,mcp__github__get_pull_request_status,mcp__github__get_secret_scanning_alert,mcp__github__get_workflow_run,mcp__github__get_workflow_run_logs,mcp__github__list_branches,mcp__github__list_code_scanning_alerts,mcp__github__list_commits,mcp__github__list_dependabot_alerts,mcp__github__list_pull_requests,mcp__github__list_secret_scanning_alerts,mcp__github__list_workflow_jobs,mcp__github__list_workflow_run_artifacts,mcp__github__list_workflow_runs,mcp__github__list_workflows,mcp__github__merge_pull_request,mcp__github__push_files,mcp__github__rerun_failed_jobs,mcp__github__rerun_workflow_run,mcp__github__run_workflow,mcp__github__search_code,mcp__github__search_pull_requests,mcp__github__submit_pending_pull_request_review,mcp__github__update_pull_request,mcp__github__update_pull_request_branch,mcp__github__get_issue,mcp__github__add_issue_comment,mcp__github__get_issue_comments,ListMcpResourcesTool,ReadMcpResourceTool"
-            --disallowedTools WebSearch,WebFetch
+            --system-prompt "You are a senior engineer focused on code quality and security. You own this project and question every change. You look for a reason, justification and value behind every feature and strive to reduce unncessesary increase of complexity and unncessesary features and guard against deviations from project goals and use cases. You are a performance optimization expert. Focus on identifying bottlenecks and suggesting improvements."
+            --allowedTools "WebSearch,WebFetch,Task,Bash,Glob,Grep,LS,ExitPlanMode,Read,Edit,MultiEdit,Write,NotebookEdit,TodoWrite,BashOutput,KillBash,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr review:*),mcp__github_inline_comment__create_inline_comment,mcp__github_inline_comment__create_inline_comment,mcp__github_ci__get_ci_status,mcp__github_ci__get_workflow_run_details,mcp__github_ci__download_job_log,mcp__github_comment__update_claude_comment,mcp__github__add_comment_to_pending_review,mcp__github__create_and_submit_pull_request_review,mcp__github__create_issue,mcp__github__create_or_update_file,mcp__github__create_pending_pull_request_review,mcp__github__delete_pending_pull_request_review,mcp__github__download_workflow_run_artifact,mcp__github__get_code_scanning_alert,mcp__github__get_commit,mcp__github__get_dependabot_alert,mcp__github__get_file_contents,mcp__github__get_job_logs,mcp__github__get_me,mcp__github__get_pull_request,mcp__github__get_pull_request_comments,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_files,mcp__github__get_pull_request_reviews,mcp__github__get_pull_request_status,mcp__github__get_secret_scanning_alert,mcp__github__get_workflow_run,mcp__github__get_workflow_run_logs,mcp__github__list_branches,mcp__github__list_code_scanning_alerts,mcp__github__list_commits,mcp__github__list_dependabot_alerts,mcp__github__list_pull_requests,mcp__github__list_secret_scanning_alerts,mcp__github__list_workflow_jobs,mcp__github__list_workflow_run_artifacts,mcp__github__list_workflow_runs,mcp__github__list_workflows,mcp__github__merge_pull_request,mcp__github__push_files,mcp__github__rerun_failed_jobs,mcp__github__rerun_workflow_run,mcp__github__run_workflow,mcp__github__search_code,mcp__github__search_pull_requests,mcp__github__submit_pending_pull_request_review,mcp__github__update_pull_request,mcp__github__update_pull_request_branch,mcp__github__get_issue,mcp__github__add_issue_comment,mcp__github__get_issue_comments,ListMcpResourcesTool,ReadMcpResourceTool"
 
           # Disabled: creates a mess to review. Inline suggestions are often broken
           # Use GitHub's suggestion format when proposing code changes.
           # Use inline comments to highlight specific areas of concern.
 
-          # If PR was already reviewed by claude previously, validate latest changes made since your previous review against previous review result first.
-          # Make full PR review only if either no previous review of this PR by claude found, or if you validated that latest changes pushed to the PR have fixed all issues (of medium priority or higher) found in previous claude review in this PR.
+          # Never read all PR comments at once. Always use pagination and filters.
+          # If whole PR diff is too large, instead of getting whole diff list changes in PR and review changes one by one.
+
+          # `gh pr comment ${{ github.event.pull_request.number }} --delete-last --yes`
+
           prompt: |
-            Please review this PR #${{ github.event.pull_request.number }} in ${{ github.repository }} by ${{ github.actor }} with comprehensive analysis covering both general software engineering principles and OCI automation specifics:
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Please review this PR with comprehensive analysis covering both general software engineering principles and OCI automation specifics:
 
             **General Code Quality & Best Practices:**
             - Code structure, readability, and maintainability
@@ -105,13 +119,28 @@ jobs:
             - Boundary conditions and error states
             - Configuration and environment dependencies
             - Workflow and automation reliability
+            - Other workflows with checks and linters results
             - Focus on main workflow in infrastructure-deployment.yml - it must pass without fails or degradations or errors
 
             Be constructive, thorough, and provide specific actionable feedback.
             Provide severity ratings (Critical/High/Medium/Low) for any issues found.
 
-            Never read all PR comments at once. Always use pagination and filters.
-            If PR diff is too large, list changes in PR instead and review changes file by file.
+            Note: The PR branch is already checked out in the current working directory.
 
-            After finishing your review, either approve PR or request changes if fixes required or if there are issues of medium priority or higher.
-            Your review result must be in PR as single sticky comment or as your approve message or as message requesting changes but not both.
+            Only post GitHub comment - don't submit review text as messages.
+            Submit review as an update of your previous review PR comment if it exists.
+            Post review using `gh pr comment ${{ github.event.pull_request.number }} --edit-last --create-if-none --body "<REVIEW BODY>"` to create review comment or update existing review comment.
+
+            Then leave top-level feedback of your review using `gh pr review` command, providing link to review comment. For example:
+            - To approve: `gh pr review ${{ github.event.pull_request.number }} --approve --body "Looks good, but consider adding more tests. See <REVIEW COMMENT URL> PR comment for details."`
+            - To request changes: `gh pr review ${{ github.event.pull_request.number }} --request-changes --body "Needs changes to address performance issues. See <REVIEW COMMENT URL> PR comment for details."`
+            Request changes if there are issues of medium priority or higher.
+
+          # # from: https://github.com/anthropics/claude-code-action/blob/main/docs/solutions.md
+          # Use `gh pr comment` for top-level feedback.
+          # Use `mcp__github_inline_comment__create_inline_comment` to highlight specific code issues.
+
+          # Removed from prompt:
+          # Your review result must be in PR as single sticky comment or as your approve message or as message requesting changes but not both.
+          # If PR was already reviewed by claude previously, validate latest changes made since your previous review against previous review result first.
+          # Make full PR review only if either no previous review of this PR by claude found, or if you validated that latest changes pushed to the PR have fixed all issues (of medium priority or higher) found in previous claude review in this PR.
