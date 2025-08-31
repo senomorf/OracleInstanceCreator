@@ -388,8 +388,8 @@ launch_instance() {
                 log_performance_metric "USER_LIMIT_REACHED" "${OCI_SHAPE:-unknown}" "$((ad_index + 1))" "$max_attempts" "TERMINAL"
                 record_ad_result "$current_ad" "user_limit_reached" "$error_type"
                 
-                # Send appropriate notification (not a failure, but informational)
-                send_telegram_notification "info" "Free tier limit reached for ${OCI_SHAPE:-unknown}. Consider managing existing instances."
+                # User limits are expected operational conditions - no notification needed
+                # Per architecture: these are EXPECTED and should be treated as normal success scenarios
                 
                 # Exit with the specific user limit error code
                 return "$OCI_EXIT_USER_LIMIT_ERROR"
@@ -664,7 +664,9 @@ handle_launch_error_with_ad() {
             ;;
         "DUPLICATE")
             log_info "Instance with this name already exists. Skipping creation."
-            send_telegram_notification "info" "OCI instance already exists: ${INSTANCE_DISPLAY_NAME}"
+            if [[ "${ENABLE_NOTIFICATIONS:-}" == "true" ]]; then
+                send_telegram_notification "info" "OCI instance already exists: ${INSTANCE_DISPLAY_NAME}"
+            fi
             echo "DUPLICATE"
             return 0
             ;;

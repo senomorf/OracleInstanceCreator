@@ -532,13 +532,8 @@ main() {
         log_info "User limit(s) reached for $user_limit_failures shape(s) - no further attempts needed"
         log_info "Consider managing existing instances to free capacity for new deployments"
         
-        # Send informational notification if enabled
-        if [[ "${ENABLE_NOTIFICATIONS:-}" == "true" ]]; then
-            local limit_message="User limits reached"
-            [[ $STATUS_A1 -eq 5 ]] && limit_message="${limit_message} (A1.Flex: 4/4 OCPUs)"
-            [[ $STATUS_E2 -eq 5 ]] && limit_message="${limit_message} (E2.Micro: 2/2 instances)"
-            send_telegram_notification "info" "$limit_message - consider managing existing instances"
-        fi
+        # User limits are expected operational conditions - no notification needed
+        # Per architecture: these are EXPECTED and should be treated as normal success scenarios
         
         return 0  # User limits are not failures - they're expected behavior
     elif [[ $capacity_failures -eq 2 ]]; then
@@ -546,10 +541,8 @@ main() {
         log_info "Both shapes unavailable due to Oracle capacity constraints - will retry on next schedule"
         log_info "This is normal behavior when Oracle Cloud capacity is temporarily exhausted"
 
-        # Send informational notification if enabled
-        if [[ "${ENABLE_NOTIFICATIONS:-}" == "true" ]]; then
-            send_telegram_notification "info" "Oracle capacity constraints - both shapes unavailable, will retry later"
-        fi
+        # Oracle capacity constraints are expected operational conditions - no notification needed
+        # Per architecture: capacity errors are EXPECTED and should be treated as normal success scenarios
 
         return 0 # Don't treat capacity exhaustion as failure
     elif [[ $((capacity_failures + user_limit_failures)) -eq 2 ]]; then

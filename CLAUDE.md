@@ -95,6 +95,28 @@ DEBUG="true"                             # Enable verbose OCI CLI output
 LOG_FORMAT="text"                        # or "json" for structured logging
 ```
 
+## Telegram Notification Policy
+
+### SEND notifications for:
+- ✅ **Instance creation SUCCESS** (with instance details)
+- ❌ **Authentication/configuration FAILURES** (actionable errors requiring user action)  
+- 🚨 **CRITICAL system errors** (require immediate user attention)
+
+### DO NOT send notifications for:
+- User limits reached (expected free tier behavior)
+- Oracle capacity unavailable (normal operational condition)
+- Rate limiting (standard cloud provider behavior)
+- Any condition that resolves through automated retry cycles
+
+### Philosophy:
+Only notify users when their action is required or when celebrating success.
+Expected operational conditions that resolve automatically should be silent.
+
+### Implementation:
+- `ENABLE_NOTIFICATIONS` flag controls informational notifications (info level)
+- SUCCESS and CRITICAL notifications always sent (regardless of flag)
+- Expected operational conditions (limits, capacity) generate no notifications
+
 ## Workflow Testing
 
 ```bash
