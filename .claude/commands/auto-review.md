@@ -1,6 +1,9 @@
 # Auto-Review Command
 
-Comprehensive PR review for the OCI automation project covering both general software engineering principles and OCI automation specifics.
+REPO: $1
+PR NUMBER: $2
+
+Perform a comprehensive code review for the OCI automation project covering both general software engineering principles and OCI automation specifics.
 
 ## Review Areas
 
@@ -59,11 +62,11 @@ Note: The PR branch is already checked out in the current working directory.
 Only post GitHub comment - don't submit review text as messages.
 Submit review as an update of your previous review PR comment if it exists.
 Post review create new review comment or updating existing review comment, for example:
-`gh pr comment <PR NUMBER> --edit-last --create-if-none --body "<REVIEW BODY>"`.
+`gh pr comment $2 --edit-last --create-if-none --body "your review"`.
 
 Additionally leave top-level feedback of your review using `gh pr review` command, providing link to review comment.
 Do one of the following:
 - approve if there are no issues, providing a link to the PR comment for more details, for example:
-  `gh pr review <PR NUMBER> --approve --body "Looks good, but consider adding more tests. See <REVIEW COMMENT URL> PR comment for details."`
+  `gh pr review $2 --approve --body "Looks good, but consider adding more tests. See <REVIEW COMMENT URL> PR comment for details."`
 - request changes if there are issues of medium priority or higher, providing a link to the PR comment for more details, for example:
-  `gh pr review <PR NUMBER> --request-changes --body "Needs changes to address performance issues. See <REVIEW COMMENT URL> PR comment for details."`
+  `gh pr review $2 --request-changes --body "Needs changes to address performance issues. See <REVIEW COMMENT URL> PR comment for details."`
