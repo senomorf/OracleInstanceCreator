@@ -33,10 +33,31 @@ oci_args+=("--read-timeout" "15")           # 15s vs 60s default
 
 ### Error Classification (scripts/utils.sh)
 ```bash
-CAPACITY: "capacity|quota|limit|429"        → Schedule retry (treat as success)
-DUPLICATE: "already exists"                 → Success
-TRANSIENT: "internal|network|timeout"       → Retry 3x same AD, then next AD
-AUTH/CONFIG: "authentication|invalid.*ocid" → Alert user immediately
+USER_LIMIT_REACHED: "limitexceeded.*core.*count"    → Cache 24h, exit 5
+ORACLE_CAPACITY_UNAVAILABLE: "out of host capacity" → Retry, exit 2  
+CAPACITY: "capacity|quota|limit|429"                → Retry (success)
+DUPLICATE: "already exists"                         → Success
+TRANSIENT: "internal|network|timeout"               → 3x retry, next AD
+AUTH/CONFIG: "authentication|invalid.*ocid"         → Alert user
+```
+
+### Error-Driven Limit Detection (PR #69)  
+Prevents 4,320+ monthly futile API calls. 24h cache TTL, exit code 5.
+```bash
+# Pre-flight cache check (launch-parallel.sh)
+get_cached_limit_state "${A1_FLEX_CONFIG[SHAPE]}" && should_launch_a1=false
+
+# Auto-detect from failures (launch-instance.sh)  
+"USER_LIMIT_REACHED") set_cached_limit_state "${OCI_SHAPE}" "true"; return 5 ;;
+```
+
+### Architecture-Aware Timeout Handling (PR #70)
+Preserves capacity/limit error codes (2, 5). Only overrides generic failures (1).
+```bash
+# Only timeout shapes that were launched and failed generically
+if [[ "$should_launch_a1" == true && $STATUS_A1 -eq 1 ]]; then
+    STATUS_A1=$EXIT_TIMEOUT_ERROR
+fi
 ```
 
 ### Parallel Execution Pattern (launch-parallel.sh)

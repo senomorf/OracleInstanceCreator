@@ -9,8 +9,10 @@ Automated provisioning of Oracle Cloud free-tier instances (A1.Flex ARM & E2.1.M
 ## Features
 
 - **Parallel provisioning** of both instance types (~20s execution)
+- **Error-driven limit detection** (saves 4,320+ monthly API calls)
 - **Multi-AD cycling** for higher success rates  
 - **Smart error handling** with transient error retry
+- **Architecture-aware timeout handling** (preserves capacity errors)
 - **Telegram notifications** on success/failure
 - **Secure credential management** via GitHub Secrets
 - **93% performance optimization** through CLI tuning
@@ -125,6 +127,7 @@ chmod +x scripts/*.sh
 ## Documentation
 
 - **[CLAUDE.md](CLAUDE.md)** - Complete project architecture, patterns, and development guide
+- **[Limits Management](docs/limits-management.md)** - Free tier limit detection and cache management
 - **[Notification Policy](CLAUDE.md#telegram-notification-policy)** - Clear guidelines on when notifications are sent
 - **[Linter Configuration](CLAUDE.md#linter-configuration-policy)** - Code quality focus over arbitrary style rules
 

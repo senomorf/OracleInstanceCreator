@@ -141,6 +141,18 @@ This is **NOT a failure** - it's Oracle's normal response when free tier capacit
    - Delete unused boot volumes
    - Check compute instance pools
 
+#### Problem: "User limit reached" (Exit Code 5)
+**Expected Behavior:** NOT a failure - intelligent limit detection working correctly.
+
+**Solutions:**
+```bash
+# Check status
+./scripts/state-manager.sh limit-status
+
+# Clear cache (after terminating instances)  
+./scripts/state-manager.sh clear-limits
+```
+
 #### Problem: "Shape not supported in availability domain"
 **Symptoms:**
 - Specific error about shape availability
@@ -263,10 +275,11 @@ export OCI_PROXY_URL="invalid-format"
 ```bash
 # Test standardized error codes
 source scripts/utils.sh
-get_exit_code_for_error_type "CAPACITY"     # Should return 2
-get_exit_code_for_error_type "AUTH"         # Should return 3
-get_exit_code_for_error_type "NETWORK"      # Should return 4
-get_exit_code_for_error_type "UNKNOWN"      # Should return 1
+get_exit_code_for_error_type "USER_LIMIT_REACHED"  # Should return 5
+get_exit_code_for_error_type "CAPACITY"            # Should return 2
+get_exit_code_for_error_type "AUTH"                # Should return 3
+get_exit_code_for_error_type "NETWORK"             # Should return 4
+get_exit_code_for_error_type "UNKNOWN"             # Should return 1
 ```
 
 ### 📊 Performance Monitoring
