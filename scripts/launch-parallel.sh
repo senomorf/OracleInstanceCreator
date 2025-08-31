@@ -261,25 +261,72 @@ main() {
     # Track resource usage at start of parallel execution
     track_resource_usage "start"
 
-    # Launch A1.Flex in background
-    log_info "Launching A1.Flex (ARM) instance in background..."
-    (
-        launch_shape "A1.Flex" A1_FLEX_CONFIG
-        local exit_code=$?
-        echo "$exit_code" >"$a1_result"
-        exit $exit_code
-    ) &
-    PID_A1=$!
+    # Smart shape filtering: Check cached limit states to prevent futile API calls
+    local state_file="instance-state.json"
+    local should_launch_a1=true
+    local should_launch_e2=true
+    
+    # Initialize state manager to ensure state file exists
+    if ! init_state_manager "$state_file" >/dev/null; then
+        log_warning "Failed to initialize state manager, proceeding with all shapes"
+    else
+        # Check A1.Flex limit state
+        if get_cached_limit_state "${A1_FLEX_CONFIG[SHAPE]}" "$state_file"; then
+            should_launch_a1=false
+            log_info "A1.Flex: Cached limit reached - skipping creation attempt"
+            echo "$OCI_EXIT_USER_LIMIT_ERROR" >"$a1_result"
+        else
+            log_debug "A1.Flex: No cached limit - proceeding with creation attempt"
+        fi
+        
+        # Check E2.Micro limit state  
+        if get_cached_limit_state "${E2_MICRO_CONFIG[SHAPE]}" "$state_file"; then
+            should_launch_e2=false
+            log_info "E2.1.Micro: Cached limit reached - skipping creation attempt"
+            echo "$OCI_EXIT_USER_LIMIT_ERROR" >"$e2_result"
+        else
+            log_debug "E2.1.Micro: No cached limit - proceeding with creation attempt"
+        fi
+        
+        # Early exit if both shapes are at cached limits
+        if [[ "$should_launch_a1" == false && "$should_launch_e2" == false ]]; then
+            log_info "Both shapes at cached limits - no creation attempts needed"
+            log_info "Consider managing existing instances to free capacity or wait for limit cache to expire"
+            # Clean up temporary files
+            rm -rf "$temp_dir" 2>/dev/null || true
+            return 0  # Success - no work needed due to limits
+        fi
+    fi
 
-    # Launch E2.Micro in background
-    log_info "Launching E2.1.Micro (AMD) instance in background..."
-    (
-        launch_shape "E2.1.Micro" E2_MICRO_CONFIG
-        local exit_code=$?
-        echo "$exit_code" >"$e2_result"
-        exit $exit_code
-    ) &
-    PID_E2=$!
+    # Launch A1.Flex in background (if not skipped due to cached limits)
+    if [[ "$should_launch_a1" == true ]]; then
+        log_info "Launching A1.Flex (ARM) instance in background..."
+        (
+            launch_shape "A1.Flex" A1_FLEX_CONFIG
+            local exit_code=$?
+            echo "$exit_code" >"$a1_result"
+            exit $exit_code
+        ) &
+        PID_A1=$!
+    else
+        log_debug "Skipping A1.Flex launch due to cached limit state"
+        PID_A1=""
+    fi
+
+    # Launch E2.Micro in background (if not skipped due to cached limits)
+    if [[ "$should_launch_e2" == true ]]; then
+        log_info "Launching E2.1.Micro (AMD) instance in background..."
+        (
+            launch_shape "E2.1.Micro" E2_MICRO_CONFIG
+            local exit_code=$?
+            echo "$exit_code" >"$e2_result"
+            exit $exit_code
+        ) &
+        PID_E2=$!
+    else
+        log_debug "Skipping E2.1.Micro launch due to cached limit state"
+        PID_E2=""
+    fi
 
     # Log concurrent execution start
     log_performance_metric "CONCURRENT_START" "parallel_execution" "1" "2" "A1_PID=$PID_A1,E2_PID=$PID_E2"
@@ -298,9 +345,19 @@ main() {
 
     # Keep checking until timeout or both processes complete
     while [[ $elapsed -lt $timeout_seconds ]]; do
-        # Check if both processes have finished
-        if ! kill -0 $PID_A1 2>/dev/null && ! kill -0 $PID_E2 2>/dev/null; then
-            log_debug "Both processes completed after ${elapsed}s"
+        # Check if both processes have finished (handle empty PIDs for skipped shapes)
+        local a1_running=false
+        local e2_running=false
+        
+        if [[ -n "$PID_A1" ]] && kill -0 "$PID_A1" 2>/dev/null; then
+            a1_running=true
+        fi
+        if [[ -n "$PID_E2" ]] && kill -0 "$PID_E2" 2>/dev/null; then
+            e2_running=true
+        fi
+        
+        if [[ "$a1_running" == false && "$e2_running" == false ]]; then
+            log_debug "Both processes completed (or were skipped) after ${elapsed}s"
             break
         fi
 
@@ -321,9 +378,13 @@ main() {
         STATUS_E2=$EXIT_TIMEOUT_ERROR # Standard timeout exit code (GNU timeout compatibility)
     fi
 
-    # Always wait for processes to fully complete and flush their output
-    wait $PID_A1 2>/dev/null || true
-    wait $PID_E2 2>/dev/null || true
+    # Always wait for processes to fully complete and flush their output (handle empty PIDs)
+    if [[ -n "$PID_A1" ]]; then
+        wait $PID_A1 2>/dev/null || true
+    fi
+    if [[ -n "$PID_E2" ]]; then
+        wait $PID_E2 2>/dev/null || true
+    fi
 
     # Wait for result files with proper timeout (fixes race condition)
     if wait_for_result_file "$a1_result"; then
@@ -388,10 +449,17 @@ main() {
     [[ $STATUS_A1 -eq 0 ]] && success_count=$((success_count + 1))
     [[ $STATUS_E2 -eq 0 ]] && success_count=$((success_count + 1))
 
-    # Check if both failures are capacity-related (exit code 2 = OCI_EXIT_CAPACITY_ERROR)
+    # Check different types of failures for intelligent handling
     local capacity_failures=0
+    local user_limit_failures=0
+    
+    # Count capacity-related failures (exit code 2 = OCI_EXIT_CAPACITY_ERROR)
     [[ $STATUS_A1 -eq 2 ]] && capacity_failures=$((capacity_failures + 1))
     [[ $STATUS_E2 -eq 2 ]] && capacity_failures=$((capacity_failures + 1))
+    
+    # Count user limit failures (exit code 5 = OCI_EXIT_USER_LIMIT_ERROR)
+    [[ $STATUS_A1 -eq 5 ]] && user_limit_failures=$((user_limit_failures + 1))
+    [[ $STATUS_E2 -eq 5 ]] && user_limit_failures=$((user_limit_failures + 1))
 
     log_elapsed "parallel_execution"
 
@@ -437,17 +505,37 @@ main() {
         fi
 
         return 0
+    elif [[ $user_limit_failures -gt 0 && $((user_limit_failures + success_count)) -eq 2 ]]; then
+        # User limits reached - this is expected behavior when at free tier limits
+        log_info "User limit(s) reached for $user_limit_failures shape(s) - no further attempts needed"
+        log_info "Consider managing existing instances to free capacity for new deployments"
+        
+        # Send informational notification if enabled
+        if [[ "${ENABLE_NOTIFICATIONS:-}" == "true" ]]; then
+            local limit_message="User limits reached"
+            [[ $STATUS_A1 -eq 5 ]] && limit_message="${limit_message} (A1.Flex: 4/4 OCPUs)"
+            [[ $STATUS_E2 -eq 5 ]] && limit_message="${limit_message} (E2.Micro: 2/2 instances)"
+            send_telegram_notification "info" "$limit_message - consider managing existing instances"
+        fi
+        
+        return 0  # User limits are not failures - they're expected behavior
     elif [[ $capacity_failures -eq 2 ]]; then
-        # Both failed due to capacity/limits - this is expected behavior, not an error
-        log_info "Both shapes unavailable due to capacity/limits - will retry on next schedule"
-        log_info "This is normal behavior when instance limits are reached or Oracle Cloud capacity is exhausted"
+        # Both failed due to Oracle capacity constraints - this is expected behavior
+        log_info "Both shapes unavailable due to Oracle capacity constraints - will retry on next schedule"
+        log_info "This is normal behavior when Oracle Cloud capacity is temporarily exhausted"
 
         # Send informational notification if enabled
         if [[ "${ENABLE_NOTIFICATIONS:-}" == "true" ]]; then
-            send_telegram_notification "info" "OCI capacity/limits reached - both shapes unavailable, will retry later"
+            send_telegram_notification "info" "Oracle capacity constraints - both shapes unavailable, will retry later"
         fi
 
         return 0 # Don't treat capacity exhaustion as failure
+    elif [[ $((capacity_failures + user_limit_failures)) -eq 2 ]]; then
+        # Mixed capacity and limit issues - still expected behavior
+        log_info "Mixed capacity/limit constraints encountered - will retry on next schedule"
+        log_info "This is normal free tier behavior - some limits reached, some capacity issues"
+        
+        return 0  # Mixed constraint issues are still expected behavior
     else
         log_error "Parallel execution failed: Instance creation failed due to configuration or authentication errors"
 
