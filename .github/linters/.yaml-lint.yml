@@ -4,6 +4,9 @@ rules:
   # Disable line length enforcement for YAML files
   line-length: disable
 
+  # Disable final newline requirement
+  new-line-at-end-of-file: disable
+
   # Keep other useful rules active
   comments:
     min-spaces-from-content: 1
