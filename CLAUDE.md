@@ -176,13 +176,6 @@ Expected conditions (limits, capacity constraints) are normal automation behavio
 ### Philosophy
 Linters should catch bugs, security issues, and functional problems - not enforce subjective style preferences that reduce documentation readability.
 
-### Claude Review Command
-Any new linters introduced to this project must follow the no-style-rules policy. Validate that linters focus on:
-- ✅ **Code quality**: Logic errors, unused variables, potential bugs
-- ✅ **Security**: Vulnerabilities, unsafe practices, credential exposure
-- ✅ **Functional correctness**: Syntax errors, missing dependencies, broken references
-- ❌ **Style preferences**: Formatting, punctuation, whitespace, subjective conventions
-
 ## Oracle Cloud Specifics
 
 - **Flexible shapes need --shape-config parameter**: `{"ocpus": 4, "memoryInGBs": 24}`
