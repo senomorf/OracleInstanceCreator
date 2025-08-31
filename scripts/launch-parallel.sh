@@ -590,10 +590,10 @@ main() {
         # No notification needed - user limits are expected operational conditions
         
         return 0  # User limits are not failures - they're expected behavior
-    elif [[ $rate_limit_failures -gt 0 && $((rate_limit_failures + success_count)) -eq 2 ]]; then
+    elif [[ $rate_limit_failures -gt 0 && $((rate_limit_failures + success_count + capacity_failures + user_limit_failures)) -eq 2 ]]; then
         # Rate limits encountered - this is expected Oracle behavior, no notifications needed
         log_info "Oracle API rate limits encountered for $rate_limit_failures shape(s) - will retry on next scheduled run"
-        log_info "This is normal Oracle API behavior during high usage periods"
+        log_info "This is normal Oracle API behavior during high usage periods and resolves automatically"
         
         # No notification needed - rate limits are expected operational conditions
         

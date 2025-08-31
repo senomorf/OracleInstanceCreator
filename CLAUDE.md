@@ -111,7 +111,8 @@ gh run watch <run-id>
 
 ### Expected Behaviors
 - **Capacity limitations are normal** - Oracle Cloud has dynamic resource availability
-- **Rate limiting (HTTP 429)** - High demand, standard cloud provider behavior  
+- **Rate limiting (HTTP 429)** - High demand, standard cloud provider behavior that resolves automatically
+- **"Too many requests"** - Oracle API throttling during high usage, workflow continues normally  
 - **"Out of host capacity"** - Common during peak usage periods
 - **ARM (A1.Flex) typically more available** than AMD (E2.1.Micro)
 
