@@ -3,7 +3,7 @@ extends: default
 rules:
   # Disable line length enforcement for YAML files
   line-length: disable
-  
+
   # Keep other useful rules active
   comments:
     min-spaces-from-content: 1
