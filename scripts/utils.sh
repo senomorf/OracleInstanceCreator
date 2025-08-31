@@ -1231,3 +1231,77 @@ record_failure_pattern() {
     fi
 }
 
+# Lifecycle management helper functions
+
+# Check if lifecycle management is enabled and configured
+is_lifecycle_management_enabled() {
+    [[ "${AUTO_ROTATE_INSTANCES:-false}" == "true" ]]
+}
+
+# Validate lifecycle management configuration
+validate_lifecycle_config() {
+    local validation_failed=false
+    
+    # Validate minimum age hours
+    if [[ -n "${INSTANCE_MIN_AGE_HOURS:-}" ]]; then
+        if ! validate_timeout_value "INSTANCE_MIN_AGE_HOURS" "$INSTANCE_MIN_AGE_HOURS" "1" "8760"; then
+            validation_failed=true
+        fi
+    fi
+    
+    # Validate rotation strategy
+    if [[ -n "${ROTATION_STRATEGY:-}" ]]; then
+        if [[ "$ROTATION_STRATEGY" != "oldest_first" && "$ROTATION_STRATEGY" != "least_utilized" ]]; then
+            log_error "ROTATION_STRATEGY must be 'oldest_first' or 'least_utilized': $ROTATION_STRATEGY"
+            validation_failed=true
+        fi
+    fi
+    
+    # Validate boolean lifecycle settings
+    local lifecycle_boolean_vars=(
+        "AUTO_ROTATE_INSTANCES:${AUTO_ROTATE_INSTANCES:-}"
+        "HEALTH_CHECK_ENABLED:${HEALTH_CHECK_ENABLED:-}"
+        "DRY_RUN:${DRY_RUN:-}"
+    )
+    
+    for var_def in "${lifecycle_boolean_vars[@]}"; do
+        IFS=':' read -r var_name var_value <<< "$var_def"
+        if [[ -n "$var_value" ]]; then
+            if [[ "$var_value" != "true" && "$var_value" != "false" ]]; then
+                log_error "Lifecycle boolean variable $var_name must be 'true' or 'false': $var_value"
+                validation_failed=true
+            fi
+        fi
+    done
+    
+    if [[ "$validation_failed" == true ]]; then
+        return 1
+    fi
+    
+    return 0
+}
+
+# Log lifecycle management events
+log_lifecycle_event() {
+    local event_type="$1"    # "rotation_started", "rotation_completed", "instance_terminated", etc.
+    local instance_id="$2"
+    local instance_name="$3"
+    local additional_info="${4:-}"
+    
+    local context=""
+    if [[ "${LOG_FORMAT:-}" == "json" ]]; then
+        context="{\"event_type\":\"$event_type\",\"instance_id\":\"$instance_id\",\"instance_name\":\"$instance_name\""
+        if [[ -n "$additional_info" ]]; then
+            context="${context},\"additional_info\":\"$additional_info\""
+        fi
+        context="${context}}"
+    fi
+    
+    local message="Lifecycle event: $event_type for instance $instance_name"
+    if [[ -n "$additional_info" ]]; then
+        message="$message ($additional_info)"
+    fi
+    
+    log_with_context "info" "$message" "$context"
+}
+

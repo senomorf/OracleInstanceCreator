@@ -13,7 +13,8 @@ scripts/
 ├── circuit-breaker.sh     # AD failure tracking (3 failures = skip)
 ├── setup-oci.sh          # CLI + proxy setup
 ├── validate-config.sh    # Configuration validation
-└── notify.sh             # Telegram notifications
+├── notify.sh             # Telegram notifications
+└── instance-lifecycle.sh # Automated instance rotation and lifecycle management
 tests/
 ├── test_proxy.sh         # Proxy validation (15 tests)
 ├── test_integration.sh   # Integration tests (9 tests)
@@ -68,6 +69,7 @@ wait  # 55s timeout protection
 ./tests/test_proxy.sh             # Proxy validation (15 tests)
 ./tests/test_integration.sh       # Integration tests (9 tests)
 ./tests/test_circuit_breaker.sh   # Circuit breaker functionality (9 tests)
+./tests/test_instance_lifecycle.sh # Instance lifecycle management (8 tests)
 ./tests/run_new_tests.sh          # Test runner for enhancements
 
 # Syntax validation
@@ -75,6 +77,11 @@ bash -n scripts/*.sh
 
 # Debug mode
 DEBUG=true ./scripts/launch-instance.sh
+
+# Instance lifecycle management
+./scripts/instance-lifecycle.sh help     # Show available commands
+./scripts/instance-lifecycle.sh dry-run  # Test rotation without actual changes
+AUTO_ROTATE_INSTANCES=true ./scripts/launch-parallel.sh  # Launch with auto-rotation
 ```
 
 ## Environment Variables
@@ -93,6 +100,13 @@ TRANSIENT_ERROR_RETRY_DELAY="15"        # Seconds between retries
 # Debugging
 DEBUG="true"                             # Enable verbose OCI CLI output
 LOG_FORMAT="text"                        # or "json" for structured logging
+
+# Instance Lifecycle Management
+AUTO_ROTATE_INSTANCES="true"             # Enable automatic rotation (true/false)
+INSTANCE_MIN_AGE_HOURS="24"              # Minimum age before rotation eligible
+ROTATION_STRATEGY="oldest_first"         # "oldest_first", "least_utilized"
+HEALTH_CHECK_ENABLED="true"              # Verify instance health before rotation
+DRY_RUN="false"                          # Dry run mode for testing
 ```
 
 ## Workflow Testing

@@ -61,6 +61,13 @@ validate_instance_configuration() {
     export LEGACY_IMDS_ENDPOINTS="${LEGACY_IMDS_ENDPOINTS:-false}"
     export RETRY_WAIT_TIME="${RETRY_WAIT_TIME:-30}"
     
+    # Instance lifecycle management configuration with defaults
+    export AUTO_ROTATE_INSTANCES="${AUTO_ROTATE_INSTANCES:-false}"
+    export INSTANCE_MIN_AGE_HOURS="${INSTANCE_MIN_AGE_HOURS:-24}"
+    export ROTATION_STRATEGY="${ROTATION_STRATEGY:-oldest_first}"
+    export HEALTH_CHECK_ENABLED="${HEALTH_CHECK_ENABLED:-true}"
+    export DRY_RUN="${DRY_RUN:-false}"
+    
     # Validate timeout values are within reasonable bounds
     validate_timeout_value "RETRY_WAIT_TIME" "$RETRY_WAIT_TIME" 5 300
     
@@ -138,6 +145,11 @@ validate_instance_configuration() {
     # Validate recovery action
     if [[ "$RECOVERY_ACTION" != "RESTORE_INSTANCE" && "$RECOVERY_ACTION" != "STOP_INSTANCE" ]]; then
         die "RECOVERY_ACTION must be 'RESTORE_INSTANCE' or 'STOP_INSTANCE', got: $RECOVERY_ACTION"
+    fi
+    
+    # Validate lifecycle management configuration
+    if ! validate_lifecycle_config; then
+        die "Lifecycle management configuration validation failed"
     fi
     
     log_success "Instance configuration validation passed"
@@ -226,6 +238,15 @@ print_configuration_summary() {
     echo "  Legacy IMDS Endpoints: $LEGACY_IMDS_ENDPOINTS"
     echo "  Retry Wait Time: ${RETRY_WAIT_TIME}s"
     echo "  Compartment: ${OCI_COMPARTMENT_ID:-$OCI_TENANCY_OCID (tenancy)}"
+    
+    # Lifecycle management configuration
+    echo ""
+    echo "  Instance Lifecycle Management:"
+    echo "    Auto-rotate instances: $AUTO_ROTATE_INSTANCES"
+    echo "    Minimum age for rotation: ${INSTANCE_MIN_AGE_HOURS}h"
+    echo "    Rotation strategy: $ROTATION_STRATEGY"
+    echo "    Health checks enabled: $HEALTH_CHECK_ENABLED"
+    echo "    Dry run mode: $DRY_RUN"
 }
 
 # Validate constants from constants.sh are within acceptable ranges

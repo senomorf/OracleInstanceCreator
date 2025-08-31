@@ -12,6 +12,7 @@ source "$(dirname "$0")/utils.sh"
 # shellcheck source=scripts/notify.sh
 source "$(dirname "$0")/notify.sh"
 source "$(dirname "$0")/state-manager.sh"
+source "$(dirname "$0")/instance-lifecycle.sh"
 
 # Global variables for signal handling
 PID_A1=""
@@ -291,10 +292,35 @@ main() {
         # Early exit if both shapes are at cached limits
         if [[ "$should_launch_a1" == false && "$should_launch_e2" == false ]]; then
             log_info "Both shapes at cached limits - no creation attempts needed"
-            log_info "Consider managing existing instances to free capacity or wait for limit cache to expire"
-            # Clean up temporary files
-            rm -rf "$temp_dir" 2>/dev/null || true
-            return 0  # Success - no work needed due to limits
+            
+            # Check if instance lifecycle management should handle this
+            if [[ "${AUTO_ROTATE_INSTANCES:-}" == "true" ]]; then
+                log_info "Auto-rotation enabled - attempting lifecycle management to free capacity"
+                
+                # Try lifecycle management with dry-run first in this context
+                local compartment_id="${OCI_COMPARTMENT_ID:-}"
+                if [[ -n "$compartment_id" ]]; then
+                    if manage_instance_lifecycle "$compartment_id" "false"; then
+                        log_info "Instance lifecycle management completed - some capacity may be freed"
+                        log_info "Proceeding with instance creation attempts after rotation"
+                        # Reset launch flags to attempt creation after rotation
+                        should_launch_a1=true
+                        should_launch_e2=true
+                        # Clear result files to ensure fresh attempts
+                        echo "" > "$a1_result"
+                        echo "" > "$e2_result"
+                    else
+                        log_warning "Instance lifecycle management failed or no rotation performed"
+                    fi
+                else
+                    log_warning "OCI_COMPARTMENT_ID not available - cannot perform lifecycle management"
+                fi
+            else
+                log_info "Consider managing existing instances to free capacity or wait for limit cache to expire"
+                # Clean up temporary files
+                rm -rf "$temp_dir" 2>/dev/null || true
+                return 0  # Success - no work needed due to limits
+            fi
         fi
     fi
 

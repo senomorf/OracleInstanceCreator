@@ -262,6 +262,128 @@ If you receive this message, the configuration is valid!"
     send_telegram_notification "info" "$test_message"
 }
 
+# Send instance lifecycle management notifications
+
+# Send notification when instance rotation starts
+notify_lifecycle_rotation_started() {
+    local shape="$1"
+    local instance_count="$2"
+    local strategy="$3"
+    
+    local message="Instance lifecycle rotation initiated.
+
+**Details:**
+• Shape: $shape
+• Instances to rotate: $instance_count
+• Strategy: $strategy
+• Reason: Capacity limits reached
+
+This will terminate older instances to free capacity for new deployments."
+    
+    send_telegram_notification "info" "$message"
+}
+
+# Send notification when instance rotation completes
+notify_lifecycle_rotation_completed() {
+    local shape="$1"
+    local terminated_count="$2"
+    local success="$3"  # "true" or "false"
+    
+    local notification_type="success"
+    local status="completed successfully"
+    
+    if [[ "$success" != "true" ]]; then
+        notification_type="warning"
+        status="completed with issues"
+    fi
+    
+    local message="Instance lifecycle rotation $status.
+
+**Details:**
+• Shape: $shape
+• Instances terminated: $terminated_count
+• Status: $status
+
+Capacity has been freed for new instance creation."
+    
+    send_telegram_notification "$notification_type" "$message"
+}
+
+# Send notification when an instance is terminated for lifecycle management
+notify_instance_terminated() {
+    local instance_name="$1"
+    local instance_id="$2"
+    local shape="${3:-unknown}"
+    local age_hours="${4:-unknown}"
+    local reason="${5:-lifecycle rotation}"
+    
+    local message="Oracle Cloud instance terminated for lifecycle management.
+
+**Instance Details:**
+• Name: $instance_name
+• OCID: $instance_id  
+• Shape: $shape
+• Age: ${age_hours} hours
+• Reason: $reason
+
+This was performed automatically to free capacity for new deployments."
+    
+    send_telegram_notification "warning" "$message"
+}
+
+# Send notification for lifecycle management errors
+notify_lifecycle_error() {
+    local error_message="$1"
+    local instance_name="${2:-unknown}"
+    
+    local message="Instance lifecycle management error occurred.
+
+**Error:** $error_message"
+    
+    if [[ "$instance_name" != "unknown" ]]; then
+        message="$message
+
+**Instance:** $instance_name"
+    fi
+    
+    message="$message
+
+**Action Required:** Check lifecycle management configuration and permissions."
+    
+    send_telegram_notification_with_retry "error" "$message"
+}
+
+# Send notification when lifecycle management prevents instance creation
+notify_lifecycle_prevention() {
+    local message="Instance lifecycle management prevented unnecessary creation attempts.
+
+**Reason:** All target shapes are at capacity limits and auto-rotation is disabled.
+
+**Recommendation:** 
+• Enable AUTO_ROTATE_INSTANCES=true for automatic capacity management
+• Or manually manage existing instances to free capacity"
+    
+    send_telegram_notification "info" "$message"
+}
+
+# Send notification for dry-run lifecycle operations
+notify_lifecycle_dry_run() {
+    local operation="$1"
+    local instance_count="$2"
+    local shape="${3:-all shapes}"
+    
+    local message="Instance lifecycle management dry-run completed.
+
+**Operation:** $operation
+• Shape: $shape  
+• Instances that would be affected: $instance_count
+
+This was a simulation only - no actual changes were made.
+Set DRY_RUN=false to perform actual lifecycle operations."
+    
+    send_telegram_notification "info" "$message"
+}
+
 # Function to be called from other scripts (backward compatibility)
 # This maintains compatibility with the launch-instance.sh script
 send_notification() {
