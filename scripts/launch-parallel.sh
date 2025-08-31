@@ -532,13 +532,7 @@ main() {
         log_info "User limit(s) reached for $user_limit_failures shape(s) - no further attempts needed"
         log_info "Consider managing existing instances to free capacity for new deployments"
         
-        # Send informational notification if enabled
-        if [[ "${ENABLE_NOTIFICATIONS:-}" == "true" ]]; then
-            local limit_message="User limits reached"
-            [[ $STATUS_A1 -eq 5 ]] && limit_message="${limit_message} (A1.Flex: 4/4 OCPUs)"
-            [[ $STATUS_E2 -eq 5 ]] && limit_message="${limit_message} (E2.Micro: 2/2 instances)"
-            send_telegram_notification "info" "$limit_message - consider managing existing instances"
-        fi
+        # No notification needed - user limits are expected operational conditions
         
         return 0  # User limits are not failures - they're expected behavior
     elif [[ $capacity_failures -eq 2 ]]; then

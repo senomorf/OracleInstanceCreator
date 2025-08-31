@@ -157,20 +157,8 @@ notify_instance_created() {
     send_telegram_notification_with_retry "success" "$message"
 }
 
-# Send capacity error notification (info level since it's expected)
-notify_capacity_unavailable() {
-    local shape="${OCI_SHAPE:-unknown}"
-    local ad="${OCI_AD:-unknown}"
-    
-    local message="Oracle Cloud capacity currently unavailable.
-
-**Details:**
-• Shape: $shape
-• Availability Domain: $ad
-• Action: Will retry on next scheduled run"
-    
-    send_telegram_notification "info" "$message"
-}
+# notify_capacity_unavailable() function removed - capacity issues are expected operational conditions
+# and should not generate notifications per the notification policy
 
 # Send configuration error notification
 notify_configuration_error() {

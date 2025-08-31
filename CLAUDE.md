@@ -138,6 +138,31 @@ gh run watch <run-id>
 - **Shape requirements**: Flexible shapes need `--shape-config` parameter
 - **Never remove** OCI CLI optimization flags - they provide 93% performance improvement
 
+## Telegram Notification Policy
+
+### SEND notifications for:
+- ✅ **SUCCESS**: Instance creation completed (with instance details)
+- ❌ **FAILURE**: Authentication/configuration errors requiring user action  
+- 🚨 **CRITICAL**: System failures requiring immediate attention
+- ❌ **ERROR**: Unexpected failures needing investigation
+
+### DO NOT send notifications for:
+- ❌ User limits reached (expected free tier behavior - normal operation)
+- ❌ Oracle capacity unavailable (expected operational condition - will retry)
+- ❌ Rate limiting (standard cloud provider behavior - will retry)
+- ❌ Instance already exists (expected when using state management cache)
+- ❌ Any condition that resolves through automated retry cycles
+
+### Notification Behavior:
+- **Scheduled runs**: Notifications ENABLED by default (monitor automation)
+- **Manual runs**: User can toggle notifications via workflow dispatch
+- **Expected conditions**: Never generate notifications (silent operation)
+- **Actual failures**: Always generate notifications (require attention)
+
+### Philosophy:
+**Notify for successes and actionable failures. Never notify for expected operational conditions.**
+Expected conditions (limits, capacity constraints) are normal automation behavior that resolve through retry cycles.
+
 ## Oracle Cloud Specifics
 
 - **Flexible shapes need --shape-config parameter**: `{"ocpus": 4, "memoryInGBs": 24}`
