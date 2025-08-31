@@ -1,22 +1,16 @@
 ---
-name: Claude PR Auto Review
+name: Claude PR Auto Review with Progress Tracking
 
 on:
   pull_request:
-    types: [opened, synchronize]
-  issue_comment:
-    types: [created]
+    types: [opened, synchronize, ready_for_review, reopened]
 
 jobs:
   auto-review:
-    # Run on PR events, or when someone comments "@claude reviewer" on a PR
     if: |
       (github.event_name == 'pull_request' &&
         !contains(github.event.pull_request.title, '[skip-review]') &&
-        !contains(github.event.pull_request.title, '[WIP]')) ||
-      (github.event_name == 'issue_comment' && 
-        github.event.issue.pull_request && 
-        contains(github.event.comment.body, '@claude reviewer'))
+        !contains(github.event.pull_request.title, '[WIP]'))
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -31,9 +25,9 @@ jobs:
         with:
           fetch-depth: 0 # Full history for better diff analysis
 
-      - name: Automatic PR Review
+      - name: PR Review with Progress Tracking
         id: claude-review
-        uses: anthropics/claude-code-action@v1-dev
+        uses: anthropics/claude-code-action@v1
         env:
           NPM_CONFIG_MAXSOCKETS: "15"
           NPM_CONFIG_NETWORK_CONCURRENCY: "1"
@@ -42,75 +36,171 @@ jobs:
         with:
           additional_permissions: |
             actions: read
+
           # github_token not needed - uses default GITHUB_TOKEN for GitHub operations
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          # ✨ Enables tracking comments like in v0.x
+          track_progress: true
+          # When track_progress is enabled:
+          # - Creates a tracking comment with progress checkboxes
+          # - Includes all PR context (comments, attachments, images)
+          # - Updates progress as the review proceeds
+          # - Marks as completed when done
+
           # Use just one comment to deliver PR comments (only applies for pull_request event workflows)
           use_sticky_comment: true
+
           # Enable commit signing using GitHub's commit signature verification. When false, Claude uses standard git commands
           # use_commit_signing: true
+
+          # --disallowedTools WebSearch,WebFetch
+          # --model claude-opus-4-1-20250805
+
           claude_args: |
-            --model claude-opus-4-1-20250805
             --max-turns 15
-            --system-prompt "You are a senior engineer focused on code quality and security. You are also a performance optimization expert. Focus on identifying bottlenecks and suggesting improvements."
-            --allowedTools "Task,Bash,Glob,Grep,LS,ExitPlanMode,Read,Edit,MultiEdit,Write,NotebookEdit,TodoWrite,BashOutput,KillBash,mcp__github_inline_comment__create_inline_comment,mcp__github_ci__get_ci_status,mcp__github_ci__get_workflow_run_details,mcp__github_ci__download_job_log,mcp__github_comment__update_claude_comment,mcp__github__add_comment_to_pending_review,mcp__github__create_and_submit_pull_request_review,mcp__github__create_issue,mcp__github__create_or_update_file,mcp__github__create_pending_pull_request_review,mcp__github__delete_pending_pull_request_review,mcp__github__download_workflow_run_artifact,mcp__github__get_code_scanning_alert,mcp__github__get_commit,mcp__github__get_dependabot_alert,mcp__github__get_file_contents,mcp__github__get_job_logs,mcp__github__get_me,mcp__github__get_pull_request,mcp__github__get_pull_request_comments,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_files,mcp__github__get_pull_request_reviews,mcp__github__get_pull_request_status,mcp__github__get_secret_scanning_alert,mcp__github__get_workflow_run,mcp__github__get_workflow_run_logs,mcp__github__list_branches,mcp__github__list_code_scanning_alerts,mcp__github__list_commits,mcp__github__list_dependabot_alerts,mcp__github__list_pull_requests,mcp__github__list_secret_scanning_alerts,mcp__github__list_workflow_jobs,mcp__github__list_workflow_run_artifacts,mcp__github__list_workflow_runs,mcp__github__list_workflows,mcp__github__merge_pull_request,mcp__github__push_files,mcp__github__rerun_failed_jobs,mcp__github__rerun_workflow_run,mcp__github__run_workflow,mcp__github__search_code,mcp__github__search_pull_requests,mcp__github__submit_pending_pull_request_review,mcp__github__update_pull_request,mcp__github__update_pull_request_branch,mcp__github__get_issue,mcp__github__add_issue_comment,mcp__github__get_issue_comments,ListMcpResourcesTool,ReadMcpResourceTool"
-            --disallowedTools WebSearch,WebFetch
+            --system-prompt "You are a senior engineer focused on code quality and security.
+              You own this project and question every change. You look for a reason, justification
+              and value behind every feature and strive to reduce unnecessary increase of complexity
+              and unnecessary features and guard against deviations from project goals and use cases.
+              You are a performance optimization expert. Focus on identifying bottlenecks and
+              suggesting improvements."
+            --allowedTools "WebSearch,WebFetch,Task,Bash,Glob,Grep,LS,ExitPlanMode,Read,Edit,
+              MultiEdit,Write,NotebookEdit,TodoWrite,BashOutput,KillBash,
+              Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr review:*),
+              mcp__github_inline_comment__create_inline_comment,
+              mcp__github_inline_comment__create_inline_comment,
+              mcp__github_ci__get_ci_status,
+              mcp__github_ci__get_workflow_run_details,
+              mcp__github_ci__download_job_log,
+              mcp__github_comment__update_claude_comment,
+              mcp__github__add_comment_to_pending_review,
+              mcp__github__create_and_submit_pull_request_review,
+              mcp__github__create_issue,
+              mcp__github__create_or_update_file,
+              mcp__github__create_pending_pull_request_review,
+              mcp__github__delete_pending_pull_request_review,
+              mcp__github__download_workflow_run_artifact,
+              mcp__github__get_code_scanning_alert,
+              mcp__github__get_commit,
+              mcp__github__get_dependabot_alert,
+              mcp__github__get_file_contents,
+              mcp__github__get_job_logs,mcp__github__get_me,
+              mcp__github__get_pull_request,
+              mcp__github__get_pull_request_comments,
+              mcp__github__get_pull_request_diff,
+              mcp__github__get_pull_request_files,
+              mcp__github__get_pull_request_reviews,
+              mcp__github__get_pull_request_status,
+              mcp__github__get_secret_scanning_alert,
+              mcp__github__get_workflow_run,
+              mcp__github__get_workflow_run_logs,
+              mcp__github__list_branches,
+              mcp__github__list_code_scanning_alerts,
+              mcp__github__list_commits,
+              mcp__github__list_dependabot_alerts,
+              mcp__github__list_pull_requests,
+              mcp__github__list_secret_scanning_alerts,
+              mcp__github__list_workflow_jobs,
+              mcp__github__list_workflow_run_artifacts,
+              mcp__github__list_workflow_runs,
+              mcp__github__list_workflows,
+              mcp__github__merge_pull_request,
+              mcp__github__push_files,
+              mcp__github__rerun_failed_jobs,
+              mcp__github__rerun_workflow_run,
+              mcp__github__run_workflow,
+              mcp__github__search_code,
+              mcp__github__search_pull_requests,
+              mcp__github__submit_pending_pull_request_review,
+              mcp__github__update_pull_request,
+              mcp__github__update_pull_request_branch,
+              mcp__github__get_issue,
+              mcp__github__add_issue_comment,
+              mcp__github__get_issue_comments,
+              ListMcpResourcesTool,
+              ReadMcpResourceTool"
 
           # Disabled: creates a mess to review. Inline suggestions are often broken
           # Use GitHub's suggestion format when proposing code changes.
           # Use inline comments to highlight specific areas of concern.
 
-          # If PR was already reviewed by claude previously, validate latest changes made since your previous review against previous review result first.
-          # Make full PR review only if either no previous review of this PR by claude found, or if you validated that latest changes pushed to the PR have fixed all issues (of medium priority or higher) found in previous claude review in this PR.
+          # Never read all PR comments at once. Always use pagination and filters.
+          # If whole PR diff is too large, instead of getting whole diff list changes in PR and review changes one by one.
+
+          # `gh pr comment ${{ github.event.pull_request.number }} --delete-last --yes`
+
           prompt: |
-            Please review this PR #${{ github.event.pull_request.number }} in ${{ github.repository }} by ${{ github.actor }} with comprehensive analysis covering both general software engineering principles and OCI automation specifics:
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
 
-            **General Code Quality & Best Practices:**
-            - Code structure, readability, and maintainability
-            - Proper error handling and input validation
-            - Logic bugs, edge cases, and null checks
-            - Algorithm efficiency and resource usage
-            - Documentation quality and code comments
-            - Adherence to coding standards and conventions
-            - Verify that README.md and docs are updated for any new features or config changes
+            Please review this PR with comprehensive analysis covering both general software engineering principles and OCI automation specifics:
 
-            **Security Analysis (General & OCI-Specific):**
-            - Input validation and injection vulnerabilities
-            - Authentication and authorization patterns
-            - **Credential Safety**: Check for exposed credentials (OCI OCIDs, keys, SSH keys, tokens)
-            - Verify secrets are only used in GitHub Actions, never in artifacts
-            - Distinguish capacity issues from real security failures
+            1. **Code Quality**
+              - Clean code principles and best practices
+              - Proper error handling and input validation
+              - Code structure, readability, and maintainability
+              - Logic bugs, edge cases, and null checks
+              - Algorithm efficiency and resource usage
+              - Check for race conditions and concurrency issues
+              - Configuration and environment dependencies
+              - Documentation quality and code comments
+              - Adherence to coding standards and conventions
+              - Verify that README.md and docs are updated for any new features or config changes
 
-            **Performance Considerations:**
-            - Algorithm complexity and optimization opportunities
-            - Memory usage and resource efficiency
-            - Caching strategies and optimization patterns
-            - Workflows use caching and optimized for run time
+            2. **Security**
+              - Check for potential security vulnerabilities
+              - Validate input sanitization
+              - Review authentication/authorization logic
+              - **Credential Safety**: Check for exposed credentials (OCI OCIDs, keys, SSH keys, tokens)
 
-            **Test Coverage & Quality:**
-            - Test completeness and edge case coverage
-            - Test quality, clarity, and maintainability
-            - Integration test scenarios
-            - Error condition testing
-            - All checks, linters and other workflows pass successfully
+            3. **Performance**
+              - Algorithm complexity and optimization opportunities
+              - Identify potential performance bottlenecks
+              - Review database queries for efficiency
+              - Check for memory leaks or resource issues
+              - Workflows use caching and optimized for run time
 
-            **OCI-Specific Automation Patterns:**
-            - Verify capacity errors return 0 (expected) vs 1 (real failure)
-            - OCI CLI optimization to minimize Oracle API calls 
-            - Optimal connect/receive timeouts
-            - PR workflows using OCI must be working correctly, assume credentials are configured and valid
+            4. **Testing**
+              - Verify adequate test coverage
+              - Review test quality and edge cases
+              - Check for missing test scenarios
+              - All PR workflows with checks, linters pass successfully
 
-            **Potential Bugs & Issues:**
-            - Race conditions and concurrency issues
-            - Boundary conditions and error states
-            - Configuration and environment dependencies
-            - Workflow and automation reliability
-            - Focus on main workflow in infrastructure-deployment.yml - it must pass without fails or degradations or errors
+            5. **Documentation**
+              - Ensure code is properly documented
+              - Verify README updates for new features
+              - Check API documentation accuracy
+
+            6. **OCI-Specific Automation Patterns**
+              - Verify capacity errors return 0 (expected) vs 1 (real failure)
+              - OCI CLI optimization to minimize Oracle API calls
+              - Optimal connect/receive timeouts
+              - PR workflows using OCI must be passing (assume credentials and configurations and valid)
+              - Distinguish capacity issues from real failures
 
             Be constructive, thorough, and provide specific actionable feedback.
             Provide severity ratings (Critical/High/Medium/Low) for any issues found.
 
-            Never read all PR comments at once. Always use pagination and filters.
-            If PR diff is too large, list changes in PR instead and review changes file by file.
+            Note: The PR branch is already checked out in the current working directory.
 
-            Your review result must be added to PR into sticky comment.
-            After finishing your review, either approve PR or request fixes if there are issues of medium priority or higher.
+            Only post GitHub comment - don't submit review text as messages.
+            Submit review as an update of your previous review PR comment if it exists.
+            Post review create new review comment or updating existing review comment, for example:
+            `gh pr comment ${{ github.event.pull_request.number }} --edit-last --create-if-none --body "<REVIEW BODY>"`.
+
+            Then leave top-level feedback of your review using `gh pr review` command, providing link to review comment. Either:
+            - approve PR, for example:
+              `gh pr review ${{ github.event.pull_request.number }} --approve --body "Looks good, but consider adding more tests. See <REVIEW COMMENT URL> PR comment for details."`
+            - request changes, for example:
+              `gh pr review ${{ github.event.pull_request.number }} --request-changes --body "Needs changes to address performance issues. See <REVIEW COMMENT URL> PR comment for details."`
+            Request changes if there are issues of medium priority or higher.
+
+          # # from: https://github.com/anthropics/claude-code-action/blob/main/docs/solutions.md
+          # Use `gh pr comment` for top-level feedback.
+          # Use `mcp__github_inline_comment__create_inline_comment` to highlight specific code issues.
+
+          # Removed from prompt:
+          # Your review result must be in PR as single sticky comment or as your approve message or as message requesting changes but not both.
+          # If PR was already reviewed by claude previously, validate latest changes made since your previous review against previous review result first.
+          # Make full PR review only if either no previous review of this PR by claude found, or if you validated that latest changes pushed to the PR have fixed all issues (of medium priority or higher) found in previous claude review in this PR.
