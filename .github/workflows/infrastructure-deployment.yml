@@ -133,6 +133,7 @@ jobs:
         env:
           CACHE_ENABLED: "true"
           CACHE_TTL_HOURS: "24"
+          CACHE_DATE_KEY: ${{ steps.get-date.outputs.date }}
         run: |
           # Make state manager executable
           chmod +x scripts/state-manager.sh
@@ -228,6 +229,7 @@ jobs:
           TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
           CACHE_ENABLED: "true"
           CACHE_TTL_HOURS: "24"
+          CACHE_DATE_KEY: ${{ steps.get-date.outputs.date }}
         run: ./scripts/launch-parallel.sh
 
       - name: Verify instances and update state
@@ -236,6 +238,8 @@ jobs:
           OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
           OCI_REGION: ${{ secrets.OCI_REGION }}
           CACHE_ENABLED: "true"
+          CACHE_TTL_HOURS: "24"
+          CACHE_DATE_KEY: ${{ steps.get-date.outputs.date }}
         run: |
           # Verify actual instance state via OCI API and update cache
           echo "Verifying instance state and updating cache..."

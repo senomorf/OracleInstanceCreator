@@ -151,31 +151,45 @@ verify_and_update_state() {
     local status_a1="$1"
     local status_e2="$2"
     local state_file="instance-state.json"
+    local verification_errors=0
     
     # Initialize state manager if not already done
-    init_state_manager "$state_file" >/dev/null
+    if ! init_state_manager "$state_file" >/dev/null; then
+        log_error "Failed to initialize state manager"
+        return 1
+    fi
     
     # Get the compartment ID for OCI API calls
     local comp_id
     if ! comp_id=$(require_env_var "OCI_COMPARTMENT_ID" 2>/dev/null); then
-        log_warning "OCI_COMPARTMENT_ID not available - skipping state verification"
-        return 0
+        log_error "OCI_COMPARTMENT_ID not available - cannot verify instance state"
+        return 2  # Return specific error code for missing config
     fi
     
     # Verify A1.Flex instance state if creation was attempted
     if [[ "$status_a1" -eq 0 ]]; then
         # Instance creation succeeded according to script, verify with OCI API
         local a1_instance_id
-        a1_instance_id=$(oci_cmd compute instance list \
+        if a1_instance_id=$(oci_cmd compute instance list \
             --compartment-id "$comp_id" \
             --display-name "${A1_FLEX_CONFIG[DISPLAY_NAME]}" \
             --lifecycle-state "RUNNING,PROVISIONING,STARTING" \
             --query 'data[0].id' \
-            --raw-output 2>/dev/null || echo "")
-        
-        if [[ -n "$a1_instance_id" && "$a1_instance_id" != "null" ]]; then
-            log_info "Verified A1.Flex instance exists: $a1_instance_id"
-            record_instance_verification "${A1_FLEX_CONFIG[DISPLAY_NAME]}" "$a1_instance_id" "verified" "$state_file"
+            --raw-output 2>/dev/null); then
+            
+            if [[ -n "$a1_instance_id" && "$a1_instance_id" != "null" ]]; then
+                log_info "Verified A1.Flex instance exists: $a1_instance_id"
+                if ! record_instance_verification "${A1_FLEX_CONFIG[DISPLAY_NAME]}" "$a1_instance_id" "verified" "$state_file"; then
+                    log_warning "Failed to record A1.Flex instance verification"
+                    ((verification_errors++))
+                fi
+            else
+                log_warning "A1.Flex instance creation reported success but instance not found via API"
+                ((verification_errors++))
+            fi
+        else
+            log_error "Failed to query A1.Flex instance state via OCI API"
+            ((verification_errors++))
         fi
     fi
     
@@ -183,16 +197,26 @@ verify_and_update_state() {
     if [[ "$status_e2" -eq 0 ]]; then
         # Instance creation succeeded according to script, verify with OCI API
         local e2_instance_id
-        e2_instance_id=$(oci_cmd compute instance list \
+        if e2_instance_id=$(oci_cmd compute instance list \
             --compartment-id "$comp_id" \
             --display-name "${E2_MICRO_CONFIG[DISPLAY_NAME]}" \
             --lifecycle-state "RUNNING,PROVISIONING,STARTING" \
             --query 'data[0].id' \
-            --raw-output 2>/dev/null || echo "")
-        
-        if [[ -n "$e2_instance_id" && "$e2_instance_id" != "null" ]]; then
-            log_info "Verified E2.Micro instance exists: $e2_instance_id"
-            record_instance_verification "${E2_MICRO_CONFIG[DISPLAY_NAME]}" "$e2_instance_id" "verified" "$state_file"
+            --raw-output 2>/dev/null); then
+            
+            if [[ -n "$e2_instance_id" && "$e2_instance_id" != "null" ]]; then
+                log_info "Verified E2.Micro instance exists: $e2_instance_id"
+                if ! record_instance_verification "${E2_MICRO_CONFIG[DISPLAY_NAME]}" "$e2_instance_id" "verified" "$state_file"; then
+                    log_warning "Failed to record E2.Micro instance verification"
+                    ((verification_errors++))
+                fi
+            else
+                log_warning "E2.Micro instance creation reported success but instance not found via API"
+                ((verification_errors++))
+            fi
+        else
+            log_error "Failed to query E2.Micro instance state via OCI API"
+            ((verification_errors++))
         fi
     fi
     
@@ -200,6 +224,15 @@ verify_and_update_state() {
     if [[ "${DEBUG:-}" == "true" ]]; then
         log_debug "Current instance state after verification:"
         print_state "$state_file"
+    fi
+    
+    # Return appropriate exit code based on verification results
+    if [[ "$verification_errors" -gt 0 ]]; then
+        log_warning "Instance state verification completed with $verification_errors error(s)"
+        return 3  # Return specific code for verification errors (non-critical)
+    else
+        log_debug "Instance state verification completed successfully"
+        return 0
     fi
 }
 
