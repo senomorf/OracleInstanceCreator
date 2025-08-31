@@ -138,6 +138,22 @@ readonly LOG_LEVEL_ERROR=3
 readonly LOG_LEVEL_SUCCESS=4
 
 # =============================================================================
+# STATE MANAGEMENT & CACHING
+# =============================================================================
+
+# GitHub Actions cache configuration
+readonly CACHE_ENABLED_DEFAULT="true"
+readonly CACHE_TTL_HOURS_MIN=1
+readonly CACHE_TTL_HOURS_MAX=168  # 7 days (GitHub Actions cache limit)
+readonly CACHE_TTL_HOURS_DEFAULT=24
+readonly CACHE_VERSION="v1"
+readonly STATE_FILE_NAME="instance-state.json"
+
+# Cache key generation
+readonly CACHE_KEY_PREFIX="oci-instances"
+readonly CACHE_PATH_DEFAULT=".cache/oci-state"
+
+# =============================================================================
 # HELPER FUNCTIONS FOR CONSTANTS
 # =============================================================================
 
@@ -206,6 +222,22 @@ validate_constants() {
     
     if [[ "$BOOT_VOLUME_SIZE_MIN" -lt 50 ]]; then
         echo "ERROR: BOOT_VOLUME_SIZE_MIN ($BOOT_VOLUME_SIZE_MIN) cannot be less than Oracle's minimum (50GB)" >&2
+        ((errors++))
+    fi
+    
+    # Cache configuration validation
+    if [[ "$CACHE_TTL_HOURS_MIN" -lt 1 ]]; then
+        echo "ERROR: CACHE_TTL_HOURS_MIN ($CACHE_TTL_HOURS_MIN) must be at least 1 hour" >&2
+        ((errors++))
+    fi
+    
+    if [[ "$CACHE_TTL_HOURS_MAX" -gt 168 ]]; then
+        echo "ERROR: CACHE_TTL_HOURS_MAX ($CACHE_TTL_HOURS_MAX) cannot exceed GitHub Actions cache limit (168 hours)" >&2
+        ((errors++))
+    fi
+    
+    if [[ "$CACHE_TTL_HOURS_DEFAULT" -lt "$CACHE_TTL_HOURS_MIN" ]] || [[ "$CACHE_TTL_HOURS_DEFAULT" -gt "$CACHE_TTL_HOURS_MAX" ]]; then
+        echo "ERROR: CACHE_TTL_HOURS_DEFAULT ($CACHE_TTL_HOURS_DEFAULT) must be between $CACHE_TTL_HOURS_MIN and $CACHE_TTL_HOURS_MAX" >&2
         ((errors++))
     fi
     

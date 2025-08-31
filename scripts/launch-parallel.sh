@@ -11,6 +11,7 @@ set -euo pipefail
 source "$(dirname "$0")/utils.sh"
 # shellcheck source=scripts/notify.sh
 source "$(dirname "$0")/notify.sh"
+source "$(dirname "$0")/state-manager.sh"
 
 # Global variables for signal handling
 PID_A1=""
@@ -145,6 +146,63 @@ launch_shape() {
     return $exit_code
 }
 
+# Verify instance states and update cache after parallel execution
+verify_and_update_state() {
+    local status_a1="$1"
+    local status_e2="$2"
+    local state_file="instance-state.json"
+    
+    # Initialize state manager if not already done
+    init_state_manager "$state_file" >/dev/null
+    
+    # Get the compartment ID for OCI API calls
+    local comp_id
+    if ! comp_id=$(require_env_var "OCI_COMPARTMENT_ID" 2>/dev/null); then
+        log_warning "OCI_COMPARTMENT_ID not available - skipping state verification"
+        return 0
+    fi
+    
+    # Verify A1.Flex instance state if creation was attempted
+    if [[ "$status_a1" -eq 0 ]]; then
+        # Instance creation succeeded according to script, verify with OCI API
+        local a1_instance_id
+        a1_instance_id=$(oci_cmd compute instance list \
+            --compartment-id "$comp_id" \
+            --display-name "${A1_FLEX_CONFIG[DISPLAY_NAME]}" \
+            --lifecycle-state "RUNNING,PROVISIONING,STARTING" \
+            --query 'data[0].id' \
+            --raw-output 2>/dev/null || echo "")
+        
+        if [[ -n "$a1_instance_id" && "$a1_instance_id" != "null" ]]; then
+            log_info "Verified A1.Flex instance exists: $a1_instance_id"
+            record_instance_verification "${A1_FLEX_CONFIG[DISPLAY_NAME]}" "$a1_instance_id" "verified" "$state_file"
+        fi
+    fi
+    
+    # Verify E2.Micro instance state if creation was attempted
+    if [[ "$status_e2" -eq 0 ]]; then
+        # Instance creation succeeded according to script, verify with OCI API
+        local e2_instance_id
+        e2_instance_id=$(oci_cmd compute instance list \
+            --compartment-id "$comp_id" \
+            --display-name "${E2_MICRO_CONFIG[DISPLAY_NAME]}" \
+            --lifecycle-state "RUNNING,PROVISIONING,STARTING" \
+            --query 'data[0].id' \
+            --raw-output 2>/dev/null || echo "")
+        
+        if [[ -n "$e2_instance_id" && "$e2_instance_id" != "null" ]]; then
+            log_info "Verified E2.Micro instance exists: $e2_instance_id"
+            record_instance_verification "${E2_MICRO_CONFIG[DISPLAY_NAME]}" "$e2_instance_id" "verified" "$state_file"
+        fi
+    fi
+    
+    # Log current state for debugging
+    if [[ "${DEBUG:-}" == "true" ]]; then
+        log_debug "Current instance state after verification:"
+        print_state "$state_file"
+    fi
+}
+
 # Main parallel execution
 main() {
     start_timer "parallel_execution"
@@ -248,7 +306,13 @@ main() {
     else
         log_warning "E2 result file not found - using default failure status"
     fi
-
+    
+    # Verify and update state for both instances (if state management enabled)
+    if [[ "${CACHE_ENABLED:-true}" == "true" ]]; then
+        log_info "Verifying instance states and updating cache..."
+        verify_and_update_state "$STATUS_A1" "$STATUS_E2"
+    fi
+    
     # Cleanup temporary files
     rm -rf "$temp_dir" 2>/dev/null || true
 
