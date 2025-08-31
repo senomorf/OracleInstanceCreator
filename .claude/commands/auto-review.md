@@ -18,6 +18,7 @@ Perform a comprehensive code review for the OCI automation project covering both
 - Documentation quality and code comments
 - Adherence to coding standards and conventions
 - Verify that README.md and docs are updated for any new features or config changes
+- **Linter Policy Compliance**: Ensure any new linters focus on code quality/security/functional issues, NOT arbitrary style rules
 
 ### 2. Security
 - Check for potential security vulnerabilities
