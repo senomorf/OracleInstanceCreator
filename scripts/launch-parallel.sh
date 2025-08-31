@@ -341,9 +341,26 @@ main() {
     fi
     
     # Verify and update state for both instances (if state management enabled)
+    # Only verify when instances were actually attempted (not cache hits)
     if [[ "${CACHE_ENABLED:-true}" == "true" ]]; then
-        log_info "Verifying instance states and updating cache..."
-        verify_and_update_state "$STATUS_A1" "$STATUS_E2"
+        local should_verify=false
+        
+        # Check if A1 instance was actually attempted (not a cache hit)
+        if [[ $STATUS_A1 -ne 0 ]] || [[ $STATUS_A1 -eq 0 && $elapsed -gt 2 ]]; then
+            should_verify=true
+        fi
+        
+        # Check if E2 instance was actually attempted (not a cache hit)  
+        if [[ $STATUS_E2 -ne 0 ]] || [[ $STATUS_E2 -eq 0 && $elapsed -gt 2 ]]; then
+            should_verify=true
+        fi
+        
+        if [[ "$should_verify" == "true" ]]; then
+            log_info "Verifying instance states and updating cache..."
+            verify_and_update_state "$STATUS_A1" "$STATUS_E2"
+        else
+            log_debug "Skipping verification - instances were served from cache"
+        fi
     fi
     
     # Cleanup temporary files

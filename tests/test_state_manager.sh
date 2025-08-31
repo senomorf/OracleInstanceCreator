@@ -30,7 +30,6 @@ setup_test_env() {
     
     # Override environment variables for testing
     export CACHE_PATH="$TEST_STATE_DIR/.cache/oci-state"
-    export STATE_FILE_NAME="test-instance-state.json"
     export OCI_REGION="ap-singapore-1"
     export CACHE_ENABLED="true"
     export CACHE_TTL_HOURS="24"
