@@ -132,10 +132,7 @@ jobs:
 
           # `gh pr comment ${{ github.event.pull_request.number }} --delete-last --yes`
 
-          prompt: |
-            /auto-review
-            REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number }}
+          prompt: "/auto-review ${{ github.repository }} ${{ github.event.pull_request.number }}"
 
           # # from: https://github.com/anthropics/claude-code-action/blob/main/docs/solutions.md
           # Use `gh pr comment` for top-level feedback.
