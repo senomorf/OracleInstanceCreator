@@ -54,6 +54,8 @@ jobs:
           # Enable commit signing using GitHub's commit signature verification. When false, Claude uses standard git commands
           # use_commit_signing: true
 
+          allowed_bots: "dependabot"
+
           # --disallowedTools WebSearch,WebFetch
           # --model claude-opus-4-1-20250805
 
