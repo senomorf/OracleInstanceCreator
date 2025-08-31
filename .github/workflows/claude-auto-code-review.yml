@@ -1,23 +1,16 @@
 ---
-name: Claude PR Auto Review
+name: Claude PR Auto Review with Progress Tracking
 
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
-  # not ready for use: reacts on pr review comment published after pull_request event
-  # issue_comment:
-  #   types: [created]
 
 jobs:
   auto-review:
-    # Run on PR events, or when someone comments "@claude reviewer" on a PR
     if: |
       (github.event_name == 'pull_request' &&
         !contains(github.event.pull_request.title, '[skip-review]') &&
-        !contains(github.event.pull_request.title, '[WIP]')) ||
-      (github.event_name == 'issue_comment' && 
-        github.event.issue.pull_request && 
-        contains(github.event.comment.body, '@claude reviewer'))
+        !contains(github.event.pull_request.title, '[WIP]'))
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -32,7 +25,7 @@ jobs:
         with:
           fetch-depth: 0 # Full history for better diff analysis
 
-      - name: Automatic PR Review
+      - name: PR Review with Progress Tracking
         id: claude-review
         uses: anthropics/claude-code-action@v1
         env:
@@ -49,6 +42,11 @@ jobs:
 
           # ✨ Enables tracking comments like in v0.x
           track_progress: true
+          # When track_progress is enabled:
+          # - Creates a tracking comment with progress checkboxes
+          # - Includes all PR context (comments, attachments, images)
+          # - Updates progress as the review proceeds
+          # - Marks as completed when done
 
           # Use just one comment to deliver PR comments (only applies for pull_request event workflows)
           # use_sticky_comment: true
@@ -79,48 +77,48 @@ jobs:
 
             Please review this PR with comprehensive analysis covering both general software engineering principles and OCI automation specifics:
 
-            **General Code Quality & Best Practices:**
-            - Code structure, readability, and maintainability
-            - Proper error handling and input validation
-            - Logic bugs, edge cases, and null checks
-            - Algorithm efficiency and resource usage
-            - Documentation quality and code comments
-            - Adherence to coding standards and conventions
-            - Verify that README.md and docs are updated for any new features or config changes
+            1. **Code Quality**
+               - Clean code principles and best practices
+               - Proper error handling and input validation
+               - Code structure, readability, and maintainability
+               - Logic bugs, edge cases, and null checks
+               - Algorithm efficiency and resource usage
+               - Check for race conditions and concurrency issues
+               - Configuration and environment dependencies
+               - Documentation quality and code comments
+               - Adherence to coding standards and conventions
+               - Verify that README.md and docs are updated for any new features or config changes
 
-            **Security Analysis (General & OCI-Specific):**
-            - Input validation and injection vulnerabilities
-            - Authentication and authorization patterns
-            - **Credential Safety**: Check for exposed credentials (OCI OCIDs, keys, SSH keys, tokens)
-            - Verify secrets are only used in GitHub Actions, never in artifacts
-            - Distinguish capacity issues from real security failures
+            2. **Security**
+               - Check for potential security vulnerabilities
+               - Validate input sanitization
+               - Review authentication/authorization logic
+               - **Credential Safety**: Check for exposed credentials (OCI OCIDs, keys, SSH keys, tokens)
 
-            **Performance Considerations:**
-            - Algorithm complexity and optimization opportunities
-            - Memory usage and resource efficiency
-            - Caching strategies and optimization patterns
-            - Workflows use caching and optimized for run time
+            3. **Performance**
+               - Algorithm complexity and optimization opportunities
+               - Identify potential performance bottlenecks
+               - Review database queries for efficiency
+               - Check for memory leaks or resource issues
+               - Workflows use caching and optimized for run time
 
-            **Test Coverage & Quality:**
-            - Test completeness and edge case coverage
-            - Test quality, clarity, and maintainability
-            - Integration test scenarios
-            - Error condition testing
-            - All checks, linters and other workflows pass successfully
+            4. **Testing**
+               - Verify adequate test coverage
+               - Review test quality and edge cases
+               - Check for missing test scenarios
+               - All PR workflows with checks, linters pass successfully
 
-            **OCI-Specific Automation Patterns:**
-            - Verify capacity errors return 0 (expected) vs 1 (real failure)
-            - OCI CLI optimization to minimize Oracle API calls 
-            - Optimal connect/receive timeouts
-            - PR workflows using OCI must be working correctly, assume credentials are configured and valid
+            5. **Documentation**
+               - Ensure code is properly documented
+               - Verify README updates for new features
+               - Check API documentation accuracy
 
-            **Potential Bugs & Issues:**
-            - Race conditions and concurrency issues
-            - Boundary conditions and error states
-            - Configuration and environment dependencies
-            - Workflow and automation reliability
-            - Other workflows with checks and linters results
-            - Focus on main workflow in infrastructure-deployment.yml - it must pass without fails or degradations or errors
+            6. **OCI-Specific Automation Patterns**
+               - Verify capacity errors return 0 (expected) vs 1 (real failure)
+               - OCI CLI optimization to minimize Oracle API calls
+               - Optimal connect/receive timeouts
+               - PR workflows using OCI must be passing (assume credentials and configurations and valid)
+               - Distinguish capacity issues from real failures
 
             Be constructive, thorough, and provide specific actionable feedback.
             Provide severity ratings (Critical/High/Medium/Low) for any issues found.
