@@ -1,5 +1,5 @@
 {
-  "printWidth": 120,
+  "printWidth": 999999,
   "tabWidth": 2,
   "useTabs": false,
   "semi": false,
@@ -9,7 +9,7 @@
   "bracketSpacing": true,
   "bracketSameLine": false,
   "arrowParens": "avoid",
-  "proseWrap": "preserve",
+  "proseWrap": "never",
   "htmlWhitespaceSensitivity": "css",
   "vueIndentScriptAndStyle": false,
   "endOfLine": "lf",
@@ -18,7 +18,7 @@
     {
       "files": "*.{yml,yaml}",
       "options": {
-        "printWidth": 120,
+        "printWidth": 999999,
         "tabWidth": 2,
         "useTabs": false
       }
@@ -26,14 +26,14 @@
     {
       "files": "*.md",
       "options": {
-        "printWidth": 80,
-        "proseWrap": "always"
+        "printWidth": 999999,
+        "proseWrap": "never"
       }
     },
     {
       "files": "*.json",
       "options": {
-        "printWidth": 120,
+        "printWidth": 999999,
         "tabWidth": 2
       }
     }

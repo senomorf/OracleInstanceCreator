@@ -15,15 +15,12 @@ skip-check:
   - CKV_DOCKER_1
   - CKV_DOCKER_2
   - CKV_DOCKER_3
-  
+
   # Skip Kubernetes checks (not applicable)
   - CKV_K8S_*
-  
+
   # Skip AWS-specific checks (using OCI)
   - CKV_AWS_*
-  
-  # Allow specific GitHub Actions patterns
-  - CKV_GHA_1  # Pinned GitHub Actions versions (can be relaxed)
 
 # Include specific security checks
 check:
@@ -36,12 +33,7 @@ output: cli
 quiet: false
 compact: false
 
-# File patterns to scan
-files:
-  - "**/*.yml"
-  - "**/*.yaml"
-  - "**/*.json"
-  - ".github/workflows/**"
+# File patterns are handled automatically by framework detection
 
 # Directories to skip
 skip-path:

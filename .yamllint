@@ -1,0 +1,13 @@
+---
+extends: default
+
+rules:
+  comments:
+    min-spaces-from-content: -1  # Allow flexible comment spacing
+  trailing-spaces: disable       # Allow trailing spaces
+  line-length: disable           # Disable line length checks entirely
+  empty-lines: disable           # Allow any empty line patterns
+  document-start: disable        # Don't require --- markers
+  brackets: disable              # Allow flexible bracket spacing
+  truthy:
+    allowed-values: ['true', 'false', 'on', 'off']
