@@ -605,64 +605,127 @@ should_create_instance() {
     local state_file
     state_file=$(get_state_file_path "${2:-}")
     
+    log_debug "=== SHOULD_CREATE_INSTANCE DEBUG START ==="
+    log_debug "Instance name: $instance_name"
+    log_debug "State file: $state_file"
+    log_debug "Cache enabled: $(get_cache_enabled)"
+    
     # If cache disabled, always create
     if [[ "$(get_cache_enabled)" != "true" ]]; then
         log_debug "Cache disabled, allowing instance creation: $instance_name"
+        log_debug "=== SHOULD_CREATE_INSTANCE DEBUG END: ALLOW (cache disabled) ==="
+        return 0
+    fi
+    
+    # Check if state file exists
+    if [[ ! -f "$state_file" ]]; then
+        log_debug "State file does not exist: $state_file"
+        log_debug "=== SHOULD_CREATE_INSTANCE DEBUG END: ALLOW (no state file) ==="
         return 0
     fi
     
     # If state expired, allow creation
     if is_state_expired "$state_file"; then
         log_debug "State expired, allowing instance creation: $instance_name"
+        log_debug "=== SHOULD_CREATE_INSTANCE DEBUG END: ALLOW (state expired) ==="
         return 0
     fi
     
     # Check for cached limit state based on instance name to shape mapping
     local shape=""
+    
+    # Method 1: Direct instance name mapping (highest priority)
     case "$instance_name" in
         "a1-flex-sg")
             shape="VM.Standard.A1.Flex"
+            log_debug "Mapped instance '$instance_name' to shape '$shape' (direct mapping)"
             ;;
         "e2-micro-sg")
             shape="VM.Standard.E2.1.Micro"
+            log_debug "Mapped instance '$instance_name' to shape '$shape' (direct mapping)"
             ;;
         *)
-            # For unknown instance names, try to determine shape from environment
-            # This handles cases where custom instance names are used
-            if [[ -n "${OCI_SHAPE:-}" ]]; then
-                shape="$OCI_SHAPE"
-                log_debug "Using shape from environment for instance $instance_name: $shape"
-            fi
+            log_debug "No direct mapping for instance name '$instance_name'"
             ;;
     esac
     
+    # Method 2: Pattern-based mapping if direct mapping failed
+    if [[ -z "$shape" ]]; then
+        case "$instance_name" in
+            *"a1"*|*"A1"*|*"flex"*|*"Flex"*|*"arm"*|*"ARM"*)
+                shape="VM.Standard.A1.Flex"
+                log_debug "Mapped instance '$instance_name' to shape '$shape' (pattern: ARM/A1/Flex)"
+                ;;
+            *"e2"*|*"E2"*|*"micro"*|*"Micro"*|*"amd"*|*"AMD"*)
+                shape="VM.Standard.E2.1.Micro"
+                log_debug "Mapped instance '$instance_name' to shape '$shape' (pattern: AMD/E2/Micro)"
+                ;;
+        esac
+    fi
+    
+    # Method 3: Environment variable fallback (medium priority)
+    if [[ -z "$shape" && -n "${OCI_SHAPE:-}" ]]; then
+        shape="$OCI_SHAPE"
+        log_debug "Using shape from environment for instance $instance_name: $shape (env fallback)"
+    fi
+    
+    # Method 4: Check instance state for existing shape information
+    if [[ -z "$shape" ]] && instance_exists_in_state "$instance_name" "$state_file"; then
+        local cached_shape
+        cached_shape=$(jq -r ".instances[\"$instance_name\"].shape // \"\"" "$state_file" 2>/dev/null || echo "")
+        if [[ -n "$cached_shape" && "$cached_shape" != "null" ]]; then
+            shape="$cached_shape"
+            log_debug "Retrieved shape from cached instance state for $instance_name: $shape (cached shape)"
+        fi
+    fi
+    
+    # Log final result
+    if [[ -n "$shape" ]]; then
+        log_debug "Final shape mapping for instance '$instance_name': '$shape'"
+    else
+        log_debug "Could not determine shape for instance '$instance_name' - limit checking will be skipped"
+    fi
+    
     # If we have a shape, check if its limit is reached
-    if [[ -n "$shape" ]] && get_cached_limit_state "$shape" "$state_file"; then
-        log_info "Free tier limit reached for shape $shape (instance: $instance_name), skipping creation"
-        return 1  # Don't create - limit reached
+    if [[ -n "$shape" ]]; then
+        log_debug "Checking limit state for shape: $shape"
+        if get_cached_limit_state "$shape" "$state_file"; then
+            log_info "Free tier limit reached for shape $shape (instance: $instance_name), skipping creation"
+            log_debug "=== SHOULD_CREATE_INSTANCE DEBUG END: SKIP (limit reached) ==="
+            return 1  # Don't create - limit reached
+        else
+            log_debug "No limit reached for shape $shape"
+        fi
+    else
+        log_debug "No shape determined, cannot check limits"
     fi
     
     # If instance not in state, allow creation
     if ! instance_exists_in_state "$instance_name" "$state_file"; then
         log_debug "Instance not in state, allowing creation: $instance_name"
+        log_debug "=== SHOULD_CREATE_INSTANCE DEBUG END: ALLOW (not in state) ==="
         return 0
     fi
     
     # Check instance status
     local status
     status=$(get_instance_state "$instance_name" "$state_file" "status")
+    log_debug "Instance '$instance_name' found in state with status: '$status'"
     
     case "$status" in
         "created"|"verified"|"running")
             log_info "Instance exists in state with status '$status', skipping creation: $instance_name"
+            log_debug "=== SHOULD_CREATE_INSTANCE DEBUG END: SKIP (exists with status $status) ==="
             return 1  # Don't create
             ;;
         "failed"|"terminated")
             log_info "Instance exists in state with status '$status', allowing recreation: $instance_name"
+            log_debug "=== SHOULD_CREATE_INSTANCE DEBUG END: ALLOW (recreation for status $status) ==="
             return 0  # Allow creation
             ;;
         *)
             log_debug "Instance exists in state with unknown status '$status', allowing creation: $instance_name"
+            log_debug "=== SHOULD_CREATE_INSTANCE DEBUG END: ALLOW (unknown status $status) ==="
             return 0  # Allow creation for safety
             ;;
     esac
@@ -982,12 +1045,20 @@ get_cached_limit_state() {
     local state_file
     state_file=$(get_state_file_path "${2:-}")
     
+    log_debug "=== GET_CACHED_LIMIT_STATE DEBUG START ==="
+    log_debug "Shape: $shape"
+    log_debug "State file: $state_file"
+    
     if [[ ! -f "$state_file" ]]; then
+        log_debug "State file does not exist: $state_file"
+        log_debug "=== GET_CACHED_LIMIT_STATE DEBUG END: NO_LIMIT (no file) ==="
         return 1  # No cache = no limit cached
     fi
     
     # Check if limits section exists
     if ! jq -e '.limits' "$state_file" >/dev/null 2>&1; then
+        log_debug "No limits section in state file"
+        log_debug "=== GET_CACHED_LIMIT_STATE DEBUG END: NO_LIMIT (no limits section) ==="
         return 1  # No limits section = no limit cached
     fi
     
@@ -996,12 +1067,15 @@ get_cached_limit_state() {
     case "$shape" in
         "VM.Standard.E2.1.Micro")
             limit_field="e2_limit_reached"
+            log_debug "Mapped shape '$shape' to limit field '$limit_field'"
             ;;
         "VM.Standard.A1.Flex")
             limit_field="a1_limit_reached"
+            log_debug "Mapped shape '$shape' to limit field '$limit_field'"
             ;;
         *)
             log_warning "Unknown shape for limit checking: $shape"
+            log_debug "=== GET_CACHED_LIMIT_STATE DEBUG END: NO_LIMIT (unknown shape) ==="
             return 1
             ;;
     esac
@@ -1012,20 +1086,31 @@ get_cached_limit_state() {
     ttl_hours=$(jq -r ".limits.ttl_hours // 24" "$state_file")
     current_time=$(date +%s)
     
+    log_debug "Limit cache TTL check:"
+    log_debug "  Last check: $last_check ($(date -r "$last_check" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "invalid"))"
+    log_debug "  Current time: $current_time ($(date -r "$current_time" '+%Y-%m-%d %H:%M:%S'))"
+    log_debug "  TTL hours: $ttl_hours"
+    log_debug "  Age in seconds: $((current_time - last_check))"
+    log_debug "  Max age in seconds: $((ttl_hours * 3600))"
+    
     if [[ $((current_time - last_check)) -gt $((ttl_hours * 3600)) ]]; then
         log_debug "Limit cache expired for $shape (TTL: ${ttl_hours}h)"
+        log_debug "=== GET_CACHED_LIMIT_STATE DEBUG END: NO_LIMIT (cache expired) ==="
         return 1  # Cache expired
     fi
     
     # Check the specific limit flag
     local limit_reached
     limit_reached=$(jq -r ".limits.$limit_field // false" "$state_file")
+    log_debug "Limit field '$limit_field' value: '$limit_reached'"
     
     if [[ "$limit_reached" == "true" ]]; then
         log_debug "Cached limit reached for $shape"
+        log_debug "=== GET_CACHED_LIMIT_STATE DEBUG END: LIMIT_REACHED ==="
         return 0  # Limit is cached as reached
     else
-        log_debug "No cached limit for $shape"
+        log_debug "No cached limit for $shape (value: $limit_reached)"
+        log_debug "=== GET_CACHED_LIMIT_STATE DEBUG END: NO_LIMIT (not reached) ==="
         return 1  # No limit cached
     fi
 }

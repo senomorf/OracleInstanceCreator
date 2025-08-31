@@ -479,21 +479,28 @@ main() {
     if [[ "${CACHE_ENABLED:-true}" == "true" ]]; then
         local should_verify=false
         
-        # Check if A1 instance was actually attempted (not a cache hit)
-        if [[ $STATUS_A1 -ne 0 ]] || [[ $STATUS_A1 -eq 0 && $elapsed -gt 2 ]]; then
+        # Only verify if at least one instance reported success (status 0)
+        # Verification is to check if successful instances actually exist in OCI
+        if [[ $STATUS_A1 -eq 0 || $STATUS_E2 -eq 0 ]]; then
             should_verify=true
+            log_debug "Verification needed - at least one instance reported success"
         fi
         
-        # Check if E2 instance was actually attempted (not a cache hit)  
-        if [[ $STATUS_E2 -ne 0 ]] || [[ $STATUS_E2 -eq 0 && $elapsed -gt 2 ]]; then
-            should_verify=true
+        # Also verify if execution took a reasonable amount of time (not instant cache hit)
+        # This handles edge cases where rapid failures might indicate cache issues
+        if [[ $elapsed -gt 2 && ($STATUS_A1 -ne 0 || $STATUS_E2 -ne 0) ]]; then
+            should_verify=true  
+            log_debug "Verification needed - non-instant execution with failures"
         fi
         
         if [[ "$should_verify" == "true" ]]; then
             log_info "Verifying instance states and updating cache..."
-            verify_and_update_state "$STATUS_A1" "$STATUS_E2"
+            # Capture but don't propagate verification errors - they're non-critical
+            if ! verify_and_update_state "$STATUS_A1" "$STATUS_E2"; then
+                log_warning "Instance state verification encountered issues but continuing"
+            fi
         else
-            log_debug "Skipping verification - instances were served from cache"
+            log_debug "Skipping verification - no successful instances to verify"
         fi
     fi
     # Cleanup temporary files
