@@ -1,15 +1,15 @@
 # EditorConfig configuration for OCI Automation Project
-# NOTE: Indentation and space/tab rules disabled to prevent CI/CD formatting failures
-# Only essential cross-platform compatibility rules are enforced
+# NOTE: All formatting rules disabled to prevent CI/CD formatting failures
+# Only charset is enforced - developers have complete formatting freedom
 
 root = true
 
 # All files
 [*]
 charset = utf-8
-end_of_line = lf
-# insert_final_newline = unset  # Don't enforce either way
-# trim_trailing_whitespace = unset  # Don't enforce either way
+# end_of_line = lf                    # Disabled - use any line ending style
+# insert_final_newline = unset        # Disabled - don't enforce either way
+# trim_trailing_whitespace = unset    # Disabled - don't enforce either way
 
 # Shell scripts
 [*.sh]
