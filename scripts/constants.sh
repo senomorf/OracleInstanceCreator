@@ -2,6 +2,8 @@
 # Centralized Configuration Constants for Oracle Instance Creator
 # This file contains all magic numbers and configuration constants used throughout the project
 
+# shellcheck disable=SC2034  # Variables defined here are used by other scripts
+
 # Prevent multiple sourcing conflicts
 if [[ -n "${OIC_CONSTANTS_LOADED:-}" ]]; then
     return 0

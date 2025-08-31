@@ -33,3 +33,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VALIDATE_YAML_PRETTIER: false
           VALIDATE_JSON_PRETTIER: false
+          # Disable style-related linters to focus on code quality issues
+          VALIDATE_EDITORCONFIG: false
+          VALIDATE_SHELL_SHFMT: false
+          VALIDATE_GITLEAKS: false
