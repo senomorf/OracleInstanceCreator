@@ -8,9 +8,6 @@ rules:
   line-length: disable           # Disable line length checks entirely
   empty-lines: disable           # Allow any empty line patterns
   document-start: disable        # Don't require --- markers
-  indentation: disable           # Don't enforce strict indentation
   brackets: disable              # Allow flexible bracket spacing
-  colons: disable                # Allow flexible colon spacing
-  commas: disable                # Allow flexible comma spacing
   truthy:
     allowed-values: ['true', 'false', 'on', 'off']

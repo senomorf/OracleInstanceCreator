@@ -10,7 +10,7 @@
   "bracketSameLine": false,
   "arrowParens": "avoid",
   "proseWrap": "never",
-  "htmlWhitespaceSensitivity": "ignore",
+  "htmlWhitespaceSensitivity": "css",
   "vueIndentScriptAndStyle": false,
   "endOfLine": "lf",
   "embeddedLanguageFormatting": "auto",
