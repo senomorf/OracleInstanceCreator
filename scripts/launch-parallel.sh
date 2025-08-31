@@ -59,7 +59,7 @@ terminate_processes() {
         log_debug "Terminating E2 process (PID: $PID_E2)"
         kill "$PID_E2" 2>/dev/null || true
     fi
-    sleep $GRACEFUL_TERMINATION_DELAY # 2-second grace period allows processes to cleanup before SIGKILL
+    sleep "$GRACEFUL_TERMINATION_DELAY" # 2-second grace period allows processes to cleanup before SIGKILL
 
     # Force kill if still running
     if [[ -n "$PID_A1" ]] && kill -0 "$PID_A1" 2>/dev/null; then
@@ -77,10 +77,12 @@ cleanup_handler() {
     terminate_processes
 
     # Cleanup temporary files
-    [[ -n "$temp_dir" && -d "$temp_dir" ]] && rm -rf "$temp_dir" 2>/dev/null || true
+    if [[ -n "$temp_dir" && -d "$temp_dir" ]]; then
+        rm -rf "$temp_dir" 2>/dev/null || true
+    fi
 
     log_info "Cleanup completed"
-    exit $OCI_EXIT_GENERAL_ERROR
+    exit "$OCI_EXIT_GENERAL_ERROR"
 }
 
 # Set up signal handlers
@@ -291,12 +293,15 @@ main() {
     fi
 
     # Log comprehensive execution summary
-    local performance_summary="ExecutionTime=${elapsed}s,A1Duration=${a1_duration}s,E2Duration=${e2_duration}s,PeakMemory=${peak_memory}MB,SuccessRate=${success_count}/2"
+    local performance_summary="ExecutionTime=${elapsed}s,A1Duration=${a1_duration}s,E2Duration=${e2_duration}s"
+    performance_summary="${performance_summary},PeakMemory=${peak_memory}MB,SuccessRate=${success_count}/2"
     log_performance_metric "CONCURRENT_END" "parallel_execution" "$success_count" "2" "$performance_summary"
 
     # Log structured performance data for analysis
     if [[ "${LOG_FORMAT:-}" == "json" ]]; then
-        local performance_context="{\"total_duration\":${elapsed},\"a1_duration\":${a1_duration},\"e2_duration\":${e2_duration},\"peak_memory\":${peak_memory},\"success_count\":${success_count},\"parallel_efficiency\":"
+        local performance_context="{\"total_duration\":${elapsed},\"a1_duration\":${a1_duration}"
+        performance_context="${performance_context},\"e2_duration\":${e2_duration},\"peak_memory\":${peak_memory}"
+        performance_context="${performance_context},\"success_count\":${success_count},\"parallel_efficiency\":"
         performance_context+="$(((a1_duration + e2_duration) > 0 ? (a1_duration + e2_duration) * 100 / elapsed : 0))}"
         log_with_context "info" "Parallel execution performance summary" "$performance_context"
     fi
