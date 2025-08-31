@@ -243,7 +243,6 @@ jobs:
         run: |
           # Verify actual instance state via OCI API and update cache
           echo "Verifying instance state and updating cache..."
-          # Note: This will be implemented in the launch scripts
           if [[ "$DEBUG" == "true" ]]; then
             ./scripts/state-manager.sh print
           fi

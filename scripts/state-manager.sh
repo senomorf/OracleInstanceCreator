@@ -66,7 +66,7 @@ get_cache_dir() {
 # Get absolute state file path
 get_state_file_path() {
     local state_file
-    state_file=$(get_state_file_path "${1:-}")
+    state_file="${1:-$STATE_FILE_NAME}"
     local cache_dir
     cache_dir=$(get_cache_dir)
     
@@ -87,8 +87,70 @@ get_state_file_path() {
 # STATE FILE MANAGEMENT
 # =============================================================================
 
+# File locking utilities for safe concurrent access
+acquire_state_lock() {
+    local state_file="$1"
+    local lock_file="${state_file}.lock"
+    local timeout="${2:-30}"  # Default 30 second timeout
+    local wait_count=0
+    
+    # Try to acquire lock with timeout
+    while (( wait_count < timeout )); do
+        if (set -C; echo $$ > "$lock_file") 2>/dev/null; then
+            log_debug "Acquired state lock: $lock_file"
+            return 0
+        fi
+        
+        # Check if lock is stale (older than 5 minutes)
+        if [[ -f "$lock_file" ]] && [[ $(( $(date +%s) - $(stat -c %Y "$lock_file" 2>/dev/null || stat -f %m "$lock_file" 2>/dev/null || echo 0) )) -gt 300 ]]; then
+            log_warning "Removing stale lock file: $lock_file"
+            rm -f "$lock_file"
+            continue
+        fi
+        
+        log_debug "Waiting for state lock... ($((wait_count + 1))/$timeout)"
+        sleep 1
+        ((wait_count++))
+    done
+    
+    log_error "Failed to acquire state lock after ${timeout}s: $lock_file"
+    return 1
+}
+
+release_state_lock() {
+    local state_file="$1"
+    local lock_file="${state_file}.lock"
+    
+    if [[ -f "$lock_file" ]]; then
+        rm -f "$lock_file"
+        log_debug "Released state lock: $lock_file"
+    fi
+}
+
+# Wrapper for safe state file operations with automatic locking
+with_state_lock() {
+    local state_file="$1"
+    shift
+    local func_name="$1"
+    shift
+    
+    if acquire_state_lock "$state_file"; then
+        # Ensure lock is released even if function fails
+        # shellcheck disable=SC2064
+        trap "release_state_lock '$state_file'" EXIT ERR
+        "$func_name" "$state_file" "$@"
+        local result=$?
+        release_state_lock "$state_file"
+        trap - EXIT ERR
+        return $result
+    else
+        log_error "Failed to acquire lock for state operation: $func_name"
+        return 1
+    fi
+}
+
 # Generate cache key for GitHub Actions cache
-# Format: oci-instances-{region}-{version}-{date}
+# Format: oci-instances-{region_hash}-{version}-{date}
 generate_cache_key() {
     local region="${OCI_REGION:-unknown}"
     local date_key
@@ -100,27 +162,43 @@ generate_cache_key() {
         date_key=$(date '+%Y-%m-%d')
     fi
     
-    # Sanitize region for cache key (replace special chars with hyphens)
-    local sanitized_region
-    sanitized_region=$(echo "$region" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
+    # Generate secure hash of region to avoid information leakage
+    local region_hash
+    if command -v sha256sum >/dev/null 2>&1; then
+        region_hash=$(echo -n "$region" | sha256sum | cut -d' ' -f1 | head -c 8)
+    elif command -v shasum >/dev/null 2>&1; then
+        region_hash=$(echo -n "$region" | shasum -a 256 | cut -d' ' -f1 | head -c 8)
+    else
+        # Fallback to simple sanitization if no hash tools available
+        region_hash=$(echo "$region" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
+    fi
     
-    echo "oci-instances-${sanitized_region}-${CACHE_VERSION}-${date_key}"
+    echo "oci-instances-${region_hash}-${CACHE_VERSION}-${date_key}"
 }
 
 # Generate fallback cache key pattern for restore
 generate_cache_restore_keys() {
     local region="${OCI_REGION:-unknown}"
-    local sanitized_region
-    sanitized_region=$(echo "$region" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
+    
+    # Generate secure hash of region to match generate_cache_key behavior
+    local region_hash
+    if command -v sha256sum >/dev/null 2>&1; then
+        region_hash=$(echo -n "$region" | sha256sum | cut -d' ' -f1 | head -c 8)
+    elif command -v shasum >/dev/null 2>&1; then
+        region_hash=$(echo -n "$region" | shasum -a 256 | cut -d' ' -f1 | head -c 8)
+    else
+        # Fallback to simple sanitization if no hash tools available
+        region_hash=$(echo "$region" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
+    fi
     
     # Generate keys for today and yesterday (in case of timezone differences)
     local today yesterday
     today=$(date '+%Y-%m-%d')
     yesterday=$(date -d 'yesterday' '+%Y-%m-%d' 2>/dev/null || date -v-1d '+%Y-%m-%d' 2>/dev/null || echo "$today")
     
-    echo "oci-instances-${sanitized_region}-${CACHE_VERSION}-${today}"
-    echo "oci-instances-${sanitized_region}-${CACHE_VERSION}-${yesterday}"
-    echo "oci-instances-${sanitized_region}-${CACHE_VERSION}-"
+    echo "oci-instances-${region_hash}-${CACHE_VERSION}-${today}"
+    echo "oci-instances-${region_hash}-${CACHE_VERSION}-${yesterday}"
+    echo "oci-instances-${region_hash}-${CACHE_VERSION}-"
 }
 
 # Initialize empty state file
@@ -213,13 +291,12 @@ get_instance_state() {
     fi
 }
 
-# Add or update instance in state
-update_instance_state() {
-    local instance_name="$1"
-    local ocid="$2"
-    local status="${3:-created}"
-    local state_file
-    state_file=$(get_state_file_path "${4:-}")
+# Internal function - performs actual state update (assumes lock is held)
+_update_instance_state_locked() {
+    local state_file="$1"
+    local instance_name="$2"
+    local ocid="$3"
+    local status="${4:-created}"
     
     local timestamp
     timestamp=$(date +%s)
@@ -249,11 +326,21 @@ update_instance_state() {
     log_info "Updated instance state: $instance_name (OCID: $ocid, Status: $status)"
 }
 
-# Remove instance from state  
-remove_instance_state() {
+# Add or update instance in state with file locking
+update_instance_state() {
     local instance_name="$1"
+    local ocid="$2"
+    local status="${3:-created}"
     local state_file
-    state_file=$(get_state_file_path "${2:-}")
+    state_file=$(get_state_file_path "${4:-}")
+    
+    with_state_lock "$state_file" _update_instance_state_locked "$instance_name" "$ocid" "$status"
+}
+
+# Internal function - performs actual state removal (assumes lock is held)
+_remove_instance_state_locked() {
+    local state_file="$1"
+    local instance_name="$2"
     
     if [[ ! -f "$state_file" ]]; then
         log_debug "State file not found, nothing to remove: $state_file"
@@ -273,6 +360,15 @@ remove_instance_state() {
     mv "$temp_file" "$state_file"
     
     log_info "Removed instance from state: $instance_name"
+}
+
+# Remove instance from state with file locking
+remove_instance_state() {
+    local instance_name="$1"
+    local state_file
+    state_file=$(get_state_file_path "${2:-}")
+    
+    with_state_lock "$state_file" _remove_instance_state_locked "$instance_name"
 }
 
 # =============================================================================
@@ -791,7 +887,7 @@ check_cache_health() {
     # Check cache directory
     if [[ -d "$cache_dir" ]]; then
         echo "✓ Cache directory exists: $cache_dir"
-        echo "  Permissions: $(ls -ld "$cache_dir" | awk '{print $1}')"
+        echo "  Permissions: $(stat -c %A "$cache_dir" 2>/dev/null || stat -f %Sp "$cache_dir" 2>/dev/null || echo "unknown")"
     else
         echo "✗ Cache directory missing: $cache_dir"
         return 1
