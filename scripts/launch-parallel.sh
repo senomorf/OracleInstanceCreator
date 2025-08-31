@@ -323,6 +323,12 @@ main() {
     else
         log_error "Parallel execution failed: Both instance creation attempts failed"
         
+        # Check if both shapes failed due to capacity limitations (exit code 2)
+        if [[ $STATUS_A1 -eq $EXIT_CAPACITY_ERROR ]] && [[ $STATUS_E2 -eq $EXIT_CAPACITY_ERROR ]]; then
+            # Track capacity exhaustion metrics for monitoring
+            log_performance_metric "CAPACITY_EXHAUSTION" "both_shapes" "2" "2" "BothShapesUnavailable=true"
+        fi
+        
         # Let individual shape failures handle their own error notifications
         # This prevents duplicate error notifications
         
