@@ -1,0 +1,12 @@
+{
+  "rules": {
+    "terminology": {
+      "defaultTerms": false,
+      "skip": ["run time"],
+      "terms": []
+    }
+  },
+  "filters": {
+    "comments": true
+  }
+}
