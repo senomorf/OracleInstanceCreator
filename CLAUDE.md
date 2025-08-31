@@ -115,6 +115,10 @@ gh run watch <run-id>
 - **"Too many requests"** - Oracle API throttling during high usage, workflow continues normally  
 - **"Out of host capacity"** - Common during peak usage periods
 - **ARM (A1.Flex) typically more available** than AMD (E2.1.Micro)
+- **Free tier limits reached** - Expected when E2 (2/2 instances) or A1 (4/4 OCPUs) limits are reached
+  - Limit states are cached to prevent repeated failed attempts
+  - Cached limits persist between workflow runs to avoid unnecessary Oracle API calls
+  - Workflow returns success (exit code 0) when limits are reached - not a failure condition
 
 ### OCID Validation
 ```bash

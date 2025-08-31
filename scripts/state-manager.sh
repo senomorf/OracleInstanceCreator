@@ -617,6 +617,31 @@ should_create_instance() {
         return 0
     fi
     
+    # Check for cached limit state based on instance name to shape mapping
+    local shape=""
+    case "$instance_name" in
+        "a1-flex-sg")
+            shape="VM.Standard.A1.Flex"
+            ;;
+        "e2-micro-sg")
+            shape="VM.Standard.E2.1.Micro"
+            ;;
+        *)
+            # For unknown instance names, try to determine shape from environment
+            # This handles cases where custom instance names are used
+            if [[ -n "${OCI_SHAPE:-}" ]]; then
+                shape="$OCI_SHAPE"
+                log_debug "Using shape from environment for instance $instance_name: $shape"
+            fi
+            ;;
+    esac
+    
+    # If we have a shape, check if its limit is reached
+    if [[ -n "$shape" ]] && get_cached_limit_state "$shape" "$state_file"; then
+        log_info "Free tier limit reached for shape $shape (instance: $instance_name), skipping creation"
+        return 1  # Don't create - limit reached
+    fi
+    
     # If instance not in state, allow creation
     if ! instance_exists_in_state "$instance_name" "$state_file"; then
         log_debug "Instance not in state, allowing creation: $instance_name"
