@@ -5,7 +5,7 @@ name: 'OCI Orchestrator - Infrastructure Deployment'
 
 on:
   schedule:
-    # Four-tier optimization: 10-min off-peak, 15-min peak (~2,340 runs/month)
+    # Four-tier optimization: 10-min off-peak, 15-min peak (~4,320 runs/month)
     # All schedules target Oracle Cloud optimal availability windows for maximum deployment success
     
     # TIER 1: Off-peak aggressive (10-min intervals)
@@ -15,8 +15,8 @@ on:
     - cron: "*/10 2-7 * * *"
     
     # TIER 2: Late night/early morning (10-min intervals)
-    # UTC 20-23,0-1 = SGT 4am-9am (early morning low usage)
-    - cron: "*/10 20-23,0-1 * * *"
+    # UTC 20-23 = SGT 4am-7am (early morning low usage, avoids overlap with TIER 1)
+    - cron: "*/10 20-23 * * *"
     
     # TIER 3: Peak hours conservative (15-min intervals)
     # UTC 8-19 = SGT 4pm-3am (business end + evening peak)
