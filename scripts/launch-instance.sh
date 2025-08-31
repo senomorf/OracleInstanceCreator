@@ -387,7 +387,7 @@ launch_instance() {
                     continue
                 else
                     log_performance_metric "AD_CYCLE_COMPLETE" "ALL_ADS" "$max_attempts" "$max_attempts" "CAPACITY_EXHAUSTED"
-                    log_info "All ADs exhausted - will retry on next schedule"
+                    log_info "All ADs exhausted - expected Oracle Cloud free-tier behavior, will retry on next schedule"
                     return 0  # Not a failure, just capacity issue across all ADs
                 fi
                 ;;
@@ -407,7 +407,7 @@ launch_instance() {
                     ((ad_index++))
                     continue
                 else
-                    log_info "All ADs exhausted after LimitExceeded errors"
+                    log_info "All ADs exhausted after LimitExceeded - expected Oracle Cloud free-tier behavior"
                     return 0
                 fi
                 ;;
@@ -492,7 +492,7 @@ launch_instance() {
                         continue
                     else
                         # All ADs attempted with transient errors - treat as temporary capacity issue
-                        log_info "All ADs and retries exhausted with transient errors - will retry on next schedule"
+                        log_info "All ADs and retries exhausted with transient errors - capacity limitations are normal, will retry on next schedule"
                         return 0
                     fi
                 else
@@ -504,7 +504,7 @@ launch_instance() {
                                 ((ad_index++))
                                 continue
                             else
-                                log_info "All ADs exhausted - will retry on next schedule"
+                                log_info "All ADs exhausted - capacity limitations are normal, will retry on next schedule"
                                 return 0
                             fi
                             ;;
@@ -602,7 +602,7 @@ handle_launch_error_with_ad() {
     
     case "$error_type" in
         "CAPACITY")
-            log_info "No capacity available for shape in AD $current_ad (attempt $attempt/$max_attempts)"
+            log_info "Capacity limitations in AD $current_ad - expected Oracle Cloud free-tier behavior (attempt $attempt/$max_attempts)"
             echo "CAPACITY"
             return 0
             ;;

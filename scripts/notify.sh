@@ -161,7 +161,7 @@ notify_capacity_unavailable() {
     local shape="${OCI_SHAPE:-unknown}"
     local ad="${OCI_AD:-unknown}"
     
-    local message="Oracle Cloud capacity currently unavailable.
+    local message="Expected Oracle Cloud free-tier behavior - capacity limitations are normal.
 
 **Details:**
 • Shape: $shape
