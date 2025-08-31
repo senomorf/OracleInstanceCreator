@@ -33,3 +33,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VALIDATE_YAML_PRETTIER: false
           VALIDATE_JSON_PRETTIER: false
+          # Disable pure style checkers
+          VALIDATE_SHELL_SHFMT: false
+          # Configure shellcheck to only show errors/warnings (not style)
+          SHELLCHECK_OPTS: "--severity=warning"
