@@ -1,0 +1,4 @@
+# Ignore test cache key patterns in test files
+# These are not real secrets - just test patterns for cache key generation
+tests/test_state_manager.sh:generic-api-key:173
+tests/test_state_manager.sh:generic-api-key:179

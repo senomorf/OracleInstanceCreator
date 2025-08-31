@@ -189,11 +189,11 @@ get_retry_config() {
     case "$config_type" in
         "max_retries")
             get_timeout_value "TRANSIENT_ERROR_MAX_RETRIES" "$TRANSIENT_ERROR_MAX_RETRIES_DEFAULT" \
-                             "$TRANSIENT_ERROR_MAX_RETRIES_MIN" "$TRANSIENT_ERROR_MAX_RETRIES_MAX"
+                                "$TRANSIENT_ERROR_MAX_RETRIES_MIN" "$TRANSIENT_ERROR_MAX_RETRIES_MAX"
             ;;
         "retry_delay")
             get_timeout_value "TRANSIENT_ERROR_RETRY_DELAY" "$TRANSIENT_ERROR_RETRY_DELAY_DEFAULT" \
-                             "$TRANSIENT_ERROR_RETRY_DELAY_MIN" "$TRANSIENT_ERROR_RETRY_DELAY_MAX"
+                                "$TRANSIENT_ERROR_RETRY_DELAY_MIN" "$TRANSIENT_ERROR_RETRY_DELAY_MAX"
             ;;
         *)
             echo "Invalid retry config type: $config_type" >&2

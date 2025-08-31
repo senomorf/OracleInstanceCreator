@@ -112,7 +112,7 @@ test_parallel_both_success() {
     
     local temp_dir
     temp_dir=$(mktemp -d)
-    trap "rm -rf '$temp_dir'" EXIT
+    trap 'rm -rf "$temp_dir"' EXIT
     
     # Setup mock environment
     create_mock_oci_responses "both_success" "$temp_dir"
@@ -200,7 +200,7 @@ test_parallel_timeout_handling() {
     
     local temp_dir
     temp_dir=$(mktemp -d)
-    trap "rm -rf '$temp_dir'" EXIT
+    trap 'rm -rf "$temp_dir"' EXIT
     
     # Create long-running mock script
     cat > "$temp_dir/mock_slow_instance.sh" << 'EOF'
@@ -264,7 +264,7 @@ test_parallel_signal_handling() {
     
     local temp_dir
     temp_dir=$(mktemp -d)
-    trap "rm -rf '$temp_dir'" EXIT
+    trap 'rm -rf "$temp_dir"' EXIT
     
     # Create script that handles signals
     cat > "$temp_dir/mock_signal_instance.sh" << EOF
@@ -318,7 +318,7 @@ test_parallel_file_operations() {
     
     local temp_dir
     temp_dir=$(mktemp -d)
-    trap "rm -rf '$temp_dir'" EXIT
+    trap 'rm -rf "$temp_dir"' EXIT
     
     # Create script that writes to separate files
     cat > "$temp_dir/mock_file_writer.sh" << 'EOF'

@@ -108,7 +108,7 @@ test_concurrent_executions() {
     
     local temp_dir
     temp_dir=$(mktemp -d)
-    trap "rm -rf '$temp_dir'" EXIT
+    trap 'rm -rf "$temp_dir"' EXIT
     
     create_mock_parallel_script "$temp_dir" 3 0
     
@@ -210,7 +210,7 @@ test_resource_contention() {
     
     local temp_dir
     temp_dir=$(mktemp -d)
-    trap "rm -rf '$temp_dir'" EXIT
+    trap 'rm -rf "$temp_dir"' EXIT
     
     # Create script that generates high I/O and CPU load
     cat > "$temp_dir/mock_heavy_load.sh" << 'EOF'
@@ -320,7 +320,7 @@ test_memory_leak_detection() {
     
     local temp_dir
     temp_dir=$(mktemp -d)
-    trap "rm -rf '$temp_dir'" EXIT
+    trap 'rm -rf "$temp_dir"' EXIT
     
     # Create script that potentially leaks memory
     create_mock_parallel_script "$temp_dir" 1 0
@@ -384,7 +384,7 @@ test_network_partition_simulation() {
     
     local temp_dir
     temp_dir=$(mktemp -d)
-    trap "rm -rf '$temp_dir'" EXIT
+    trap 'rm -rf "$temp_dir"' EXIT
     
     # Create script that simulates network calls
     cat > "$temp_dir/mock_network_script.sh" << 'EOF'
@@ -462,7 +462,7 @@ test_rate_limiting_simulation() {
     
     local temp_dir
     temp_dir=$(mktemp -d)
-    trap "rm -rf '$temp_dir'" EXIT
+    trap 'rm -rf "$temp_dir"' EXIT
     
     # Create script that simulates rate limiting
     cat > "$temp_dir/mock_rate_limited.sh" << 'EOF'
