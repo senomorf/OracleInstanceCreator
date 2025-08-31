@@ -23,6 +23,7 @@ FAILED_SUITES=0
 
 run_test_suite() {
     local test_file="$1"
+    # shellcheck disable=SC2155  # basename rarely fails
     local suite_name="$(basename "$test_file" .sh)"
     
     echo -e "${BLUE}Running test suite: $suite_name${NC}"
