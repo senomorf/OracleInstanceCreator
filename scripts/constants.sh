@@ -26,7 +26,7 @@ readonly GITHUB_ACTIONS_BILLING_BOUNDARY=60
 # Process monitoring and cleanup timing
 readonly PROCESS_MONITORING_INTERVAL=1  # Monitor processes every 1s for responsive detection without excessive CPU usage
 readonly GRACEFUL_TERMINATION_DELAY=2   # 2s grace period allows processes proper cleanup before SIGKILL
-readonly RESULT_FILE_WAIT_TIMEOUT=10     # 10s max wait prevents indefinite blocking on missing result files
+readonly RESULT_FILE_WAIT_TIMEOUT=30     # 30s max wait handles slow Oracle API responses during parallel execution
 readonly RESULT_FILE_POLL_INTERVAL=0.1   # 100ms polling provides responsive detection without excessive CPU load
 
 # =============================================================================
@@ -60,8 +60,9 @@ readonly TRANSIENT_ERROR_RETRY_DELAY_DEFAULT=15     # Base delay for exponential
 # Exit codes following GNU standards
 readonly EXIT_SUCCESS=0
 readonly EXIT_GENERAL_ERROR=1
-readonly EXIT_CAPACITY_ERROR=2        # Oracle capacity/rate limiting
+readonly EXIT_CAPACITY_ERROR=2        # Oracle capacity unavailable
 readonly EXIT_CONFIG_ERROR=3          # Configuration/authentication errors
+readonly EXIT_RATE_LIMIT_ERROR=6      # Oracle API rate limiting (429 errors)
 readonly EXIT_TIMEOUT_ERROR=124       # GNU timeout compatibility
 
 # =============================================================================

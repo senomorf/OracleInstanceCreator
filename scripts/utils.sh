@@ -184,8 +184,11 @@ handle_error_by_type() {
         "USER_LIMIT_REACHED")
             return "$OCI_EXIT_USER_LIMIT_ERROR"
             ;;
-        "ORACLE_CAPACITY_UNAVAILABLE"|"CAPACITY"|"RATE_LIMIT"|"LIMIT_EXCEEDED")
+        "ORACLE_CAPACITY_UNAVAILABLE"|"CAPACITY"|"LIMIT_EXCEEDED")
             return "$OCI_EXIT_CAPACITY_ERROR"
+            ;;
+        "RATE_LIMIT")
+            return "$OCI_EXIT_RATE_LIMIT_ERROR"
             ;;
         "AUTH"|"CONFIG"|"DUPLICATE")
             return "$OCI_EXIT_CONFIG_ERROR"
@@ -616,6 +619,7 @@ if [[ -z "${OCI_EXIT_SUCCESS:-}" ]]; then
     readonly OCI_EXIT_CONFIG_ERROR=3
     readonly OCI_EXIT_NETWORK_ERROR=4
     readonly OCI_EXIT_USER_LIMIT_ERROR=5
+    readonly OCI_EXIT_RATE_LIMIT_ERROR=6
     readonly OCI_EXIT_TIMEOUT=124
 fi
 
@@ -680,8 +684,11 @@ get_exit_code_for_error_type() {
     local error_type="$1"
     
     case "$error_type" in
-        "CAPACITY"|"RATE_LIMIT"|"LIMIT_EXCEEDED")
+        "CAPACITY"|"LIMIT_EXCEEDED")
             echo $OCI_EXIT_CAPACITY_ERROR
+            ;;
+        "RATE_LIMIT")
+            echo $OCI_EXIT_RATE_LIMIT_ERROR
             ;;
         "AUTH"|"CONFIG"|"DUPLICATE")
             echo $OCI_EXIT_CONFIG_ERROR
@@ -890,7 +897,7 @@ validate_availability_domain() {
     fi
     
     # Check for leading/trailing commas or spaces
-    if [[ "$ad_list" =~ ^[[:space:]]*,|,[[:space:]]*$ ]]; then
+    if [[ "$ad_list" =~ ^[[:space:]]*,.* ]] || [[ "$ad_list" =~ .*,[[:space:]]*$ ]]; then
         log_error "Invalid AD format: leading or trailing commas not allowed"
         log_error "Found: '$ad_list'"
         return 1
