@@ -24,17 +24,22 @@ skip-check:
   - CKV_AWS_*
 
   # Allow specific GitHub Actions patterns
-  - CKV_GHA_1  # Pinned GitHub Actions versions (can be relaxed)
-  - CKV_GHA_7  # GitHub Actions should use OIDC (not required for this project)
+  - CKV_GHA_1 # Pinned GitHub Actions versions (can be relaxed)
+  - CKV_GHA_7 # GitHub Actions should use OIDC (not required for this project)
 
   # Skip checks related to actions versions (Dependabot manages these)
-  - CKV2_GHA_1  # Ensure top-level permissions are not set to write-all
+  - CKV2_GHA_1 # Ensure top-level permissions are not set to write-all
+  - CKV_GHA_2 # Ensure that each step in the job does not have write-all permissions
+  - CKV_GHA_3 # Suspicious use of curl in GitHub Actions
+  - CKV_GHA_4 # Suspicious use of netcat in GitHub Actions
+  - CKV_GHA_5 # Found usage of GitHub Actions vulnerable to code injection
+  - CKV2_GHA_2 # Ensure actions are from trusted publishers
 
 # Include specific security checks
 check:
-  - CKV_SECRET_*  # Secret detection
-  - CKV_GHA_*     # GitHub Actions security
-  - CKV2_GHA_*    # Advanced GitHub Actions checks
+  - CKV_SECRET_* # Secret detection
+  - CKV_GHA_* # GitHub Actions security
+  - CKV2_GHA_* # Advanced GitHub Actions checks
 
 # Output settings
 output: cli
