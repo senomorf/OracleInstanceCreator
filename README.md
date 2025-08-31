@@ -122,6 +122,12 @@ chmod +x scripts/*.sh
 - **Multi-region support**: Works with any OCI region
 - **Comprehensive logging**: Structured output for debugging
 
+## Documentation
+
+- **[CLAUDE.md](CLAUDE.md)** - Complete project architecture, patterns, and development guide
+- **[Notification Policy](CLAUDE.md#telegram-notification-policy)** - Clear guidelines on when notifications are sent
+- **[Linter Configuration](CLAUDE.md#linter-configuration-policy)** - Code quality focus over arbitrary style rules
+
 ## License
 
 MIT License - See [LICENSE](LICENSE) file for details.
