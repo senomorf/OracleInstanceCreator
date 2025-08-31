@@ -63,6 +63,12 @@ regexes = [
     "user:password@proxy\\.example\\.com",
     "user:secret123@proxy\\.example\\.com",
     "ocid1\\.example\\.",
+    # Allow test OCIDs with .test suffix or in test files
+    "ocid1\\.[^.]+\\.[^.]+\\.[^.]*\\.test[^.]*$",
+    "ocid1\\.instance\\.test",
+    "ocid1\\.user\\.oc1\\.\\.test",
+    "ocid1\\.tenancy\\.oc1\\.\\.test",
+    "ocid1\\.subnet\\.oc1\\.test",
     # Allow redacted patterns we use
     "\\[.*REDACTED.*\\]",
     "\\[PRIVATE_KEY_REDACTED\\]",
