@@ -1,5 +1,5 @@
 {
-  "threshold": 2,
+  "threshold": 1,
   "reporters": ["html", "console"],
   "ignore": ["node_modules/**", ".git/**", "docs/**", "tests/fixtures/**", "**/package-lock.json", "**/*.min.js"],
   "minLines": 6,

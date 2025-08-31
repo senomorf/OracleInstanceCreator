@@ -33,12 +33,7 @@ output: cli
 quiet: false
 compact: false
 
-# File patterns to scan
-files:
-  - "**/*.yml"
-  - "**/*.yaml"
-  - "**/*.json"
-  - ".github/workflows/**"
+# File patterns are handled automatically by framework detection
 
 # Directories to skip
 skip-path:

@@ -7,6 +7,11 @@ rules:
   # Disable final newline requirement
   new-line-at-end-of-file: disable
 
+  # Disable style-only rules that don't improve code quality
+  document-start: disable
+  truthy: disable
+  brackets: disable
+
   # Keep other useful rules active
   comments:
     min-spaces-from-content: 1
