@@ -7,7 +7,9 @@
 
 set -euo pipefail
 
+# shellcheck source=scripts/utils.sh
 source "$(dirname "$0")/utils.sh"
+# shellcheck source=scripts/notify.sh
 source "$(dirname "$0")/notify.sh"
 
 # Global variables for signal handling
@@ -89,6 +91,7 @@ cleanup_handler() {
 trap cleanup_handler SIGTERM SIGINT
 
 # Shape configurations for Oracle Cloud free tier
+# shellcheck disable=SC2034  # Used via nameref in launch_shape()
 declare -A A1_FLEX_CONFIG=(
     ["SHAPE"]="VM.Standard.A1.Flex"
     ["OCPUS"]="4"
@@ -96,6 +99,7 @@ declare -A A1_FLEX_CONFIG=(
     ["DISPLAY_NAME"]="a1-flex-sg"
 )
 
+# shellcheck disable=SC2034  # Used via nameref in launch_shape()
 declare -A E2_MICRO_CONFIG=(
     ["SHAPE"]="VM.Standard.E2.1.Micro"
     ["OCPUS"]=""
