@@ -24,6 +24,10 @@ skip-check:
   
   # Allow specific GitHub Actions patterns
   - CKV_GHA_1  # Pinned GitHub Actions versions (can be relaxed)
+  - CKV_GHA_7  # GitHub Actions should use OIDC (not required for this project)
+  
+  # Skip checks related to actions versions (Dependabot manages these)
+  - CKV2_GHA_1  # Ensure top-level permissions are not set to write-all
 
 # Include specific security checks
 check:

@@ -1,0 +1,17 @@
+{
+  "threshold": 10,
+  "reporters": ["html", "console"],
+  "ignore": [
+    "node_modules/**",
+    ".git/**",
+    "docs/**",
+    "tests/fixtures/**",
+    "**/package-lock.json",
+    "**/*.min.js"
+  ],
+  "minLines": 5,
+  "minTokens": 50,
+  "format": ["javascript", "typescript", "bash", "shell", "yaml", "json"],
+  "output": "./jscpd-report",
+  "mode": "mild"
+}
