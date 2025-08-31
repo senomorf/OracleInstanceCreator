@@ -14,13 +14,13 @@ trim_trailing_whitespace = true
 [*.sh]
 indent_style = space
 indent_size = 4
-max_line_length = 120
+# max_line_length = 120
 
 # JavaScript files
 [*.js]
 indent_style = space
 indent_size = 2
-max_line_length = 120
+# max_line_length = 120
 
 # JSON files
 [*.json]
@@ -38,19 +38,20 @@ indent_size = 2
 [*.html]
 indent_style = space
 indent_size = 4
-max_line_length = 120
+# max_line_length = 120
 
 # CSS files
 [*.css]
 indent_style = space
 indent_size = 2
-max_line_length = 120
+# max_line_length = 120
 
 # Markdown files
 [*.md]
 indent_style = space
 indent_size = 2
-max_line_length = 80
+# Line length restrictions disabled - let content flow naturally
+# max_line_length = 80
 trim_trailing_whitespace = false
 
 # Configuration files
