@@ -1140,13 +1140,17 @@ record_success_pattern() {
         return 0
     fi
     
+    # shellcheck disable=SC2155  # Date commands rarely fail
     local timestamp=$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')
+    # shellcheck disable=SC2155  # Date commands rarely fail
     local hour_utc=$(date -u '+%H')
+    # shellcheck disable=SC2155  # Date commands rarely fail
     local day_of_week=$(date -u '+%u')
     
     if [[ -n "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
-        # Get existing pattern data
-        local existing_data=$(gh variable get SUCCESS_PATTERN_DATA 2>/dev/null || echo "[]")
+        # Get existing pattern data - separate declaration for better error handling
+        local existing_data
+        existing_data=$(gh variable get SUCCESS_PATTERN_DATA 2>/dev/null || echo "[]")
         
         # Create success entry
         local success_entry="{\"type\":\"success\",\"timestamp\":\"$timestamp\",\"hour_utc\":$hour_utc,\"day_of_week\":$day_of_week,\"ad\":\"$availability_domain\",\"attempt\":$attempt_number,\"total_attempts\":$total_attempts}"
@@ -1178,13 +1182,17 @@ record_failure_pattern() {
         return 0
     fi
     
+    # shellcheck disable=SC2155  # Date commands rarely fail
     local timestamp=$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')
+    # shellcheck disable=SC2155  # Date commands rarely fail
     local hour_utc=$(date -u '+%H')
+    # shellcheck disable=SC2155  # Date commands rarely fail
     local day_of_week=$(date -u '+%u')
     
     if [[ -n "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
-        # Get existing pattern data
-        local existing_data=$(gh variable get SUCCESS_PATTERN_DATA 2>/dev/null || echo "[]")
+        # Get existing pattern data - separate declaration for better error handling
+        local existing_data
+        existing_data=$(gh variable get SUCCESS_PATTERN_DATA 2>/dev/null || echo "[]")
         
         # Create failure entry
         local failure_entry="{\"type\":\"${error_type}_failure\",\"timestamp\":\"$timestamp\",\"hour_utc\":$hour_utc,\"day_of_week\":$day_of_week,\"ad\":\"$availability_domain\",\"attempt\":$attempt_number,\"total_attempts\":$total_attempts}"

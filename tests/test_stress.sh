@@ -331,8 +331,8 @@ test_memory_leak_detection() {
     local memory_samples=()
     
     # Run multiple iterations
+    # shellcheck disable=SC2034  # iteration is used as loop context
     for iteration in {1..10}; do
-        # shellcheck disable=SC2034  # iteration is used as loop context
         # Launch parallel processes
         local pids=()
         for i in {1..3}; do
