@@ -370,14 +370,6 @@ main() {
         ((elapsed += sleep_interval))
     done
 
-    # Handle timeout case
-    if [[ $elapsed -ge $timeout_seconds ]]; then
-        log_warning "Execution timeout reached (${timeout_seconds}s) - terminating background processes"
-        terminate_processes
-        STATUS_A1=$EXIT_TIMEOUT_ERROR # Standard timeout exit code (GNU timeout compatibility)
-        STATUS_E2=$EXIT_TIMEOUT_ERROR # Standard timeout exit code (GNU timeout compatibility)
-    fi
-
     # Always wait for processes to fully complete and flush their output (handle empty PIDs)
     if [[ -n "$PID_A1" ]]; then
         wait $PID_A1 2>/dev/null || true
@@ -399,6 +391,37 @@ main() {
         log_debug "E2 result file found with status: $STATUS_E2"
     else
         log_warning "E2 result file not found - using default failure status"
+    fi
+    # Handle timeout case - architecture-aware approach respecting smart shape filtering
+    if [[ $elapsed -ge $timeout_seconds ]]; then
+        log_warning "Execution timeout reached (${timeout_seconds}s) - terminating background processes"
+        terminate_processes
+        
+        # Only apply timeout errors to shapes that were actually launched and have generic error codes
+        # This preserves capacity/limit error codes (2, 5) which indicate expected Oracle Cloud behavior
+        if [[ "$should_launch_a1" == true ]]; then
+            # Only override if no specific error code was already captured
+            if [[ $STATUS_A1 -eq 1 ]]; then
+                STATUS_A1=$EXIT_TIMEOUT_ERROR
+                log_debug "A1 timeout applied (was launched, no specific error code)"
+            else
+                log_debug "A1 timeout occurred but preserving error code $STATUS_A1 (capacity/limit detection)"
+            fi
+        else
+            log_debug "A1 was skipped due to cached limits - no timeout handling needed"
+        fi
+        
+        if [[ "$should_launch_e2" == true ]]; then
+            # Only override if no specific error code was already captured
+            if [[ $STATUS_E2 -eq 1 ]]; then
+                STATUS_E2=$EXIT_TIMEOUT_ERROR
+                log_debug "E2 timeout applied (was launched, no specific error code)"
+            else
+                log_debug "E2 timeout occurred but preserving error code $STATUS_E2 (capacity/limit detection)"
+            fi
+        else
+            log_debug "E2 was skipped due to cached limits - no timeout handling needed"
+        fi
     fi
     
     # Verify and update state for both instances (if state management enabled)
@@ -423,7 +446,6 @@ main() {
             log_debug "Skipping verification - instances were served from cache"
         fi
     fi
-    
     # Cleanup temporary files
     rm -rf "$temp_dir" 2>/dev/null || true
 
