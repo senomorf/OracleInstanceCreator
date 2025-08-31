@@ -62,7 +62,7 @@ concurrency:
 env:
   # Global environment variables
   DEBUG: ${{ inputs.verbose_output && 'true' || 'false' }}
-  ENABLE_NOTIFICATIONS: ${{ inputs.send_notifications && 'true' || 'false' }}
+  ENABLE_NOTIFICATIONS: ${{ github.event_name == 'workflow_dispatch' && (inputs.send_notifications && 'true' || 'false') || 'true' }}
   # Enable instance check by default to use state management cache (can be overridden manually)
   CHECK_EXISTING_INSTANCE: ${{ github.event_name == 'workflow_dispatch' && (inputs.check_existing_instance && 'true' || 'false') || 'true' }}
   # Suppress OCI CLI file permissions warnings
