@@ -49,7 +49,7 @@ jobs:
           # - Marks as completed when done
 
           # Use just one comment to deliver PR comments (only applies for pull_request event workflows)
-          # use_sticky_comment: true
+          use_sticky_comment: true
 
           # Enable commit signing using GitHub's commit signature verification. When false, Claude uses standard git commands
           # use_commit_signing: true
