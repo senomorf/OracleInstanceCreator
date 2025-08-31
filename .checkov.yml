@@ -1,3 +1,4 @@
+---
 # Checkov configuration for OracleInstanceCreator
 # Security and compliance scanning for Infrastructure as Code
 
@@ -15,17 +16,17 @@ skip-check:
   - CKV_DOCKER_1
   - CKV_DOCKER_2
   - CKV_DOCKER_3
-  
+
   # Skip Kubernetes checks (not applicable)
   - CKV_K8S_*
-  
+
   # Skip AWS-specific checks (using OCI)
   - CKV_AWS_*
-  
+
   # Allow specific GitHub Actions patterns
   - CKV_GHA_1  # Pinned GitHub Actions versions (can be relaxed)
   - CKV_GHA_7  # GitHub Actions should use OIDC (not required for this project)
-  
+
   # Skip checks related to actions versions (Dependabot manages these)
   - CKV2_GHA_1  # Ensure top-level permissions are not set to write-all
 
@@ -42,10 +43,10 @@ compact: false
 
 # File patterns to scan
 files:
-  - "**/*.yml"
-  - "**/*.yaml"
-  - "**/*.json"
-  - ".github/workflows/**"
+  - '**/*.yml'
+  - '**/*.yaml'
+  - '**/*.json'
+  - '.github/workflows/**'
 
 # Directories to skip
 skip-path:
