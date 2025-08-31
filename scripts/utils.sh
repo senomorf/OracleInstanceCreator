@@ -635,15 +635,31 @@ wait_for_result_file() {
     log_debug "Waiting for result file: $file_path (timeout: ${timeout}s)"
     
     while [[ $elapsed -lt $timeout ]]; do
-        if [[ -f "$file_path" && -s "$file_path" ]]; then
-            log_debug "Result file found and non-empty after ${elapsed}s"
-            return 0
+        if [[ -f "$file_path" ]]; then
+            # File exists, check if it has content
+            local file_content
+            if file_content=$(cat "$file_path" 2>/dev/null) && [[ -n "$file_content" ]]; then
+                # Validate content is a valid exit code (numeric)
+                if [[ "$file_content" =~ ^[0-9]+$ ]]; then
+                    log_debug "Result file found with valid exit code '$file_content' after ${elapsed}s"
+                    return 0
+                else
+                    log_debug "Result file found but content is not numeric: '$file_content'"
+                fi
+            fi
         fi
         sleep "$poll_interval"
-        elapsed=$((elapsed + 1))
+        elapsed=$((elapsed + poll_interval))
     done
     
-    log_warning "Result file not found within ${timeout}s timeout: $file_path"
+    # Final check - log file state for debugging
+    if [[ -f "$file_path" ]]; then
+        local file_content
+        file_content=$(cat "$file_path" 2>/dev/null || echo "<read failed>")
+        log_warning "Result file exists but failed validation within ${timeout}s timeout: $file_path (content: '$file_content')"
+    else
+        log_warning "Result file not found within ${timeout}s timeout: $file_path"
+    fi
     return 1
 }
 
