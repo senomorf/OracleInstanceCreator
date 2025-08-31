@@ -222,7 +222,13 @@ init_state_file() {
   "region": "${OCI_REGION:-}",
   "created": "$timestamp",
   "updated": "$timestamp",
-  "instances": {}
+  "instances": {},
+  "limits": {
+    "e2_limit_reached": false,
+    "a1_limit_reached": false,
+    "last_limit_check": $timestamp,
+    "ttl_hours": 24
+  }
 }
 EOF
     
@@ -249,6 +255,24 @@ load_state() {
     if ! jq -e '.instances' "$state_file" >/dev/null 2>&1; then
         log_warning "State file missing instances field, reinitializing: $state_file"
         init_state_file "$state_file"
+    fi
+    
+    # Ensure limits field exists (for backward compatibility with existing state files)
+    if ! jq -e '.limits' "$state_file" >/dev/null 2>&1; then
+        log_info "State file missing limits field, adding default limit structure"
+        local timestamp
+        timestamp=$(date +%s)
+        local temp_file
+        temp_file=$(mktemp)
+        
+        jq --arg timestamp "$timestamp" \
+           '.limits = {
+             "e2_limit_reached": false,
+             "a1_limit_reached": false,
+             "last_limit_check": ($timestamp | tonumber),
+             "ttl_hours": 24
+           }' "$state_file" > "$temp_file"
+        mv "$temp_file" "$state_file"
     fi
     
     echo "$state_file"
@@ -924,6 +948,190 @@ check_cache_health() {
 }
 
 # =============================================================================
+# LIMIT STATE MANAGEMENT
+# =============================================================================
+
+# Check if a shape limit is reached based on cached state
+get_cached_limit_state() {
+    local shape="$1"
+    local state_file
+    state_file=$(get_state_file_path "${2:-}")
+    
+    if [[ ! -f "$state_file" ]]; then
+        return 1  # No cache = no limit cached
+    fi
+    
+    # Check if limits section exists
+    if ! jq -e '.limits' "$state_file" >/dev/null 2>&1; then
+        return 1  # No limits section = no limit cached
+    fi
+    
+    # Determine limit field based on shape
+    local limit_field
+    case "$shape" in
+        "VM.Standard.E2.1.Micro")
+            limit_field="e2_limit_reached"
+            ;;
+        "VM.Standard.A1.Flex")
+            limit_field="a1_limit_reached"
+            ;;
+        *)
+            log_warning "Unknown shape for limit checking: $shape"
+            return 1
+            ;;
+    esac
+    
+    # Check if limit TTL has expired
+    local last_check ttl_hours current_time
+    last_check=$(jq -r ".limits.last_limit_check // 0" "$state_file")
+    ttl_hours=$(jq -r ".limits.ttl_hours // 24" "$state_file")
+    current_time=$(date +%s)
+    
+    if [[ $((current_time - last_check)) -gt $((ttl_hours * 3600)) ]]; then
+        log_debug "Limit cache expired for $shape (TTL: ${ttl_hours}h)"
+        return 1  # Cache expired
+    fi
+    
+    # Check the specific limit flag
+    local limit_reached
+    limit_reached=$(jq -r ".limits.$limit_field // false" "$state_file")
+    
+    if [[ "$limit_reached" == "true" ]]; then
+        log_debug "Cached limit reached for $shape"
+        return 0  # Limit is cached as reached
+    else
+        log_debug "No cached limit for $shape"
+        return 1  # No limit cached
+    fi
+}
+
+# Set a shape limit state in the cache
+set_cached_limit_state() {
+    local shape="$1" 
+    local limit_reached="$2"  # "true" or "false"
+    local state_file
+    state_file=$(get_state_file_path "${3:-}")
+    
+    # Determine limit field based on shape
+    local limit_field
+    case "$shape" in
+        "VM.Standard.E2.1.Micro")
+            limit_field="e2_limit_reached"
+            ;;
+        "VM.Standard.A1.Flex")
+            limit_field="a1_limit_reached"
+            ;;
+        *)
+            log_warning "Unknown shape for limit setting: $shape"
+            return 1
+            ;;
+    esac
+    
+    # Ensure state file exists
+    load_state "$state_file" >/dev/null
+    
+    # Update the limit state
+    local timestamp temp_file
+    timestamp=$(date +%s)
+    temp_file=$(mktemp)
+    
+    if jq --arg field "$limit_field" \
+          --arg value "$limit_reached" \
+          --arg timestamp "$timestamp" \
+          '.limits[$field] = ($value == "true") | 
+           .limits.last_limit_check = ($timestamp | tonumber) |
+           .updated = ($timestamp | tonumber)' \
+          "$state_file" > "$temp_file"; then
+        mv "$temp_file" "$state_file"
+        log_debug "Updated cached limit state: $shape -> $limit_reached"
+    else
+        rm -f "$temp_file"
+        log_error "Failed to update cached limit state: $shape"
+        return 1
+    fi
+    
+    # Save to cache if in GitHub Actions
+    save_state_to_cache "$state_file"
+}
+
+# Clear all cached limit states (useful for testing or manual reset)
+clear_cached_limit_states() {
+    local state_file
+    state_file=$(get_state_file_path "${1:-}")
+    
+    # Ensure state file exists
+    load_state "$state_file" >/dev/null
+    
+    local timestamp temp_file
+    timestamp=$(date +%s)
+    temp_file=$(mktemp)
+    
+    if jq --arg timestamp "$timestamp" \
+          '.limits.e2_limit_reached = false |
+           .limits.a1_limit_reached = false |
+           .limits.last_limit_check = ($timestamp | tonumber) |
+           .updated = ($timestamp | tonumber)' \
+          "$state_file" > "$temp_file"; then
+        mv "$temp_file" "$state_file"
+        log_info "Cleared all cached limit states"
+    else
+        rm -f "$temp_file"
+        log_error "Failed to clear cached limit states"
+        return 1
+    fi
+    
+    # Save to cache if in GitHub Actions
+    save_state_to_cache "$state_file"
+}
+
+# Get comprehensive limit status summary
+get_limit_status() {
+    local state_file
+    state_file=$(get_state_file_path "${1:-}")
+    
+    if [[ ! -f "$state_file" ]]; then
+        echo "No limit state available"
+        return 1
+    fi
+    
+    # Check if limits section exists
+    if ! jq -e '.limits' "$state_file" >/dev/null 2>&1; then
+        echo "No limit data in state file"
+        return 1
+    fi
+    
+    echo "=== Free Tier Limit Status ==="
+    
+    local e2_limit a1_limit last_check ttl_hours
+    e2_limit=$(jq -r '.limits.e2_limit_reached // false' "$state_file")
+    a1_limit=$(jq -r '.limits.a1_limit_reached // false' "$state_file")
+    last_check=$(jq -r '.limits.last_limit_check // 0' "$state_file")
+    ttl_hours=$(jq -r '.limits.ttl_hours // 24' "$state_file")
+    
+    # Convert timestamp for display
+    local last_check_readable
+    if [[ "$last_check" =~ ^[0-9]+$ ]] && [[ "$last_check" != "0" ]]; then
+        last_check_readable=$(date -r "$last_check" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || echo "$last_check")
+    else
+        last_check_readable="Never"
+    fi
+    
+    echo "E2.1.Micro limit: $([[ "$e2_limit" == "true" ]] && echo "REACHED (2/2)" || echo "Available")"
+    echo "A1.Flex limit: $([[ "$a1_limit" == "true" ]] && echo "REACHED (4/4 OCPUs)" || echo "Available")"
+    echo "Last check: $last_check_readable"
+    echo "Cache TTL: ${ttl_hours} hours"
+    
+    # Check if cache is expired
+    local current_time
+    current_time=$(date +%s)
+    if [[ $((current_time - last_check)) -gt $((ttl_hours * 3600)) ]]; then
+        echo "⚠ Limit cache is expired - will be rechecked on next creation attempt"
+    else
+        echo "✓ Limit cache is current"
+    fi
+}
+
+# =============================================================================
 # COMMAND LINE INTERFACE
 # =============================================================================
 
@@ -998,8 +1206,41 @@ main() {
             fi
             verify_instance_configuration "$instance_id" "$expected_shape" "$expected_ocpus" "$expected_memory"
             ;;
+        "check-limit")
+            local shape="${2:-}"
+            if [[ -z "$shape" ]]; then
+                echo "Usage: $0 check-limit <shape> [state_file]" >&2
+                exit 1
+            fi
+            if get_cached_limit_state "$shape" "${3:-}"; then
+                echo "LIMIT_REACHED"
+                exit 0
+            else
+                echo "AVAILABLE"
+                exit 1
+            fi
+            ;;
+        "set-limit")
+            local shape="${2:-}"
+            local limit_reached="${3:-}"
+            if [[ -z "$shape" || -z "$limit_reached" ]]; then
+                echo "Usage: $0 set-limit <shape> <true|false> [state_file]" >&2
+                exit 1
+            fi
+            if [[ "$limit_reached" != "true" && "$limit_reached" != "false" ]]; then
+                echo "Error: limit_reached must be 'true' or 'false'" >&2
+                exit 1
+            fi
+            set_cached_limit_state "$shape" "$limit_reached" "${4:-}"
+            ;;
+        "clear-limits")
+            clear_cached_limit_states "${2:-}"
+            ;;
+        "limit-status")
+            get_limit_status "${2:-}"
+            ;;
         *)
-            echo "Usage: $0 {init|check|record|verify|print|cleanup|stats|health|purge|verify-config} [args...]" >&2
+            echo "Usage: $0 {init|check|record|verify|print|cleanup|stats|health|purge|verify-config|check-limit|set-limit|clear-limits|limit-status} [args...]" >&2
             echo ""
             echo "State Management:"
             echo "  init [state_file]                           - Initialize state manager"
@@ -1013,6 +1254,12 @@ main() {
             echo "  stats                                       - Show cache statistics"
             echo "  health                                      - Check cache health"
             echo "  purge --confirm                             - Purge cache and reset statistics"
+            echo ""
+            echo "Limit Management:"
+            echo "  check-limit <shape> [state_file]            - Check if shape limit is cached as reached"
+            echo "  set-limit <shape> <true|false> [state_file] - Set shape limit state in cache"
+            echo "  clear-limits [state_file]                   - Clear all cached limit states"
+            echo "  limit-status [state_file]                   - Show comprehensive limit status"
             echo ""
             echo "Configuration Verification:"
             echo "  verify-config <id> <shape> [ocpus] [memory] - Verify instance configuration"

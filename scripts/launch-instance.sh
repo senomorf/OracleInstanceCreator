@@ -379,7 +379,22 @@ launch_instance() {
         error_type=$(handle_launch_error_with_ad "$output" "$current_ad" $((ad_index + 1)) "$max_attempts")
         
         case "$error_type" in
-            "CAPACITY"|"RATE_LIMIT")
+            "USER_LIMIT_REACHED")
+                # User has reached free tier limits - this is expected behavior, not an error
+                log_info "User limit reached for shape ${OCI_SHAPE:-unknown} - no further attempts needed"
+                log_info "Free tier limit reached. Consider managing existing instances to free capacity."
+                
+                # This is a terminal condition - no point trying other ADs for user limits
+                log_performance_metric "USER_LIMIT_REACHED" "${OCI_SHAPE:-unknown}" "$((ad_index + 1))" "$max_attempts" "TERMINAL"
+                record_ad_result "$current_ad" "user_limit_reached" "$error_type"
+                
+                # Send appropriate notification (not a failure, but informational)
+                send_telegram_notification "info" "Free tier limit reached for ${OCI_SHAPE:-unknown}. Consider managing existing instances."
+                
+                # Exit with the specific user limit error code
+                return "$OCI_EXIT_USER_LIMIT_ERROR"
+                ;;
+            "ORACLE_CAPACITY_UNAVAILABLE"|"CAPACITY"|"RATE_LIMIT")
                 # Track capacity-related failures for performance analysis and circuit breaker
                 log_performance_metric "AD_FAILURE" "$current_ad" "$((ad_index + 1))" "$max_attempts" "$error_type"
                 record_ad_result "$current_ad" "failure" "$error_type"
@@ -613,6 +628,25 @@ handle_launch_error_with_ad() {
     error_type=$(get_error_type "$error_output")
     
     case "$error_type" in
+        "USER_LIMIT_REACHED")
+            log_info "User limit reached for shape ${OCI_SHAPE:-unknown} in AD $current_ad (attempt $attempt/$max_attempts)"
+            log_info "This indicates the free tier limit has been reached (E2: 2/2 instances, A1: 4/4 OCPUs)"
+            
+            # Update cached limit state to prevent future attempts
+            if [[ "${CACHE_ENABLED:-true}" == "true" && -n "${OCI_SHAPE:-}" ]]; then
+                log_info "Caching limit state for shape: ${OCI_SHAPE}"
+                set_cached_limit_state "${OCI_SHAPE}" "true" "${state_file:-instance-state.json}"
+            fi
+            
+            echo "USER_LIMIT_REACHED"
+            return 0
+            ;;
+        "ORACLE_CAPACITY_UNAVAILABLE")
+            log_info "Oracle capacity unavailable for shape in AD $current_ad (attempt $attempt/$max_attempts)"
+            log_info "This is a transient Oracle Cloud capacity constraint"
+            echo "ORACLE_CAPACITY_UNAVAILABLE"
+            return 0
+            ;;
         "CAPACITY")
             log_info "No capacity available for shape in AD $current_ad (attempt $attempt/$max_attempts)"
             echo "CAPACITY"

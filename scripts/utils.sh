@@ -181,7 +181,10 @@ handle_error_by_type() {
     error_type=$(get_error_type "$error_message")
     
     case "$error_type" in
-        "CAPACITY"|"RATE_LIMIT"|"LIMIT_EXCEEDED")
+        "USER_LIMIT_REACHED")
+            return "$OCI_EXIT_USER_LIMIT_ERROR"
+            ;;
+        "ORACLE_CAPACITY_UNAVAILABLE"|"CAPACITY"|"RATE_LIMIT"|"LIMIT_EXCEEDED")
             return "$OCI_EXIT_CAPACITY_ERROR"
             ;;
         "AUTH"|"CONFIG"|"DUPLICATE")
@@ -497,8 +500,16 @@ extract_instance_ocid() {
 get_error_type() {
     local error_output="$1"
     
-    # Check for limit exceeded errors first (more specific than general service limit)
-    if echo "$error_output" | grep -qi "limitexceeded\|\"code\".*\"LimitExceeded\""; then
+    # Check for user limit reached errors first (most specific - E2/A1 instance limits)
+    if echo "$error_output" | grep -qi "limitexceeded.*core.*count\|standard.*micro.*core.*count\|\"code\".*\"LimitExceeded\".*core.*count"; then
+        log_debug "Detected USER_LIMIT_REACHED error pattern in: $error_output"
+        echo "USER_LIMIT_REACHED"
+    # Check for Oracle capacity unavailable errors (specific Oracle capacity constraints)
+    elif echo "$error_output" | grep -qi "out of host capacity\|insufficient.*host.*capacity\|host.*capacity.*unavailable\|\"code\".*\"InternalError\".*host.*capacity"; then
+        log_debug "Detected ORACLE_CAPACITY_UNAVAILABLE error pattern in: $error_output"
+        echo "ORACLE_CAPACITY_UNAVAILABLE"
+    # Check for general limit exceeded errors (fallback for other limit types)
+    elif echo "$error_output" | grep -qi "limitexceeded\|\"code\".*\"LimitExceeded\""; then
         log_debug "Detected LIMIT_EXCEEDED error pattern in: $error_output"
         echo "LIMIT_EXCEEDED"
     # Check for rate limiting (treat as capacity issue)
@@ -604,6 +615,7 @@ if [[ -z "${OCI_EXIT_SUCCESS:-}" ]]; then
     readonly OCI_EXIT_CAPACITY_ERROR=2
     readonly OCI_EXIT_CONFIG_ERROR=3
     readonly OCI_EXIT_NETWORK_ERROR=4
+    readonly OCI_EXIT_USER_LIMIT_ERROR=5
     readonly OCI_EXIT_TIMEOUT=124
 fi
 
