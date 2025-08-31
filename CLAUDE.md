@@ -163,6 +163,26 @@ gh run watch <run-id>
 **Notify for successes and actionable failures. Never notify for expected operational conditions.**
 Expected conditions (limits, capacity constraints) are normal automation behavior that resolve through retry cycles.
 
+## Linter Configuration Policy
+
+### Core Principle
+**Linters in this project MUST NOT enforce arbitrary style rules.** Focus on code quality, security, and functional correctness only.
+
+### Disabled Style Rules
+- **All Prettier validators**: Disabled to prevent style conflicts with intentional formatting
+- **Markdown style rules**: MD026 (trailing punctuation), MD013 (line length), MD033 (HTML tags)
+- **Shell formatting**: VALIDATE_SHELL_SHFMT disabled (existing)
+
+### Philosophy
+Linters should catch bugs, security issues, and functional problems - not enforce subjective style preferences that reduce documentation readability.
+
+### Claude Review Command
+Any new linters introduced to this project must follow the no-style-rules policy. Validate that linters focus on:
+- ✅ **Code quality**: Logic errors, unused variables, potential bugs
+- ✅ **Security**: Vulnerabilities, unsafe practices, credential exposure
+- ✅ **Functional correctness**: Syntax errors, missing dependencies, broken references
+- ❌ **Style preferences**: Formatting, punctuation, whitespace, subjective conventions
+
 ## Oracle Cloud Specifics
 
 - **Flexible shapes need --shape-config parameter**: `{"ocpus": 4, "memoryInGBs": 24}`
