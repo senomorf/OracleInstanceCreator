@@ -474,6 +474,7 @@ main() {
     # Check different types of failures for intelligent handling
     local capacity_failures=0
     local user_limit_failures=0
+    local rate_limit_failures=0
     
     # Count capacity-related failures (exit code 2 = OCI_EXIT_CAPACITY_ERROR)
     [[ $STATUS_A1 -eq 2 ]] && capacity_failures=$((capacity_failures + 1))
@@ -482,6 +483,10 @@ main() {
     # Count user limit failures (exit code 5 = OCI_EXIT_USER_LIMIT_ERROR)
     [[ $STATUS_A1 -eq 5 ]] && user_limit_failures=$((user_limit_failures + 1))
     [[ $STATUS_E2 -eq 5 ]] && user_limit_failures=$((user_limit_failures + 1))
+    
+    # Count rate limit failures (exit code 6 = OCI_EXIT_RATE_LIMIT_ERROR)
+    [[ $STATUS_A1 -eq 6 ]] && rate_limit_failures=$((rate_limit_failures + 1))
+    [[ $STATUS_E2 -eq 6 ]] && rate_limit_failures=$((rate_limit_failures + 1))
 
     log_elapsed "parallel_execution"
 
@@ -535,6 +540,14 @@ main() {
         # No notification needed - user limits are expected operational conditions
         
         return 0  # User limits are not failures - they're expected behavior
+    elif [[ $rate_limit_failures -gt 0 && $((rate_limit_failures + success_count)) -eq 2 ]]; then
+        # Rate limits encountered - this is expected Oracle behavior, no notifications needed
+        log_info "Oracle API rate limits encountered for $rate_limit_failures shape(s) - will retry on next scheduled run"
+        log_info "This is normal Oracle API behavior during high usage periods"
+        
+        # No notification needed - rate limits are expected operational conditions
+        
+        return 0  # Rate limits are not failures - they're expected behavior
     elif [[ $capacity_failures -eq 2 ]]; then
         # Both failed due to Oracle capacity constraints - this is expected behavior
         log_info "Both shapes unavailable due to Oracle capacity constraints - will retry on next schedule"
@@ -546,10 +559,10 @@ main() {
         fi
 
         return 0 # Don't treat capacity exhaustion as failure
-    elif [[ $((capacity_failures + user_limit_failures)) -eq 2 ]]; then
-        # Mixed capacity and limit issues - still expected behavior
-        log_info "Mixed capacity/limit constraints encountered - will retry on next schedule"
-        log_info "This is normal free tier behavior - some limits reached, some capacity issues"
+    elif [[ $((capacity_failures + user_limit_failures + rate_limit_failures)) -eq 2 ]]; then
+        # Mixed capacity, limit, and rate limit issues - still expected behavior
+        log_info "Mixed Oracle constraints encountered - will retry on next schedule"
+        log_info "This is normal Oracle Cloud behavior - capacity, limits, or rate limiting"
         
         return 0  # Mixed constraint issues are still expected behavior
     else

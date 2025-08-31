@@ -393,7 +393,7 @@ launch_instance() {
                 # Exit with the specific user limit error code
                 return "$OCI_EXIT_USER_LIMIT_ERROR"
                 ;;
-            "ORACLE_CAPACITY_UNAVAILABLE"|"CAPACITY"|"RATE_LIMIT")
+            "ORACLE_CAPACITY_UNAVAILABLE"|"CAPACITY")
                 # Track capacity-related failures for performance analysis and circuit breaker
                 log_performance_metric "AD_FAILURE" "$current_ad" "$((ad_index + 1))" "$max_attempts" "$error_type"
                 record_ad_result "$current_ad" "failure" "$error_type"
@@ -410,6 +410,18 @@ launch_instance() {
                     log_info "All ADs exhausted - will retry on next schedule"
                     return 0  # Not a failure, just capacity issue across all ADs
                 fi
+                ;;
+            "RATE_LIMIT")
+                # Rate limit detected - this is expected Oracle behavior
+                log_info "Rate limit detected for shape ${OCI_SHAPE:-unknown} in AD $current_ad (attempt $((ad_index + 1))/$max_attempts)"
+                log_info "This is normal Oracle API behavior - will retry on next scheduled workflow run"
+                
+                # No tracking as failure - this is expected operational behavior
+                log_performance_metric "RATE_LIMIT_DETECTED" "$current_ad" "$((ad_index + 1))" "$max_attempts" "EXPECTED"
+                
+                # No AD cycling needed - rate limits affect all ADs equally
+                # Exit immediately with rate limit error code (treated as success by workflow)
+                return "$OCI_EXIT_RATE_LIMIT_ERROR"
                 ;;
             "LIMIT_EXCEEDED")
                 # Special case: check if instance was created despite error
@@ -524,7 +536,7 @@ launch_instance() {
                 else
                     # Error type changed to something else during retries - handle it
                     case "$error_type" in
-                        "CAPACITY"|"RATE_LIMIT")
+                        "CAPACITY")
                             if [[ $((ad_index + 1)) -lt $max_attempts ]]; then
                                 log_info "Trying next availability domain after capacity error during retry..."
                                 ((ad_index++))
@@ -533,6 +545,11 @@ launch_instance() {
                                 log_info "All ADs exhausted - will retry on next schedule"
                                 return 0
                             fi
+                            ;;
+                        "RATE_LIMIT")
+                            # Rate limit during retry - exit immediately, no further attempts
+                            log_info "Rate limit encountered during retry - exiting"
+                            return "$OCI_EXIT_RATE_LIMIT_ERROR"
                             ;;
                         "AUTH"|"CONFIG")
                             return 1  # Configuration errors - immediate failure
@@ -590,7 +607,8 @@ launch_instance() {
 # 3. Exit with failure (configuration/authentication issues)
 #
 # ERROR CLASSIFICATION HIERARCHY:
-# - CAPACITY/RATE_LIMIT: Expected for free tier → Try next AD → Success if all ADs exhausted
+# - CAPACITY: Expected for free tier → Try next AD → Success if all ADs exhausted
+# - RATE_LIMIT: Oracle API throttling → Exit immediately with success
 # - LIMIT_EXCEEDED: Special case → Verify instance creation → Try next AD if needed
 # - INTERNAL_ERROR/NETWORK: Transient → Try next AD → Eventual success
 # - DUPLICATE: Instance exists → Success immediately  
@@ -612,7 +630,8 @@ launch_instance() {
 #   NETWORK, DUPLICATE, AUTH, CONFIG, or UNKNOWN
 #
 # Error Classification Strategy:
-# - CAPACITY/RATE_LIMIT/LIMIT_EXCEEDED: Try next AD, not a failure
+# - CAPACITY/LIMIT_EXCEEDED: Try next AD, not a failure
+# - RATE_LIMIT: Exit immediately with success (no AD cycling needed)
 # - INTERNAL_ERROR/NETWORK: Transient issues, try next AD
 # - AUTH/CONFIG: Immediate failure with notification  
 # - DUPLICATE: Success (instance already exists)
