@@ -13,6 +13,7 @@ set -euo pipefail
 # Try to source utils.sh with fallback functions
 UTILS_PATH="$(dirname "$0")/utils.sh"
 if [[ -f "$UTILS_PATH" ]]; then
+    # shellcheck source=scripts/utils.sh
     source "$UTILS_PATH"
 else
     # Fallback functions when utils.sh is not available (e.g., in GitHub Actions notification job)

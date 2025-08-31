@@ -26,7 +26,7 @@ run_test_suite() {
     local suite_name="$(basename "$test_file" .sh)"
     
     echo -e "${BLUE}Running test suite: $suite_name${NC}"
-    echo "=" $(printf '=%.0s' {1..50})
+    echo "=" "$(printf '=%.0s' {1..50})"
     
     ((TOTAL_SUITES++))
     

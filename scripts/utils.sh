@@ -134,7 +134,7 @@ log_elapsed() {
     if [[ -n "${BASH_VERSION:-}" ]] && [[ ${BASH_VERSION%%.*} -ge 4 ]]; then
         start_time="${TIMER_START_TIMES[$timer_name]:-}"
         if [[ -n "$start_time" ]]; then
-            unset TIMER_START_TIMES[$timer_name]
+            unset "TIMER_START_TIMES[$timer_name]"
         fi
     else
         # Fallback - use single timer
