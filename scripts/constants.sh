@@ -62,6 +62,8 @@ readonly EXIT_SUCCESS=0
 readonly EXIT_GENERAL_ERROR=1
 readonly EXIT_CAPACITY_ERROR=2        # Oracle capacity unavailable
 readonly EXIT_CONFIG_ERROR=3          # Configuration/authentication errors
+readonly EXIT_NETWORK_ERROR=4         # Network/internal errors
+readonly EXIT_USER_LIMIT_ERROR=5      # User reached free tier limits (expected success)
 readonly EXIT_RATE_LIMIT_ERROR=6      # Oracle API rate limiting (429 errors)
 readonly EXIT_TIMEOUT_ERROR=124       # GNU timeout compatibility
 
