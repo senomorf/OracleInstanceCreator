@@ -32,3 +32,4 @@ jobs:
           DEFAULT_BRANCH: "master"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VALIDATE_YAML_PRETTIER: false
+          VALIDATE_JSON_PRETTIER: false
