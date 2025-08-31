@@ -302,12 +302,26 @@ main() {
     if [[ "$should_launch_a1" == true ]]; then
         log_info "Launching A1.Flex (ARM) instance in background..."
         (
-            launch_shape "A1.Flex" A1_FLEX_CONFIG
-            local exit_code=$?
-            echo "$exit_code" >"$a1_result"
+            # Capture both exit code and any error output
+            set -o pipefail
+            local exit_code=0
+            if ! launch_shape "A1.Flex" A1_FLEX_CONFIG; then
+                exit_code=$?
+                log_debug "A1.Flex launch_shape returned exit code: $exit_code"
+            fi
+            
+            # Ensure result file is written atomically
+            local temp_result="${a1_result}.tmp"
+            echo "$exit_code" > "$temp_result"
+            mv "$temp_result" "$a1_result"
+            
+            log_debug "A1.Flex background process writing exit code $exit_code to result file"
+            # Small delay to ensure file system flush
+            sleep 0.1
             exit $exit_code
         ) &
         PID_A1=$!
+        log_debug "A1.Flex background process started with PID: $PID_A1"
     else
         log_debug "Skipping A1.Flex launch due to cached limit state"
         PID_A1=""
@@ -317,12 +331,26 @@ main() {
     if [[ "$should_launch_e2" == true ]]; then
         log_info "Launching E2.1.Micro (AMD) instance in background..."
         (
-            launch_shape "E2.1.Micro" E2_MICRO_CONFIG
-            local exit_code=$?
-            echo "$exit_code" >"$e2_result"
+            # Capture both exit code and any error output
+            set -o pipefail
+            local exit_code=0
+            if ! launch_shape "E2.1.Micro" E2_MICRO_CONFIG; then
+                exit_code=$?
+                log_debug "E2.1.Micro launch_shape returned exit code: $exit_code"
+            fi
+            
+            # Ensure result file is written atomically
+            local temp_result="${e2_result}.tmp"
+            echo "$exit_code" > "$temp_result"
+            mv "$temp_result" "$e2_result"
+            
+            log_debug "E2.1.Micro background process writing exit code $exit_code to result file"
+            # Small delay to ensure file system flush
+            sleep 0.1
             exit $exit_code
         ) &
         PID_E2=$!
+        log_debug "E2.1.Micro background process started with PID: $PID_E2"
     else
         log_debug "Skipping E2.1.Micro launch due to cached limit state"
         PID_E2=""
@@ -371,26 +399,48 @@ main() {
     done
 
     # Always wait for processes to fully complete and flush their output (handle empty PIDs)
+    local a1_wait_result=0
+    local e2_wait_result=0
+    
     if [[ -n "$PID_A1" ]]; then
-        wait $PID_A1 2>/dev/null || true
+        log_debug "Waiting for A1.Flex process (PID: $PID_A1) to complete"
+        wait $PID_A1 2>/dev/null || a1_wait_result=$?
+        log_debug "A1.Flex process wait completed with result: $a1_wait_result"
     fi
     if [[ -n "$PID_E2" ]]; then
-        wait $PID_E2 2>/dev/null || true
+        log_debug "Waiting for E2.1.Micro process (PID: $PID_E2) to complete"
+        wait $PID_E2 2>/dev/null || e2_wait_result=$?
+        log_debug "E2.1.Micro process wait completed with result: $e2_wait_result"
     fi
+
+    # Additional wait to ensure file system consistency after process completion
+    sleep 0.2
 
     # Wait for result files with proper timeout (fixes race condition)
     if wait_for_result_file "$a1_result"; then
-        STATUS_A1=$(cat "$a1_result")
+        STATUS_A1=$(cat "$a1_result" 2>/dev/null || echo "1")
         log_debug "A1 result file found with status: $STATUS_A1"
+        # Validate the status is numeric
+        if [[ ! "$STATUS_A1" =~ ^[0-9]+$ ]]; then
+            log_warning "A1 result file contains invalid status '$STATUS_A1', using failure status"
+            STATUS_A1=1
+        fi
     else
-        log_warning "A1 result file not found - using default failure status"
+        log_warning "A1 result file not found - using wait result or default failure status"
+        STATUS_A1=${a1_wait_result:-1}
     fi
 
     if wait_for_result_file "$e2_result"; then
-        STATUS_E2=$(cat "$e2_result")
+        STATUS_E2=$(cat "$e2_result" 2>/dev/null || echo "1")
         log_debug "E2 result file found with status: $STATUS_E2"
+        # Validate the status is numeric
+        if [[ ! "$STATUS_E2" =~ ^[0-9]+$ ]]; then
+            log_warning "E2 result file contains invalid status '$STATUS_E2', using failure status"
+            STATUS_E2=1
+        fi
     else
-        log_warning "E2 result file not found - using default failure status"
+        log_warning "E2 result file not found - using wait result or default failure status"
+        STATUS_E2=${e2_wait_result:-1}
     fi
     # Handle timeout case - architecture-aware approach respecting smart shape filtering
     if [[ $elapsed -ge $timeout_seconds ]]; then
@@ -566,7 +616,24 @@ main() {
         
         return 0  # Mixed constraint issues are still expected behavior
     else
-        log_error "Parallel execution failed: Instance creation failed due to configuration or authentication errors"
+        # Analyze and report the specific failure reasons
+        local failure_summary=""
+        if [[ $STATUS_A1 -ne 0 && $STATUS_A1 -ne 2 && $STATUS_A1 -ne 5 && $STATUS_A1 -ne 6 ]]; then
+            failure_summary="A1.Flex failed (exit: $STATUS_A1)"
+        fi
+        if [[ $STATUS_E2 -ne 0 && $STATUS_E2 -ne 2 && $STATUS_E2 -ne 5 && $STATUS_E2 -ne 6 ]]; then
+            if [[ -n "$failure_summary" ]]; then
+                failure_summary="$failure_summary, E2.1.Micro failed (exit: $STATUS_E2)"
+            else
+                failure_summary="E2.1.Micro failed (exit: $STATUS_E2)"
+            fi
+        fi
+        
+        if [[ -n "$failure_summary" ]]; then
+            log_error "Parallel execution failed: $failure_summary - likely configuration or authentication errors"
+        else
+            log_error "Parallel execution failed: Both instance creation attempts failed"
+        fi
 
         # Let individual shape failures handle their own error notifications
         # This prevents duplicate error notifications
