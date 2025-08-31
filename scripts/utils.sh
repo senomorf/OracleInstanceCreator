@@ -608,6 +608,102 @@ retry_with_backoff() {
 # 4 = Network/connectivity error (may resolve)
 # 124 = Timeout (GNU timeout standard)
 
+# Enhanced performance tracking with API response time measurement
+track_api_call() {
+    local operation="$1"
+    local start_time=$(date +%s.%N)
+    
+    # Execute the API call (passed as remaining arguments)
+    shift
+    local cmd=("$@")
+    
+    # Run the command and capture result
+    local result=0
+    "${cmd[@]}" || result=$?
+    
+    # Calculate response time
+    local end_time=$(date +%s.%N)
+    local response_time
+    response_time=$(echo "($end_time - $start_time) * 1000" | bc -l 2>/dev/null | awk '{printf "%.0f", $1}')  # Convert to milliseconds
+    
+    # Record API performance metric
+    if declare -f record_execution_metric >/dev/null 2>&1; then
+        local api_context
+        local status="success"
+        [[ $result -ne 0 ]] && status="failure"
+        
+        if command -v jq >/dev/null 2>&1; then
+            api_context=$(jq -nc \
+                --arg op "$operation" \
+                --arg st "$status" \
+                --arg rt "$response_time" \
+                '{
+                    operation: $op,
+                    status: $st,
+                    response_time_ms: ($rt | tonumber)
+                }')
+        else
+            api_context="{\"operation\":\"$operation\",\"status\":\"$status\",\"response_time_ms\":$response_time}"
+        fi
+        
+        record_execution_metric "api_response_time" "$response_time" "$api_context"
+    fi
+    
+    # Log slow API calls
+    if [[ $(echo "$response_time > 5000" | bc -l 2>/dev/null || echo 0) -eq 1 ]]; then
+        log_warning "Slow API call detected: $operation took ${response_time}ms"
+    fi
+    
+    return $result
+}
+
+# Cost tracking for GitHub Actions minutes
+track_execution_cost() {
+    local execution_type="$1"  # parallel, single, etc.
+    local start_time="$2"      # Start timestamp
+    local end_time="$3"        # End timestamp  
+    local success_count="${4:-0}"  # Number of successful instances
+    
+    local duration
+    duration=$(echo "$end_time - $start_time" | bc -l 2>/dev/null | awk '{printf "%.2f", $1}')
+    
+    # GitHub Actions billing is per minute, rounded up
+    local billable_minutes
+    billable_minutes=$(echo "($duration + 59) / 60" | bc -l 2>/dev/null | awk '{printf "%.0f", $1}')
+    
+    # Calculate cost efficiency (successful instances per minute)
+    local efficiency="0"
+    if [[ $(echo "$billable_minutes > 0" | bc -l 2>/dev/null || echo 0) -eq 1 ]]; then
+        efficiency=$(echo "scale=3; $success_count / $billable_minutes" | bc -l 2>/dev/null || echo "0")
+    fi
+    
+    # Record cost metrics
+    if declare -f record_execution_metric >/dev/null 2>&1; then
+        local cost_context
+        if command -v jq >/dev/null 2>&1; then
+            cost_context=$(jq -nc \
+                --arg type "$execution_type" \
+                --arg duration "$duration" \
+                --arg minutes "$billable_minutes" \
+                --arg success "$success_count" \
+                --arg efficiency "$efficiency" \
+                '{
+                    execution_type: $type,
+                    duration_seconds: ($duration | tonumber),
+                    billable_minutes: ($minutes | tonumber),
+                    successful_instances: ($success | tonumber),
+                    cost_efficiency: ($efficiency | tonumber)
+                }')
+        else
+            cost_context="{\"execution_type\":\"$execution_type\",\"duration_seconds\":$duration,\"billable_minutes\":$billable_minutes,\"successful_instances\":$success_count,\"cost_efficiency\":$efficiency}"
+        fi
+        
+        record_execution_metric "github_actions_cost" "$billable_minutes" "$cost_context"
+    fi
+    
+    log_info "Cost tracking: ${execution_type} execution used ${billable_minutes} billable minute(s) for ${success_count} instance(s) (efficiency: ${efficiency} instances/min)"
+}
+
 # Only define constants if not already defined (avoid readonly conflicts)
 if [[ -z "${OCI_EXIT_SUCCESS:-}" ]]; then
     readonly OCI_EXIT_SUCCESS=0
@@ -1082,7 +1178,7 @@ validate_configuration() {
     return 0
 }
 
-# Performance metrics logging for multi-AD optimization
+# Enhanced performance metrics logging with analytics integration
 log_performance_metric() {
     local metric_type="$1"
     local ad_name="$2"
@@ -1101,6 +1197,48 @@ log_performance_metric() {
     # Log to both debug output and a performance metrics comment for future analysis
     log_debug "PERF_METRIC: $metric_line"
     
+    # Record structured metric for analytics (if analytics is available)
+    if declare -f record_execution_metric >/dev/null 2>&1; then
+        local metric_context
+        if command -v jq >/dev/null 2>&1; then
+            metric_context=$(jq -nc \
+                --arg ad "$ad_name" \
+                --arg attempt "$attempt_number" \
+                --arg total "$total_attempts" \
+                --arg info "$additional_info" \
+                '{
+                    ad: $ad,
+                    attempt: ($attempt | tonumber),
+                    total_attempts: ($total | tonumber),
+                    info: $info
+                }')
+        else
+            metric_context="{\"ad\":\"$ad_name\",\"attempt\":$attempt_number,\"total_attempts\":$total_attempts,\"info\":\"$additional_info\"}"
+        fi
+        
+        # Map metric types to analytics format
+        case "$metric_type" in
+            "AD_SUCCESS")
+                record_execution_metric "ad_success" "$ad_name" "$metric_context"
+                ;;
+            "AD_FAILURE")
+                record_execution_metric "ad_failure" "$ad_name:$additional_info" "$metric_context"
+                ;;
+            "AD_CYCLE_COMPLETE")
+                record_execution_metric "ad_cycle_complete" "$total_attempts" "$metric_context"
+                ;;
+            "RESOURCE_USAGE")
+                record_execution_metric "resource_usage" "$additional_info" "$metric_context"
+                ;;
+            "SHAPE_DURATION")
+                record_execution_metric "shape_duration" "$attempt_number" "$metric_context"  # attempt_number contains duration
+                ;;
+            "CONCURRENT_START"|"CONCURRENT_END")
+                record_execution_metric "concurrent_execution" "$metric_type" "$metric_context"
+                ;;
+        esac
+    fi
+    
     # In a production environment, these could be sent to monitoring systems
     case "$metric_type" in
         "AD_SUCCESS")
@@ -1111,6 +1249,18 @@ log_performance_metric() {
             ;;
         "AD_CYCLE_COMPLETE")
             log_info "Performance: Completed full AD cycle ($total_attempts ADs attempted)"
+            ;;
+        "RESOURCE_USAGE")
+            log_debug "Performance: Resource usage $additional_info"
+            ;;
+        "SHAPE_DURATION")
+            log_debug "Performance: Shape execution duration ${attempt_number}s for $ad_name"
+            ;;
+        "CONCURRENT_START")
+            log_debug "Performance: Started concurrent execution - $additional_info"
+            ;;
+        "CONCURRENT_END")
+            log_info "Performance: Completed concurrent execution - $additional_info"
             ;;
     esac
 }
@@ -1148,11 +1298,12 @@ set_success_variable() {
     fi
 }
 
-# Record success pattern for adaptive scheduling analysis
+# Record success pattern for adaptive scheduling analysis with enhanced analytics
 record_success_pattern() {
     local availability_domain="$1"
     local attempt_number="$2"
     local total_attempts="$3"
+    local execution_time="${4:-0}"  # Optional execution time parameter
     
     # Only record if pattern tracking is enabled
     if [[ "${SUCCESS_TRACKING_ENABLED:-true}" != "true" ]]; then
@@ -1166,13 +1317,39 @@ record_success_pattern() {
     # shellcheck disable=SC2155  # Date commands rarely fail
     local day_of_week=$(date -u '+%u')
     
+    # Record in analytics system if available
+    if declare -f record_execution_metric >/dev/null 2>&1; then
+        local success_context
+        if command -v jq >/dev/null 2>&1; then
+            success_context=$(jq -nc \
+                --arg ad "$availability_domain" \
+                --arg hour "$hour_utc" \
+                --arg dow "$day_of_week" \
+                --arg attempt "$attempt_number" \
+                --arg total "$total_attempts" \
+                --arg exec_time "$execution_time" \
+                '{
+                    ad: $ad,
+                    hour: ($hour | tonumber),
+                    day_of_week: ($dow | tonumber),
+                    attempt: ($attempt | tonumber),
+                    total_attempts: ($total | tonumber),
+                    execution_time: ($exec_time | tonumber)
+                }')
+        else
+            success_context="{\"ad\":\"$availability_domain\",\"hour\":$hour_utc,\"day_of_week\":$day_of_week,\"attempt\":$attempt_number,\"total_attempts\":$total_attempts,\"execution_time\":$execution_time}"
+        fi
+        
+        record_execution_metric "execution_result" "success" "$success_context"
+    fi
+    
     if [[ -n "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
         # Get existing pattern data - separate declaration for better error handling
         local existing_data
         existing_data=$(gh variable get SUCCESS_PATTERN_DATA 2>/dev/null || echo "[]")
         
-        # Create success entry
-        local success_entry="{\"type\":\"success\",\"timestamp\":\"$timestamp\",\"hour_utc\":$hour_utc,\"day_of_week\":$day_of_week,\"ad\":\"$availability_domain\",\"attempt\":$attempt_number,\"total_attempts\":$total_attempts}"
+        # Create success entry with execution time
+        local success_entry="{\"type\":\"success\",\"timestamp\":\"$timestamp\",\"hour_utc\":$hour_utc,\"day_of_week\":$day_of_week,\"ad\":\"$availability_domain\",\"attempt\":$attempt_number,\"total_attempts\":$total_attempts,\"execution_time\":$execution_time}"
         
         # Update pattern data (keep last 100 entries)
         local updated_data
@@ -1184,17 +1361,18 @@ record_success_pattern() {
         
         # Store updated data
         if echo "$updated_data" | gh variable set SUCCESS_PATTERN_DATA --body-file - 2>/dev/null; then
-            log_debug "Recorded success pattern: AD=$availability_domain, Hour=${hour_utc}UTC, Attempt=$attempt_number"
+            log_debug "Recorded success pattern: AD=$availability_domain, Hour=${hour_utc}UTC, Attempt=$attempt_number, Duration=${execution_time}s"
         fi
     fi
 }
 
-# Record failure pattern for adaptive scheduling analysis  
+# Record failure pattern for adaptive scheduling analysis with enhanced analytics
 record_failure_pattern() {
     local availability_domain="$1"
     local error_type="$2"
     local attempt_number="$3"
     local total_attempts="$4"
+    local execution_time="${5:-0}"  # Optional execution time parameter
     
     # Only record if pattern tracking is enabled
     if [[ "${SUCCESS_TRACKING_ENABLED:-true}" != "true" ]]; then
@@ -1208,13 +1386,41 @@ record_failure_pattern() {
     # shellcheck disable=SC2155  # Date commands rarely fail
     local day_of_week=$(date -u '+%u')
     
+    # Record in analytics system if available
+    if declare -f record_execution_metric >/dev/null 2>&1; then
+        local failure_context
+        if command -v jq >/dev/null 2>&1; then
+            failure_context=$(jq -nc \
+                --arg ad "$availability_domain" \
+                --arg error "$error_type" \
+                --arg hour "$hour_utc" \
+                --arg dow "$day_of_week" \
+                --arg attempt "$attempt_number" \
+                --arg total "$total_attempts" \
+                --arg exec_time "$execution_time" \
+                '{
+                    ad: $ad,
+                    error_type: $error,
+                    hour: ($hour | tonumber),
+                    day_of_week: ($dow | tonumber),
+                    attempt: ($attempt | tonumber),
+                    total_attempts: ($total | tonumber),
+                    execution_time: ($exec_time | tonumber)
+                }')
+        else
+            failure_context="{\"ad\":\"$availability_domain\",\"error_type\":\"$error_type\",\"hour\":$hour_utc,\"day_of_week\":$day_of_week,\"attempt\":$attempt_number,\"total_attempts\":$total_attempts,\"execution_time\":$execution_time}"
+        fi
+        
+        record_execution_metric "execution_result" "failure" "$failure_context"
+    fi
+    
     if [[ -n "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
         # Get existing pattern data - separate declaration for better error handling
         local existing_data
         existing_data=$(gh variable get SUCCESS_PATTERN_DATA 2>/dev/null || echo "[]")
         
-        # Create failure entry
-        local failure_entry="{\"type\":\"${error_type}_failure\",\"timestamp\":\"$timestamp\",\"hour_utc\":$hour_utc,\"day_of_week\":$day_of_week,\"ad\":\"$availability_domain\",\"attempt\":$attempt_number,\"total_attempts\":$total_attempts}"
+        # Create failure entry with execution time
+        local failure_entry="{\"type\":\"${error_type}_failure\",\"timestamp\":\"$timestamp\",\"hour_utc\":$hour_utc,\"day_of_week\":$day_of_week,\"ad\":\"$availability_domain\",\"attempt\":$attempt_number,\"total_attempts\":$total_attempts,\"execution_time\":$execution_time}"
         
         # Update pattern data (keep last 100 entries)
         local updated_data
@@ -1226,7 +1432,7 @@ record_failure_pattern() {
         
         # Store updated data
         if echo "$updated_data" | gh variable set SUCCESS_PATTERN_DATA --body-file - 2>/dev/null; then
-            log_debug "Recorded failure pattern: AD=$availability_domain, Error=$error_type, Hour=${hour_utc}UTC"
+            log_debug "Recorded failure pattern: AD=$availability_domain, Error=$error_type, Hour=${hour_utc}UTC, Duration=${execution_time}s"
         fi
     fi
 }

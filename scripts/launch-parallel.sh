@@ -12,6 +12,7 @@ source "$(dirname "$0")/utils.sh"
 # shellcheck source=scripts/notify.sh
 source "$(dirname "$0")/notify.sh"
 source "$(dirname "$0")/state-manager.sh"
+source "$(dirname "$0")/analytics.sh" 2>/dev/null || true  # Optional analytics integration
 
 # Global variables for signal handling
 PID_A1=""
@@ -238,8 +239,19 @@ verify_and_update_state() {
 
 # Main parallel execution
 main() {
+    # Initialize analytics if available
+    if declare -f init_analytics >/dev/null 2>&1; then
+        init_analytics >/dev/null 2>&1 || log_debug "Analytics initialization failed - continuing without analytics"
+    fi
+    
     start_timer "parallel_execution"
+    local execution_start_time=$(date +%s.%N)
     log_info "Starting parallel OCI instance creation for both free tier shapes"
+    
+    # Record execution start
+    if declare -f record_execution_metric >/dev/null 2>&1; then
+        record_execution_metric "execution_start" "parallel" '{"shapes": ["A1.Flex", "E2.1.Micro"], "optimization_enabled": true}'
+    fi
 
     # Set timeout to prevent exceeding 60 seconds (GitHub Actions billing boundary)
     # Using constant defined in constants.sh for consistency and maintainability
@@ -466,10 +478,25 @@ main() {
         log_warning "E2.1.Micro (AMD) instance creation: FAILED"
     fi
 
+    # Calculate final execution time and record cost metrics
+    local execution_end_time=$(date +%s.%N)
+    local total_execution_time
+    total_execution_time=$(echo "$execution_end_time - $execution_start_time" | bc -l 2>/dev/null | awk '{printf "%.2f", $1}')
+    
     # Determine overall result
     local success_count=0
     [[ $STATUS_A1 -eq 0 ]] && success_count=$((success_count + 1))
     [[ $STATUS_E2 -eq 0 ]] && success_count=$((success_count + 1))
+    
+    # Record execution metrics
+    if declare -f record_execution_metric >/dev/null 2>&1; then
+        record_execution_metric "execution_time" "$total_execution_time" '{"type": "parallel", "success_count": '"$success_count"'}'
+    fi
+    
+    # Track GitHub Actions cost
+    if declare -f track_execution_cost >/dev/null 2>&1; then
+        track_execution_cost "parallel" "$execution_start_time" "$execution_end_time" "$success_count"
+    fi
 
     # Check different types of failures for intelligent handling
     local capacity_failures=0
@@ -516,6 +543,16 @@ main() {
 
     if [[ $success_count -gt 0 ]]; then
         log_success "Parallel execution completed: $success_count of 2 instances created successfully"
+        
+        # Record success patterns with execution times
+        if [[ $STATUS_A1 -eq 0 ]]; then
+            local a1_duration=${a1_duration:-0}
+            record_success_pattern "${A1_FLEX_CONFIG[DISPLAY_NAME]}" "1" "1" "$a1_duration"
+        fi
+        if [[ $STATUS_E2 -eq 0 ]]; then
+            local e2_duration=${e2_duration:-0}
+            record_success_pattern "${E2_MICRO_CONFIG[DISPLAY_NAME]}" "1" "1" "$e2_duration"
+        fi
 
         # Send combined success notification if notifications enabled
         if [[ "${ENABLE_NOTIFICATIONS:-}" == "true" ]]; then
@@ -523,7 +560,11 @@ main() {
             [[ $STATUS_A1 -eq 0 ]] && shapes_created="A1.Flex (ARM)"
             [[ $STATUS_E2 -eq 0 ]] && shapes_created="${shapes_created:+$shapes_created, }E2.1.Micro (AMD)"
 
-            send_telegram_notification "success" "OCI instances created: $shapes_created"
+            # Enhanced notification with performance metrics
+            local performance_summary="Execution time: ${total_execution_time}s"
+            [[ "$total_execution_time" != "0" ]] && [[ $(echo "$total_execution_time < 20" | bc -l 2>/dev/null || echo 0) -eq 1 ]] && performance_summary="${performance_summary} (Excellent performance ⚡)"
+            
+            send_telegram_notification "success" "OCI instances created: $shapes_created" "$performance_summary"
         fi
 
         return 0
@@ -531,6 +572,14 @@ main() {
         # User limits reached - this is expected behavior when at free tier limits
         log_info "User limit(s) reached for $user_limit_failures shape(s) - no further attempts needed"
         log_info "Consider managing existing instances to free capacity for new deployments"
+        
+        # Record limit patterns for analytics
+        if [[ $STATUS_A1 -eq 5 ]]; then
+            record_failure_pattern "${A1_FLEX_CONFIG[DISPLAY_NAME]}" "USER_LIMIT_REACHED" "1" "1" "$total_execution_time"
+        fi
+        if [[ $STATUS_E2 -eq 5 ]]; then
+            record_failure_pattern "${E2_MICRO_CONFIG[DISPLAY_NAME]}" "USER_LIMIT_REACHED" "1" "1" "$total_execution_time"
+        fi
         
         # Send informational notification if enabled
         if [[ "${ENABLE_NOTIFICATIONS:-}" == "true" ]]; then
@@ -545,10 +594,23 @@ main() {
         # Both failed due to Oracle capacity constraints - this is expected behavior
         log_info "Both shapes unavailable due to Oracle capacity constraints - will retry on next schedule"
         log_info "This is normal behavior when Oracle Cloud capacity is temporarily exhausted"
+        
+        # Record capacity failure patterns
+        if [[ $STATUS_A1 -eq 2 ]]; then
+            record_failure_pattern "${A1_FLEX_CONFIG[DISPLAY_NAME]}" "CAPACITY" "1" "1" "$total_execution_time"
+        fi
+        if [[ $STATUS_E2 -eq 2 ]]; then
+            record_failure_pattern "${E2_MICRO_CONFIG[DISPLAY_NAME]}" "CAPACITY" "1" "1" "$total_execution_time"
+        fi
 
         # Send informational notification if enabled
         if [[ "${ENABLE_NOTIFICATIONS:-}" == "true" ]]; then
-            send_telegram_notification "info" "Oracle capacity constraints - both shapes unavailable, will retry later"
+            local capacity_message="Oracle capacity constraints - both shapes unavailable, will retry later"
+            # Add performance insight if execution was fast (indicates good network/API performance)
+            if [[ $(echo "$total_execution_time < 10" | bc -l 2>/dev/null || echo 0) -eq 1 ]]; then
+                capacity_message="${capacity_message} (Fast detection: ${total_execution_time}s)"
+            fi
+            send_telegram_notification "info" "$capacity_message"
         fi
 
         return 0 # Don't treat capacity exhaustion as failure
