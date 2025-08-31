@@ -9,6 +9,7 @@ source "$(dirname "$0")/utils.sh"
 source "$(dirname "$0")/notify.sh"
 source "$(dirname "$0")/metrics.sh"
 source "$(dirname "$0")/circuit-breaker.sh"
+source "$(dirname "$0")/state-manager.sh"
 
 # Global flag for signal handling
 INTERRUPTED=false
@@ -357,6 +358,12 @@ launch_instance() {
             record_ad_result "$current_ad" "success" ""
             mark_ad_success "$current_ad"  # Reset circuit breaker for this AD
             
+            # Record instance creation in state cache
+            if [[ "${CACHE_ENABLED:-true}" == "true" ]]; then
+                log_info "Recording instance creation in state cache: ${INSTANCE_DISPLAY_NAME:-default}"
+                record_instance_creation "${INSTANCE_DISPLAY_NAME:-default}" "$instance_id" "${state_file:-instance-state.json}"
+            fi
+            
             # Set GitHub repository variable to prevent future runs
             set_success_variable "$instance_id" "$current_ad"
             
@@ -455,6 +462,12 @@ launch_instance() {
                         log_performance_metric "AD_SUCCESS_RETRY" "$current_ad" "$retry_count" "$transient_retry_max"
                         record_ad_result "$current_ad" "success" "RETRY_$retry_count"
                         mark_ad_success "$current_ad"  # Reset circuit breaker for this AD
+                        
+                        # Record instance creation in state cache
+                        if [[ "${CACHE_ENABLED:-true}" == "true" ]]; then
+                            log_info "Recording instance creation in state cache: ${INSTANCE_DISPLAY_NAME:-default}"
+                            record_instance_creation "${INSTANCE_DISPLAY_NAME:-default}" "$instance_id" "${state_file:-instance-state.json}"
+                        fi
                         
                         # Set GitHub repository variable to prevent future runs
                         set_success_variable "$instance_id" "$current_ad"
@@ -707,6 +720,12 @@ verify_instance_creation() {
             
             log_success "Instance found: $instance_id (state: $state)"
             
+            # Record instance creation in state cache
+            if [[ "${CACHE_ENABLED:-true}" == "true" ]]; then
+                log_info "Recording instance creation in state cache: ${INSTANCE_DISPLAY_NAME:-default}"
+                record_instance_verification "${INSTANCE_DISPLAY_NAME:-default}" "$instance_id" "verified" "${state_file:-instance-state.json}"
+            fi
+            
             # Set GitHub repository variable to prevent future runs
             set_success_variable "$instance_id" "VERIFIED"
             
@@ -748,7 +767,26 @@ launch_oci_instance() {
     comp_id=$(determine_compartment)
     log_elapsed "compartment_setup"
     
-    # Check for existing instance (if enabled)
+    # Initialize state management and check cache first (if enabled)
+    local state_file="instance-state.json"
+    if [[ "${CACHE_ENABLED:-true}" == "true" ]]; then
+        log_info "Initializing state management system..."
+        start_timer "state_cache_check"
+        init_state_manager "$state_file" >/dev/null
+        
+        # Check if instance should be created based on cache state
+        if ! should_create_instance "${INSTANCE_DISPLAY_NAME:-default}" "$state_file"; then
+            log_info "Instance exists in cache and is valid, skipping creation: ${INSTANCE_DISPLAY_NAME:-default}"
+            log_elapsed "state_cache_check"
+            log_elapsed "total_execution"
+            return 0
+        else
+            log_info "Cache indicates instance should be created: ${INSTANCE_DISPLAY_NAME:-default}"
+        fi
+        log_elapsed "state_cache_check"
+    fi
+    
+    # Check for existing instance via OCI API (if enabled and cache didn't skip)
     if [[ "${CHECK_EXISTING_INSTANCE:-false}" == "true" ]]; then
         start_timer "existing_instance_check"
         local instance_status

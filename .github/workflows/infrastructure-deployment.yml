@@ -63,8 +63,8 @@ env:
   # Global environment variables
   DEBUG: ${{ inputs.verbose_output && 'true' || 'false' }}
   ENABLE_NOTIFICATIONS: ${{ inputs.send_notifications && 'true' || 'false' }}
-  # For scheduled runs: skip instance check (direct launch), for manual: allow checking
-  CHECK_EXISTING_INSTANCE: ${{ github.event_name == 'workflow_dispatch' && (inputs.check_existing_instance && 'true' || 'false') || 'false' }}
+  # Enable instance check by default to use state management cache (can be overridden manually)
+  CHECK_EXISTING_INSTANCE: ${{ github.event_name == 'workflow_dispatch' && (inputs.check_existing_instance && 'true' || 'false') || 'true' }}
   # Suppress OCI CLI file permissions warnings
   OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: true
 
@@ -114,6 +114,34 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+
+      - name: Get current date for cache key
+        id: get-date
+        run: echo "date=$(date '+%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore instance state cache
+        id: cache-instance-state
+        uses: actions/cache/restore@v4.2.4
+        with:
+          path: .cache/oci-state
+          key: oci-instances-${{ secrets.OCI_REGION }}-v1-${{ steps.get-date.outputs.date }}
+          restore-keys: |
+            oci-instances-${{ secrets.OCI_REGION }}-v1-
+            oci-instances-${{ secrets.OCI_REGION }}-
+
+      - name: Initialize state manager
+        env:
+          CACHE_ENABLED: "true"
+          CACHE_TTL_HOURS: "24"
+        run: |
+          # Make state manager executable
+          chmod +x scripts/state-manager.sh
+          # Initialize state management system
+          ./scripts/state-manager.sh init
+          # Show current state for debugging
+          if [[ "$DEBUG" == "true" ]]; then
+            ./scripts/state-manager.sh print
+          fi
 
       - name: Reset success state if requested
         if: inputs.reset_success_state
@@ -198,7 +226,30 @@ jobs:
           OCI_PROXY_URL: ${{ secrets.OCI_PROXY_URL }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
+          CACHE_ENABLED: "true"
+          CACHE_TTL_HOURS: "24"
         run: ./scripts/launch-parallel.sh
+
+      - name: Verify instances and update state
+        if: always()
+        env:
+          OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+          CACHE_ENABLED: "true"
+        run: |
+          # Verify actual instance state via OCI API and update cache
+          echo "Verifying instance state and updating cache..."
+          # Note: This will be implemented in the launch scripts
+          if [[ "$DEBUG" == "true" ]]; then
+            ./scripts/state-manager.sh print
+          fi
+
+      - name: Save instance state cache
+        if: always()
+        uses: actions/cache/save@v4.2.4
+        with:
+          path: .cache/oci-state
+          key: oci-instances-${{ secrets.OCI_REGION }}-v1-${{ steps.get-date.outputs.date }}
 
       - name: Schedule Optimization Analysis
         if: always() && env.ENABLE_ADAPTIVE_SCHEDULING == 'true'
