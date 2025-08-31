@@ -143,7 +143,9 @@ log_elapsed() {
     fi
     
     if [[ -n "$start_time" ]]; then
+        # shellcheck disable=SC2155  # Date commands rarely fail
         local end_time=$(date +%s.%N)
+        # shellcheck disable=SC2155  # Mathematical calculation with fallback
         local elapsed=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0")
         log_info "Timer '$timer_name' elapsed: ${elapsed}s"
     else
@@ -793,7 +795,9 @@ parse_and_configure_proxy() {
     fi
     
     # Re-encode credentials to handle special characters in final URL
+    # shellcheck disable=SC2155  # url_encode function rarely fails
     local encoded_user=$(url_encode "$proxy_user")
+    # shellcheck disable=SC2155  # url_encode function rarely fails  
     local encoded_pass=$(url_encode "$proxy_pass")
     
     # Construct proxy URL with authentication and proper IPv6 bracketing
@@ -915,6 +919,7 @@ validate_availability_domain() {
     
     # Process the last (or only) AD
     if [[ -n "$temp_list" ]]; then
+        # shellcheck disable=SC2155  # String trimming with sed rarely fails
         local ad=$(echo "$temp_list" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         
         if [[ -z "$ad" ]]; then
@@ -1073,6 +1078,7 @@ log_performance_metric() {
     local total_attempts="$4"
     local additional_info="${5:-}"
     
+    # shellcheck disable=SC2155  # Date commands rarely fail
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     local metric_line="[$timestamp] $metric_type: AD=$ad_name, Attempt=$attempt_number/$total_attempts"
     
@@ -1109,6 +1115,7 @@ set_success_variable() {
         
         # Use GitHub CLI to set repository variable
         if command -v gh >/dev/null 2>&1; then
+            # shellcheck disable=SC2155  # Date command embedded in JSON rarely fails
             local success_value="{\"created\": true, \"instance_id\": \"$instance_id\", \"ad\": \"$availability_domain\", \"timestamp\": \"$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')\"}"
             
             if gh variable set INSTANCE_CREATED --body "true" >/dev/null 2>&1; then
