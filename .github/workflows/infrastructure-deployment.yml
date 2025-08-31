@@ -5,24 +5,26 @@ name: 'OCI Orchestrator - Infrastructure Deployment'
 
 on:
   schedule:
-    # Three-tier regional optimization: 85% efficiency improvement (7,200→1,068 runs/month)
+    # Four-tier optimization: 10-min off-peak, 15-min peak (~2,340 runs/month)
     # All schedules target Oracle Cloud optimal availability windows for maximum deployment success
     
-    # TIER 1: Off-peak aggressive (550 runs/month)
+    # TIER 1: Off-peak aggressive (10-min intervals)
     # UTC 2-7am = SGT 10am-3pm (lunch/afternoon lull)
     # UTC 2-7am = EST 9pm-2am (late evening/night)  
     # UTC 2-7am = CET 3-8am (early morning)
-    - cron: "*/15 2-7 * * *"
+    - cron: "*/10 2-7 * * *"
     
-    # TIER 2: Conservative peak (374 runs/month)  
-    # UTC 8-23,0-1am = SGT 4pm-7am (avoids 8am-3pm business peak)
-    # 17 total hours at 60min intervals = conservative approach
-    - cron: "0 8-23,0-1 * * *"
+    # TIER 2: Late night/early morning (10-min intervals)
+    # UTC 20-23,0-1 = SGT 4am-9am (early morning low usage)
+    - cron: "*/10 20-23,0-1 * * *"
     
-    # TIER 3: Weekend boost (144 runs/month)
-    # Weekends only: UTC 1-6am = SGT 9am-2pm (lower weekend cloud usage)
-    # 20min intervals for 5 hours × 2 days = moderate frequency
-    - cron: "*/20 1-6 * * 6,0"
+    # TIER 3: Peak hours conservative (15-min intervals)
+    # UTC 8-19 = SGT 4pm-3am (business end + evening peak)
+    - cron: "*/15 8-19 * * *"
+    
+    # TIER 4: Weekend boost (10-min intervals all day)
+    # Saturdays and Sundays - lower weekend cloud usage
+    - cron: "*/10 * * * 6,0"
 
   workflow_dispatch:
     inputs:
