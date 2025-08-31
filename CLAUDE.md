@@ -151,6 +151,7 @@ gh run watch <run-id>
 - ❌ Oracle capacity unavailable (expected operational condition - will retry)
 - ❌ Rate limiting (standard cloud provider behavior - will retry)
 - ❌ Instance already exists (expected when using state management cache)
+- ❌ Preflight check completion (operational validation - use silent connectivity test)
 - ❌ Any condition that resolves through automated retry cycles
 
 ### Notification Behavior:
@@ -162,6 +163,10 @@ gh run watch <run-id>
 ### Philosophy:
 **Notify for successes and actionable failures. Never notify for expected operational conditions.**
 Expected conditions (limits, capacity constraints) are normal automation behavior that resolve through retry cycles.
+
+### Configuration Variables:
+- `PREFLIGHT_SEND_TEST_NOTIFICATION=true`: Forces preflight check to send test notification (default: false)
+- Preflight checks use silent `/getMe` API endpoint for connectivity validation without generating notifications
 
 ## Linter Configuration Policy
 
