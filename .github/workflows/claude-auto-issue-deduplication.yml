@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 1
 
       - name: Check for duplicate issues
-        uses: anthropics/claude-code-action@v1-dev
+        uses: anthropics/claude-code-action@v1
         with:
           prompt: |
             Analyze this new issue and check if it's a duplicate of existing issues in the repository.
@@ -61,4 +61,6 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_args: |
-            --allowedTools "mcp__github__get_issue,mcp__github__search_issues,mcp__github__list_issues,mcp__github__create_issue_comment,mcp__github__update_issue,mcp__github__get_issue_comments"
+            --allowedTools "mcp__github__get_issue,mcp__github__search_issues,
+              mcp__github__list_issues,mcp__github__create_issue_comment,
+              mcp__github__update_issue,mcp__github__get_issue_comments"

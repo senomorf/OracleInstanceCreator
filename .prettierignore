@@ -1,0 +1,65 @@
+# Prettier ignore file for OCI Automation Project
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+out/
+
+# Generated files
+*.min.js
+*.min.css
+*-min.js
+*-min.css
+
+# Logs
+*.log
+logs/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Project specific
+# Shell Script Formatting Strategy:
+# - Exclude shell scripts from Prettier to preserve existing formatting and shell-specific conventions
+# - Shell scripts use 4-space indentation (enforced by EditorConfig) and follow POSIX standards
+# - Shell scripts have specialized linting (shellcheck) and are optimized for OCI CLI patterns
+# - Mixed-content shell scripts (outside these directories) can still benefit from Prettier
+scripts/*.sh
+tests/*.sh
+
+# Don't format configuration files that have specific formatting requirements
+.github/workflows/*.yml
+config/templates/*.yml
+
+# Generated reports
+.jscpd-report/
+*-report.html
+*-report.json
+
+# Temporary files
+tmp/
+temp/
+.tmp/
