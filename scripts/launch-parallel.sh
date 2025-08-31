@@ -280,6 +280,11 @@ main() {
     [[ $STATUS_A1 -eq 0 ]] && success_count=$((success_count + 1))
     [[ $STATUS_E2 -eq 0 ]] && success_count=$((success_count + 1))
     
+    # Check if both failures are capacity-related (exit code 2 = OCI_EXIT_CAPACITY_ERROR)
+    local capacity_failures=0
+    [[ $STATUS_A1 -eq 2 ]] && capacity_failures=$((capacity_failures + 1))
+    [[ $STATUS_E2 -eq 2 ]] && capacity_failures=$((capacity_failures + 1))
+    
     log_elapsed "parallel_execution"
     
     # Track final resource usage and collect detailed performance summary
@@ -320,8 +325,19 @@ main() {
         fi
         
         return 0
+    elif [[ $capacity_failures -eq 2 ]]; then
+        # Both failed due to capacity/limits - this is expected behavior, not an error
+        log_info "Both shapes unavailable due to capacity/limits - will retry on next schedule"
+        log_info "This is normal behavior when instance limits are reached or Oracle Cloud capacity is exhausted"
+        
+        # Send informational notification if enabled
+        if [[ "${ENABLE_NOTIFICATIONS:-}" == "true" ]]; then
+            send_telegram_notification "info" "OCI capacity/limits reached - both shapes unavailable, will retry later"
+        fi
+        
+        return 0  # Don't treat capacity exhaustion as failure
     else
-        log_error "Parallel execution failed: Both instance creation attempts failed"
+        log_error "Parallel execution failed: Instance creation failed due to configuration or authentication errors"
         
         # Let individual shape failures handle their own error notifications
         # This prevents duplicate error notifications
