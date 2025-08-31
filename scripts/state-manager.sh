@@ -31,6 +31,58 @@ get_cache_ttl_hours() {
     fi
 }
 
+# Get dynamic TTL based on region contention
+get_dynamic_ttl_hours() {
+    local base_ttl
+    base_ttl=$(get_cache_ttl_hours)
+    local region="${OCI_REGION:-}"
+    
+    # Check if current region is in high contention list
+    if [[ ",$HIGH_CONTENTION_REGIONS," == *",$region,"* ]]; then
+        # Use reduced TTL for high-contention regions
+        local reduced_ttl
+        reduced_ttl=$(echo "$base_ttl * $HIGH_CONTENTION_TTL_MULTIPLIER" | bc 2>/dev/null || echo "$base_ttl")
+        # Ensure minimum TTL of 1 hour
+        if (( $(echo "$reduced_ttl < 1" | bc -l 2>/dev/null || echo "0") )); then
+            echo "1"
+        else
+            printf "%.0f" "$reduced_ttl"
+        fi
+    else
+        echo "$base_ttl"
+    fi
+}
+
+# Get absolute cache directory path
+get_cache_dir() {
+    local cache_dir="${CACHE_PATH:-$CACHE_PATH_DEFAULT}"
+    # Convert to absolute path if relative
+    if [[ "$cache_dir" != /* ]]; then
+        cache_dir="$(pwd)/$cache_dir"
+    fi
+    echo "$cache_dir"
+}
+
+# Get absolute state file path
+get_state_file_path() {
+    local state_file
+    state_file=$(get_state_file_path "${1:-}")
+    local cache_dir
+    cache_dir=$(get_cache_dir)
+    
+    # If state_file is just a filename, put it in cache directory
+    if [[ "$state_file" == "$(basename "$state_file")" ]]; then
+        echo "$cache_dir/$state_file"
+    else
+        # If it's already a path, use it as-is but make it absolute
+        if [[ "$state_file" != /* ]]; then
+            echo "$(pwd)/$state_file"
+        else
+            echo "$state_file"
+        fi
+    fi
+}
+
 # =============================================================================
 # STATE FILE MANAGEMENT
 # =============================================================================
@@ -40,7 +92,13 @@ get_cache_ttl_hours() {
 generate_cache_key() {
     local region="${OCI_REGION:-unknown}"
     local date_key
-    date_key=$(date '+%Y-%m-%d')
+    
+    # Use provided cache date key if available (prevents race conditions)
+    if [[ -n "${CACHE_DATE_KEY:-}" ]]; then
+        date_key="$CACHE_DATE_KEY"
+    else
+        date_key=$(date '+%Y-%m-%d')
+    fi
     
     # Sanitize region for cache key (replace special chars with hyphens)
     local sanitized_region
@@ -69,6 +127,14 @@ generate_cache_restore_keys() {
 init_state_file() {
     local state_file="$1"
     
+    # Ensure the directory exists
+    local state_dir
+    state_dir=$(dirname "$state_file")
+    if [[ ! -d "$state_dir" ]]; then
+        mkdir -p "$state_dir"
+        log_debug "Created state directory: $state_dir"
+    fi
+    
     local timestamp
     timestamp=$(date +%s)
     
@@ -87,7 +153,8 @@ EOF
 
 # Load state from file with validation
 load_state() {
-    local state_file="${1:-$STATE_FILE_NAME}"
+    local state_file
+    state_file=$(get_state_file_path "${1:-}")
     
     if [[ ! -f "$state_file" ]]; then
         log_debug "State file not found, initializing: $state_file"
@@ -116,7 +183,8 @@ load_state() {
 # Check if instance exists in state
 instance_exists_in_state() {
     local instance_name="$1"
-    local state_file="${2:-$STATE_FILE_NAME}"
+    local state_file
+    state_file=$(get_state_file_path "${2:-}")
     
     if [[ ! -f "$state_file" ]]; then
         return 1
@@ -128,7 +196,8 @@ instance_exists_in_state() {
 # Get instance state information
 get_instance_state() {
     local instance_name="$1" 
-    local state_file="${2:-$STATE_FILE_NAME}"
+    local state_file
+    state_file=$(get_state_file_path "${2:-}")
     local field="${3:-}"  # Optional: specific field to retrieve
     
     if [[ ! -f "$state_file" ]]; then
@@ -149,7 +218,8 @@ update_instance_state() {
     local instance_name="$1"
     local ocid="$2"
     local status="${3:-created}"
-    local state_file="${4:-$STATE_FILE_NAME}"
+    local state_file
+    state_file=$(get_state_file_path "${4:-}")
     
     local timestamp
     timestamp=$(date +%s)
@@ -182,7 +252,8 @@ update_instance_state() {
 # Remove instance from state  
 remove_instance_state() {
     local instance_name="$1"
-    local state_file="${2:-$STATE_FILE_NAME}"
+    local state_file
+    state_file=$(get_state_file_path "${2:-}")
     
     if [[ ! -f "$state_file" ]]; then
         log_debug "State file not found, nothing to remove: $state_file"
@@ -210,7 +281,8 @@ remove_instance_state() {
 
 # Check if state is expired based on TTL
 is_state_expired() {
-    local state_file="${1:-$STATE_FILE_NAME}"
+    local state_file
+    state_file=$(get_state_file_path "${1:-}")
     local ttl_hours
     ttl_hours=$(get_cache_ttl_hours)
     
@@ -252,7 +324,8 @@ is_state_expired() {
 
 # Validate state file integrity and consistency
 validate_state_file() {
-    local state_file="${1:-$STATE_FILE_NAME}"
+    local state_file
+    state_file=$(get_state_file_path "${1:-}")
     
     if [[ ! -f "$state_file" ]]; then
         log_debug "State file not found: $state_file"
@@ -297,7 +370,8 @@ is_github_actions() {
 
 # Save state to GitHub Actions cache (if available)
 save_state_to_cache() {
-    local state_file="${1:-$STATE_FILE_NAME}"
+    local state_file
+    state_file=$(get_state_file_path "${1:-}")
     
     if [[ "$(get_cache_enabled)" != "true" ]]; then
         log_debug "Cache disabled, skipping save"
@@ -319,11 +393,17 @@ save_state_to_cache() {
     
     log_info "Saving state to GitHub Actions cache: $cache_key"
     
-    # GitHub Actions cache save requires the file to be in current directory
-    # or a subdirectory, so we may need to copy it
-    local cache_dir=".cache/oci-state"
+    # Ensure the cache directory exists and copy state file
+    local cache_dir
+    cache_dir=$(get_cache_dir)
     mkdir -p "$cache_dir"
-    cp "$state_file" "$cache_dir/"
+    
+    # If state file is already in cache directory, no need to copy
+    local cached_state="$cache_dir/$STATE_FILE_NAME"
+    if [[ "$state_file" != "$cached_state" ]]; then
+        cp "$state_file" "$cached_state"
+        log_debug "Copied state file to cache directory: $cached_state"
+    fi
     
     # Note: Actual cache save would be handled by GitHub Actions workflow
     # This function prepares the file for caching
@@ -335,7 +415,8 @@ save_state_to_cache() {
 
 # Load state from GitHub Actions cache (if available)
 load_state_from_cache() {
-    local state_file="${1:-$STATE_FILE_NAME}"
+    local state_file
+    state_file=$(get_state_file_path "${1:-}")
     
     if [[ "$(get_cache_enabled)" != "true" ]]; then
         log_debug "Cache disabled, skipping load"
@@ -347,12 +428,25 @@ load_state_from_cache() {
         return 1
     fi
     
-    local cache_dir=".cache/oci-state"
+    local cache_dir
+    cache_dir=$(get_cache_dir)
     local cached_state="$cache_dir/$STATE_FILE_NAME"
     
     if [[ -f "$cached_state" ]]; then
         if validate_state_file "$cached_state"; then
-            cp "$cached_state" "$state_file"
+            # Ensure target directory exists
+            local target_dir
+            target_dir=$(dirname "$state_file")
+            if [[ ! -d "$target_dir" ]]; then
+                mkdir -p "$target_dir"
+            fi
+            
+            # If state file is the same as cached state, no need to copy
+            if [[ "$state_file" != "$cached_state" ]]; then
+                cp "$cached_state" "$state_file"
+                log_debug "Copied cached state to: $state_file"
+            fi
+            
             log_info "Loaded state from GitHub Actions cache"
             return 0
         else
@@ -371,9 +465,10 @@ load_state_from_cache() {
 
 # Initialize state management system
 init_state_manager() {
-    local state_file="${1:-$STATE_FILE_NAME}"
+    local state_file
+    state_file=$(get_state_file_path "${1:-}")
     
-    log_debug "Initializing state manager (cache enabled: $(get_cache_enabled), TTL: $(get_cache_ttl_hours)h)"
+    log_debug "Initializing state manager (cache enabled: $(get_cache_enabled), TTL: $(get_dynamic_ttl_hours)h)"
     
     # Try to load from cache first
     if ! load_state_from_cache "$state_file"; then
@@ -387,7 +482,8 @@ init_state_manager() {
 # Check if instance should be created (not in cache or cache expired)
 should_create_instance() {
     local instance_name="$1"
-    local state_file="${2:-$STATE_FILE_NAME}"
+    local state_file
+    state_file=$(get_state_file_path "${2:-}")
     
     # If cache disabled, always create
     if [[ "$(get_cache_enabled)" != "true" ]]; then
@@ -431,7 +527,8 @@ should_create_instance() {
 record_instance_creation() {
     local instance_name="$1"
     local ocid="$2"
-    local state_file="${3:-$STATE_FILE_NAME}"
+    local state_file
+    state_file=$(get_state_file_path "${3:-}")
     
     update_instance_state "$instance_name" "$ocid" "created" "$state_file"
     save_state_to_cache "$state_file"
@@ -442,7 +539,8 @@ record_instance_verification() {
     local instance_name="$1"
     local ocid="$2"
     local status="${3:-verified}"
-    local state_file="${4:-$STATE_FILE_NAME}"
+    local state_file
+    state_file=$(get_state_file_path "${4:-}")
     
     update_instance_state "$instance_name" "$ocid" "$status" "$state_file"
     save_state_to_cache "$state_file"
@@ -450,7 +548,8 @@ record_instance_verification() {
 
 # Clean up state management
 cleanup_state_manager() {
-    local state_file="${1:-$STATE_FILE_NAME}"
+    local state_file
+    state_file=$(get_state_file_path "${1:-}")
     
     # Cleanup temporary files
     rm -f "${state_file}.tmp" "${state_file}.bak"
@@ -464,7 +563,8 @@ cleanup_state_manager() {
 
 # Get state summary for logging
 get_state_summary() {
-    local state_file="${1:-$STATE_FILE_NAME}"
+    local state_file
+    state_file=$(get_state_file_path "${1:-}")
     
     if [[ ! -f "$state_file" ]]; then
         echo "No state file"
@@ -489,7 +589,8 @@ get_state_summary() {
 
 # Print state in human-readable format
 print_state() {
-    local state_file="${1:-$STATE_FILE_NAME}"
+    local state_file
+    state_file=$(get_state_file_path "${1:-}")
     
     if [[ ! -f "$state_file" ]]; then
         echo "No state file found: $state_file"
@@ -526,6 +627,204 @@ print_state() {
     else
         echo "No instances in state"
     fi
+}
+
+# =============================================================================
+# ENHANCED VERIFICATION FUNCTIONS
+# =============================================================================
+
+# Verify instance configuration matches cached expectations
+verify_instance_configuration() {
+    local instance_id="$1"
+    local expected_shape="$2"
+    local expected_ocpus="${3:-}"
+    local expected_memory="${4:-}"
+    
+    if [[ -z "$instance_id" || -z "$expected_shape" ]]; then
+        log_error "verify_instance_configuration: instance_id and expected_shape are required"
+        return 1
+    fi
+    
+    # Get actual instance configuration from OCI API
+    local actual_config
+    if ! actual_config=$(oci_cmd compute instance get --instance-id "$instance_id" \
+        --query 'data.{shape:shape,ocpus:shapeConfig.ocpus,memory:shapeConfig.memoryInGBs}' \
+        --output json 2>/dev/null); then
+        log_error "Failed to get instance configuration for $instance_id"
+        return 1
+    fi
+    
+    # Parse the configuration
+    local actual_shape actual_ocpus actual_memory
+    actual_shape=$(echo "$actual_config" | jq -r '.shape // "unknown"')
+    actual_ocpus=$(echo "$actual_config" | jq -r '.ocpus // "null"')
+    actual_memory=$(echo "$actual_config" | jq -r '.memory // "null"')
+    
+    # Verify shape matches
+    if [[ "$actual_shape" != "$expected_shape" ]]; then
+        log_warning "Instance shape mismatch: expected '$expected_shape', got '$actual_shape'"
+        return 2
+    fi
+    
+    # Verify OCPUs if specified and shape is flexible
+    if [[ -n "$expected_ocpus" && "$actual_ocpus" != "null" ]]; then
+        if ! awk -v actual="$actual_ocpus" -v expected="$expected_ocpus" \
+            'BEGIN { exit (actual != expected) }' 2>/dev/null; then
+            log_warning "Instance OCPUs mismatch: expected '$expected_ocpus', got '$actual_ocpus'"
+            return 2
+        fi
+    fi
+    
+    # Verify memory if specified and shape is flexible
+    if [[ -n "$expected_memory" && "$actual_memory" != "null" ]]; then
+        if ! awk -v actual="$actual_memory" -v expected="$expected_memory" \
+            'BEGIN { exit (actual != expected) }' 2>/dev/null; then
+            log_warning "Instance memory mismatch: expected '${expected_memory}GB', got '${actual_memory}GB'"
+            return 2
+        fi
+    fi
+    
+    log_debug "Instance configuration verified: shape=$actual_shape, ocpus=$actual_ocpus, memory=${actual_memory}GB"
+    return 0
+}
+
+# Update instance state with configuration details
+update_instance_state_with_config() {
+    local instance_name="$1"
+    local ocid="$2"
+    local status="$3"
+    local shape="$4"
+    local ocpus="${5:-}"
+    local memory="${6:-}"
+    local state_file
+    state_file=$(get_state_file_path "${7:-}")
+    
+    # Create configuration object
+    local config_json="{\"shape\": \"$shape\""
+    if [[ -n "$ocpus" ]]; then
+        config_json="$config_json, \"ocpus\": $ocpus"
+    fi
+    if [[ -n "$memory" ]]; then
+        config_json="$config_json, \"memory\": $memory"
+    fi
+    config_json="$config_json}"
+    
+    # Update instance state with configuration
+    local timestamp
+    timestamp=$(date +%s)
+    
+    local temp_file="${state_file}.tmp"
+    if jq --arg name "$instance_name" \
+          --arg ocid "$ocid" \
+          --arg status "$status" \
+          --arg timestamp "$timestamp" \
+          --argjson config "$config_json" \
+          '.instances[$name] = {
+              "id": $ocid,
+              "status": $status,
+              "updated": ($timestamp | tonumber),
+              "config": $config
+          } | .updated = ($timestamp | tonumber)' \
+          "$state_file" > "$temp_file"; then
+        mv "$temp_file" "$state_file"
+        log_debug "Updated instance state with configuration: $instance_name"
+    else
+        rm -f "$temp_file"
+        log_error "Failed to update instance state with configuration: $instance_name"
+        return 1
+    fi
+}
+
+# =============================================================================
+# CACHE STATISTICS AND MANAGEMENT
+# =============================================================================
+
+# Get cache statistics summary
+get_cache_stats() {
+    local cache_dir
+    cache_dir=$(get_cache_dir)
+    local stats_file="$cache_dir/$CACHE_STATS_FILE"
+    
+    if [[ ! -f "$stats_file" ]]; then
+        echo "No cache statistics available"
+        return 1
+    fi
+    
+    echo "=== Cache Statistics ==="
+    jq -r '.stats | to_entries | map("\(.key): \(.value)") | join("\n")' "$stats_file" 2>/dev/null || echo "Failed to read statistics"
+    
+    local updated
+    updated=$(jq -r '.updated' "$stats_file" 2>/dev/null)
+    if [[ "$updated" =~ ^[0-9]+$ ]]; then
+        local updated_readable
+        updated_readable=$(date -r "$updated" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || echo "$updated")
+        echo "Last updated: $updated_readable"
+    fi
+}
+
+# Purge cache and reset statistics
+purge_cache() {
+    local cache_dir
+    cache_dir=$(get_cache_dir)
+    
+    if [[ -d "$cache_dir" ]]; then
+        rm -rf "$cache_dir"
+        log_info "Cache purged: $cache_dir"
+    else
+        log_debug "Cache directory does not exist: $cache_dir"
+    fi
+    
+    # Reinitialize empty state
+    init_state_manager >/dev/null
+    log_info "Cache and state management reset"
+}
+
+# Check cache health
+check_cache_health() {
+    local cache_dir
+    cache_dir=$(get_cache_dir)
+    local state_file
+    state_file=$(get_state_file_path)
+    
+    echo "=== Cache Health Check ==="
+    
+    # Check cache directory
+    if [[ -d "$cache_dir" ]]; then
+        echo "✓ Cache directory exists: $cache_dir"
+        echo "  Permissions: $(ls -ld "$cache_dir" | awk '{print $1}')"
+    else
+        echo "✗ Cache directory missing: $cache_dir"
+        return 1
+    fi
+    
+    # Check state file
+    if [[ -f "$state_file" ]]; then
+        echo "✓ State file exists: $state_file"
+        if validate_state_file "$state_file"; then
+            echo "✓ State file is valid JSON"
+            local ttl_hours
+            ttl_hours=$(get_dynamic_ttl_hours)
+            echo "  TTL: ${ttl_hours}h (dynamic based on region)"
+            
+            # Check if expired
+            if is_state_expired "$state_file"; then
+                echo "⚠ State file is expired"
+            else
+                echo "✓ State file is current"
+            fi
+        else
+            echo "✗ State file is corrupted"
+            return 1
+        fi
+    else
+        echo "⚠ State file not found: $state_file"
+    fi
+    
+    # Cache configuration
+    echo "✓ Cache enabled: $(get_cache_enabled)"
+    echo "✓ GitHub Actions mode: $(is_github_actions && echo "true" || echo "false")"
+    
+    return 0
 }
 
 # =============================================================================
@@ -577,14 +876,50 @@ main() {
         "cleanup")
             cleanup_state_manager "${2:-}"
             ;;
+        "stats")
+            get_cache_stats
+            ;;
+        "health")
+            check_cache_health
+            ;;
+        "purge")
+            echo "WARNING: This will delete all cached data and reset statistics."
+            if [[ "${2:-}" == "--confirm" ]]; then
+                purge_cache
+            else
+                echo "To confirm, run: $0 purge --confirm"
+                exit 1
+            fi
+            ;;
+        "verify-config")
+            local instance_id="${2:-}"
+            local expected_shape="${3:-}"
+            local expected_ocpus="${4:-}"
+            local expected_memory="${5:-}"
+            if [[ -z "$instance_id" || -z "$expected_shape" ]]; then
+                echo "Usage: $0 verify-config <instance_id> <expected_shape> [expected_ocpus] [expected_memory]" >&2
+                exit 1
+            fi
+            verify_instance_configuration "$instance_id" "$expected_shape" "$expected_ocpus" "$expected_memory"
+            ;;
         *)
-            echo "Usage: $0 {init|check|record|verify|print|cleanup} [args...]" >&2
+            echo "Usage: $0 {init|check|record|verify|print|cleanup|stats|health|purge|verify-config} [args...]" >&2
+            echo ""
+            echo "State Management:"
             echo "  init [state_file]                           - Initialize state manager"
             echo "  check <instance_name> [state_file]          - Check if instance should be created"
             echo "  record <instance_name> <ocid> [state_file]  - Record successful creation"
             echo "  verify <name> <ocid> [status] [state_file]  - Record verification"
             echo "  print [state_file]                          - Print current state"
             echo "  cleanup [state_file]                        - Cleanup temporary files"
+            echo ""
+            echo "Cache Management:"
+            echo "  stats                                       - Show cache statistics"
+            echo "  health                                      - Check cache health"
+            echo "  purge --confirm                             - Purge cache and reset statistics"
+            echo ""
+            echo "Configuration Verification:"
+            echo "  verify-config <id> <shape> [ocpus] [memory] - Verify instance configuration"
             exit 1
             ;;
     esac
