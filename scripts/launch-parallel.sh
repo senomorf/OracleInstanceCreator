@@ -112,6 +112,38 @@ declare -A E2_MICRO_CONFIG=(
     ["DISPLAY_NAME"]="e2-micro-sg"
 )
 
+# Verify actual instance existence by querying OCI API
+count_actual_instances() {
+    local comp_id
+    comp_id=$(require_env_var "OCI_COMPARTMENT_ID" 2>/dev/null) || return 0
+    
+    local actual_count=0
+    
+    # Check A1.Flex instance
+    local a1_instance_id
+    if a1_instance_id=$(oci_cmd compute instance list \
+        --compartment-id "$comp_id" \
+        --display-name "${A1_FLEX_CONFIG[DISPLAY_NAME]}" \
+        --lifecycle-state "RUNNING,PROVISIONING,STARTING" \
+        --query 'data[0].id' \
+        --raw-output 2>/dev/null) && [[ -n "$a1_instance_id" && "$a1_instance_id" != "null" ]]; then
+        ((actual_count++))
+    fi
+    
+    # Check E2.1.Micro instance
+    local e2_instance_id
+    if e2_instance_id=$(oci_cmd compute instance list \
+        --compartment-id "$comp_id" \
+        --display-name "${E2_MICRO_CONFIG[DISPLAY_NAME]}" \
+        --lifecycle-state "RUNNING,PROVISIONING,STARTING" \
+        --query 'data[0].id' \
+        --raw-output 2>/dev/null) && [[ -n "$e2_instance_id" && "$e2_instance_id" != "null" ]]; then
+        ((actual_count++))
+    fi
+    
+    echo "$actual_count"
+}
+
 launch_shape() {
     local shape_name="$1"
     local -n config=$2
@@ -626,8 +658,12 @@ main() {
         log_with_context "info" "Parallel execution performance summary" "$performance_context"
     fi
 
-    if [[ $success_count -gt 0 ]]; then
-        log_success "Parallel execution completed: $success_count of 2 instances created successfully"
+    # Verify actual instances exist before claiming success
+    local actual_instances
+    actual_instances=$(count_actual_instances)
+    
+    if [[ $actual_instances -gt 0 ]]; then
+        log_success "Parallel execution completed: $actual_instances of 2 instances actually exist and running"
 
         # Instance hunting success: notify for ANY created instances with details
         if [[ "${ENABLE_NOTIFICATIONS:-}" == "true" ]]; then
@@ -637,41 +673,33 @@ main() {
             local notification_details=""
             local shapes_created=""
             
-            # Get details for A1.Flex if successful
-            if [[ $STATUS_A1 -eq 0 ]]; then
+            # Get details for A1.Flex if it exists
+            local a1_instance_id
+            if [[ -n "$comp_id" ]] && a1_instance_id=$(oci_cmd compute instance list \
+                --compartment-id "$comp_id" \
+                --display-name "${A1_FLEX_CONFIG[DISPLAY_NAME]}" \
+                --lifecycle-state "RUNNING,PROVISIONING,STARTING" \
+                --query 'data[0].id' \
+                --raw-output 2>/dev/null) && [[ -n "$a1_instance_id" && "$a1_instance_id" != "null" ]]; then
                 shapes_created="A1.Flex (ARM)"
-                if [[ -n "$comp_id" ]]; then
-                    local a1_instance_id
-                    if a1_instance_id=$(oci_cmd compute instance list \
-                        --compartment-id "$comp_id" \
-                        --display-name "${A1_FLEX_CONFIG[DISPLAY_NAME]}" \
-                        --lifecycle-state "RUNNING,PROVISIONING,STARTING" \
-                        --query 'data[0].id' \
-                        --raw-output 2>/dev/null) && [[ -n "$a1_instance_id" && "$a1_instance_id" != "null" ]]; then
-                        if a1_details=$(get_instance_details "$a1_instance_id" "A1.Flex (ARM)" 2>/dev/null); then
-                            notification_details="$a1_details"
-                        fi
-                    fi
+                if a1_details=$(get_instance_details "$a1_instance_id" "A1.Flex (ARM)" 2>/dev/null); then
+                    notification_details="$a1_details"
                 fi
             fi
             
-            # Get details for E2.Micro if successful  
-            if [[ $STATUS_E2 -eq 0 ]]; then
+            # Get details for E2.Micro if it exists
+            local e2_instance_id
+            if [[ -n "$comp_id" ]] && e2_instance_id=$(oci_cmd compute instance list \
+                --compartment-id "$comp_id" \
+                --display-name "${E2_MICRO_CONFIG[DISPLAY_NAME]}" \
+                --lifecycle-state "RUNNING,PROVISIONING,STARTING" \
+                --query 'data[0].id' \
+                --raw-output 2>/dev/null) && [[ -n "$e2_instance_id" && "$e2_instance_id" != "null" ]]; then
                 shapes_created="${shapes_created:+$shapes_created, }E2.1.Micro (AMD)"
-                if [[ -n "$comp_id" ]]; then
-                    local e2_instance_id
-                    if e2_instance_id=$(oci_cmd compute instance list \
-                        --compartment-id "$comp_id" \
-                        --display-name "${E2_MICRO_CONFIG[DISPLAY_NAME]}" \
-                        --lifecycle-state "RUNNING,PROVISIONING,STARTING" \
-                        --query 'data[0].id' \
-                        --raw-output 2>/dev/null) && [[ -n "$e2_instance_id" && "$e2_instance_id" != "null" ]]; then
-                        if e2_details=$(get_instance_details "$e2_instance_id" "E2.1.Micro (AMD)" 2>/dev/null); then
-                            notification_details="${notification_details:+$notification_details
+                if e2_details=$(get_instance_details "$e2_instance_id" "E2.1.Micro (AMD)" 2>/dev/null); then
+                    notification_details="${notification_details:+$notification_details
 
 }$e2_details"
-                        fi
-                    fi
                 fi
             fi
             
