@@ -12,5 +12,5 @@ scripts/ @senomorf
 config/ @senomorf
 
 # Core workflow files
-.github/workflows/free-tier-creation.yml @senomorf
+.github/workflows/infrastructure-deployment.yml @senomorf
 .github/workflows/claude*.yml @senomorf
