@@ -4,6 +4,10 @@
 # Attempts to create both free tier shapes simultaneously:
 # - VM.Standard.A1.Flex (ARM): 4 OCPUs, 24GB RAM
 # - VM.Standard.E2.1.Micro (AMD): 1 OCPU, 1GB RAM
+#
+# TELEGRAM NOTIFICATION RULES:
+# NOTIFY: Any instance created OR critical failures (auth/config/system)
+# SILENT: Zero instances created (capacity/limits/rate limiting)
 
 set -euo pipefail
 
@@ -234,6 +238,52 @@ verify_and_update_state() {
         log_debug "Instance state verification completed successfully"
         return 0
     fi
+}
+
+# Get detailed instance information for notifications
+get_instance_details() {
+    local instance_id="$1"
+    local shape_name="$2"
+    
+    if [[ -z "$instance_id" || "$instance_id" == "null" ]]; then
+        return 1
+    fi
+    
+    # Get instance details from OCI API
+    local instance_data
+    if ! instance_data=$(oci_cmd compute instance get --instance-id "$instance_id" \
+        --query 'data.{id:id,shape:shape,ad:availabilityDomain,state:lifecycleState}' \
+        --output json 2>/dev/null); then
+        log_debug "Failed to get details for instance $instance_id"
+        return 1
+    fi
+    
+    # Get VNIC attachments for IP addresses
+    local vnic_data
+    if ! vnic_data=$(oci_cmd compute instance list-vnics --instance-id "$instance_id" \
+        --query 'data[0].{publicIp:publicIp,privateIp:privateIp}' \
+        --output json 2>/dev/null); then
+        log_debug "Failed to get VNIC details for instance $instance_id"
+        # Continue without IP info
+        vnic_data='{"publicIp":null,"privateIp":null}'
+    fi
+    
+    # Parse the data
+    local id shape ad state public_ip private_ip
+    id=$(echo "$instance_data" | jq -r '.id // "unknown"')
+    shape=$(echo "$instance_data" | jq -r '.shape // "unknown"') 
+    ad=$(echo "$instance_data" | jq -r '.ad // "unknown"' | sed 's/.*-AD-/AD-/')
+    state=$(echo "$instance_data" | jq -r '.state // "unknown"')
+    public_ip=$(echo "$vnic_data" | jq -r '.publicIp // "none"')
+    private_ip=$(echo "$vnic_data" | jq -r '.privateIp // "unknown"')
+    
+    # Format the details
+    echo "**${shape_name}** (${shape}):
+• ID: ${id}
+• Public IP: ${public_ip}
+• Private IP: ${private_ip}
+• AD: ${ad}
+• State: ${state}"
 }
 
 # Main parallel execution
@@ -579,13 +629,60 @@ main() {
     if [[ $success_count -gt 0 ]]; then
         log_success "Parallel execution completed: $success_count of 2 instances created successfully"
 
-        # Send combined success notification if notifications enabled
+        # Instance hunting success: notify for ANY created instances with details
         if [[ "${ENABLE_NOTIFICATIONS:-}" == "true" ]]; then
+            local comp_id
+            comp_id=$(require_env_var "OCI_COMPARTMENT_ID" 2>/dev/null) || comp_id=""
+            
+            local notification_details=""
             local shapes_created=""
-            [[ $STATUS_A1 -eq 0 ]] && shapes_created="A1.Flex (ARM)"
-            [[ $STATUS_E2 -eq 0 ]] && shapes_created="${shapes_created:+$shapes_created, }E2.1.Micro (AMD)"
+            
+            # Get details for A1.Flex if successful
+            if [[ $STATUS_A1 -eq 0 ]]; then
+                shapes_created="A1.Flex (ARM)"
+                if [[ -n "$comp_id" ]]; then
+                    local a1_instance_id
+                    if a1_instance_id=$(oci_cmd compute instance list \
+                        --compartment-id "$comp_id" \
+                        --display-name "${A1_FLEX_CONFIG[DISPLAY_NAME]}" \
+                        --lifecycle-state "RUNNING,PROVISIONING,STARTING" \
+                        --query 'data[0].id' \
+                        --raw-output 2>/dev/null) && [[ -n "$a1_instance_id" && "$a1_instance_id" != "null" ]]; then
+                        if a1_details=$(get_instance_details "$a1_instance_id" "A1.Flex (ARM)" 2>/dev/null); then
+                            notification_details="$a1_details"
+                        fi
+                    fi
+                fi
+            fi
+            
+            # Get details for E2.Micro if successful  
+            if [[ $STATUS_E2 -eq 0 ]]; then
+                shapes_created="${shapes_created:+$shapes_created, }E2.1.Micro (AMD)"
+                if [[ -n "$comp_id" ]]; then
+                    local e2_instance_id
+                    if e2_instance_id=$(oci_cmd compute instance list \
+                        --compartment-id "$comp_id" \
+                        --display-name "${E2_MICRO_CONFIG[DISPLAY_NAME]}" \
+                        --lifecycle-state "RUNNING,PROVISIONING,STARTING" \
+                        --query 'data[0].id' \
+                        --raw-output 2>/dev/null) && [[ -n "$e2_instance_id" && "$e2_instance_id" != "null" ]]; then
+                        if e2_details=$(get_instance_details "$e2_instance_id" "E2.1.Micro (AMD)" 2>/dev/null); then
+                            notification_details="${notification_details:+$notification_details
 
-            send_telegram_notification "success" "OCI instances created: $shapes_created"
+}$e2_details"
+                        fi
+                    fi
+                fi
+            fi
+            
+            # Send notification with details if available, fallback to basic info
+            if [[ -n "$notification_details" ]]; then
+                send_telegram_notification "success" "OCI instance hunting success!
+
+$notification_details"
+            else
+                send_telegram_notification "success" "OCI instances created: $shapes_created"
+            fi
         fi
 
         return 0
@@ -594,7 +691,9 @@ main() {
         log_info "User limit(s) reached for $user_limit_failures shape(s) - no further attempts needed"
         log_info "Consider managing existing instances to free capacity for new deployments"
         
-        # No notification needed - user limits are expected operational conditions
+        # Notification Policy: NO notifications for user limits
+        # User limits are EXPECTED free tier behavior - normal operation
+        # Per CLAUDE.md policy: "DO NOT send notifications for User limits reached (expected)"
         
         return 0  # User limits are not failures - they're expected behavior
     elif [[ $rate_limit_failures -gt 0 && $((rate_limit_failures + success_count + capacity_failures + user_limit_failures)) -eq 2 ]]; then
@@ -602,7 +701,9 @@ main() {
         log_info "Oracle API rate limits encountered for $rate_limit_failures shape(s) - will retry on next scheduled run"
         log_info "This is normal Oracle API behavior during high usage periods and resolves automatically"
         
-        # No notification needed - rate limits are expected operational conditions
+        # Notification Policy: NO notifications for rate limits  
+        # Rate limiting is EXPECTED Oracle API behavior during high usage periods
+        # Per CLAUDE.md policy: "DO NOT send notifications for Rate limiting (standard behavior)"
         
         return 0  # Rate limits are not failures - they're expected behavior
     elif [[ $capacity_failures -eq 2 ]]; then
@@ -610,16 +711,19 @@ main() {
         log_info "Both shapes unavailable due to Oracle capacity constraints - will retry on next schedule"
         log_info "This is normal behavior when Oracle Cloud capacity is temporarily exhausted"
 
-        # Send informational notification if enabled
-        if [[ "${ENABLE_NOTIFICATIONS:-}" == "true" ]]; then
-            send_telegram_notification "info" "Oracle capacity constraints - both shapes unavailable, will retry later"
-        fi
-
+        # Notification Policy: NO notifications for Oracle capacity constraints
+        # Capacity constraints are EXPECTED operational conditions that resolve through retry cycles
+        # Per CLAUDE.md policy: "DO NOT send notifications for Oracle capacity unavailable (expected)"
+        
         return 0 # Don't treat capacity exhaustion as failure
     elif [[ $((capacity_failures + user_limit_failures + rate_limit_failures)) -eq 2 ]]; then
         # Mixed capacity, limit, and rate limit issues - still expected behavior
         log_info "Mixed Oracle constraints encountered - will retry on next schedule"
         log_info "This is normal Oracle Cloud behavior - capacity, limits, or rate limiting"
+        
+        # Notification Policy: NO notifications for mixed constraint scenarios
+        # These are EXPECTED Oracle operational conditions that resolve through retry cycles
+        # Per CLAUDE.md policy: \"DO NOT send notifications for\" expected operational conditions
         
         return 0  # Mixed constraint issues are still expected behavior
     else
