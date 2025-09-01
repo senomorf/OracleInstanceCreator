@@ -115,19 +115,28 @@ declare -A E2_MICRO_CONFIG=(
 # Verify actual instance existence by querying OCI API
 count_actual_instances() {
     local comp_id
-    comp_id=$(require_env_var "OCI_COMPARTMENT_ID" 2>/dev/null) || return 0
+    comp_id=$(require_env_var "OCI_COMPARTMENT_ID" 2>/dev/null) || {
+        log_debug "OCI_COMPARTMENT_ID unavailable - cannot verify instance count"
+        return 0
+    }
     
     local actual_count=0
     
     # Check A1.Flex instance
     local a1_instance_id
+    local a1_error_output
     if a1_instance_id=$(oci_cmd compute instance list \
         --compartment-id "$comp_id" \
         --display-name "${A1_FLEX_CONFIG[DISPLAY_NAME]}" \
         --lifecycle-state "RUNNING,PROVISIONING,STARTING" \
         --query 'data[0].id' \
-        --raw-output 2>/dev/null) && [[ -n "$a1_instance_id" && "$a1_instance_id" != "null" ]]; then
+        --raw-output 2>&1) && [[ -n "$a1_instance_id" && "$a1_instance_id" != "null" ]]; then
         ((actual_count++))
+    else
+        # Log API failures for debugging while maintaining graceful degradation
+        if [[ -n "$a1_instance_id" && "$a1_instance_id" =~ (ERROR|ServiceError|Authentication) ]]; then
+            log_debug "A1.Flex instance verification failed: ${a1_instance_id:0:100}..."
+        fi
     fi
     
     # Check E2.1.Micro instance
@@ -137,8 +146,13 @@ count_actual_instances() {
         --display-name "${E2_MICRO_CONFIG[DISPLAY_NAME]}" \
         --lifecycle-state "RUNNING,PROVISIONING,STARTING" \
         --query 'data[0].id' \
-        --raw-output 2>/dev/null) && [[ -n "$e2_instance_id" && "$e2_instance_id" != "null" ]]; then
+        --raw-output 2>&1) && [[ -n "$e2_instance_id" && "$e2_instance_id" != "null" ]]; then
         ((actual_count++))
+    else
+        # Log API failures for debugging while maintaining graceful degradation
+        if [[ -n "$e2_instance_id" && "$e2_instance_id" =~ (ERROR|ServiceError|Authentication) ]]; then
+            log_debug "E2.1.Micro instance verification failed: ${e2_instance_id:0:100}..."
+        fi
     fi
     
     echo "$actual_count"
