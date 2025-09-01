@@ -22,7 +22,13 @@
       "Bash(djlint:*)",
       "Bash(grep:*)",
       "Bash(yamllint:*)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch",
+      "mcp__gh",
+      "mcp__github",
+      "mcp__github_ci",
+      "mcp__github_comment",
+      "mcp__github_inline_comment"
     ],
     "ask": [],
     "deny": []

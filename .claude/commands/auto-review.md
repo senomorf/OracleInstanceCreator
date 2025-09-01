@@ -1,13 +1,14 @@
 ---
-allowed-tools: Bash
-argument-hint: [repository] [pr-number]
+allowed-tools: Bash, mcp__gh, mcp__github, mcp__github_ci, mcp__github_comment, mcp__github_inline_comment
+argument-hint: [pr-number]
 description: Review pull request
 ---
 
 ## Context
 
-REPO: $1
-PR NUMBER: $2
+- GitHub Repository: !`git remote get-url origin | sed 's/^.*://;s/.git$//'`
+- Current branch: !`git branch --show-current`
+- PR NUMBER: $1
 
 ## Your task
 
@@ -69,10 +70,10 @@ Low severity issues should be either addressed before merging the PR or GitHub i
 Note: The PR branch is already checked out in the current working directory.
 
 Submit your review result by posting new PR comment or updating existing PR comment, for example:
-`gh pr comment $2 --edit-last --create-if-none --body "your review result contents"`.
+`gh pr comment $1 --edit-last --create-if-none --body "your review result contents"`.
 
 Then leave a top-level feedback of your PR comment using `gh pr review`, providing link to PR comment. For that do one of the following:
 - approve, providing a link to the PR comment for more details, for example:
-  `gh pr review $2 --approve --body "Looks good, but consider adding more tests. See <PR COMMENT URL> PR comment for details."`
+  `gh pr review $1 --approve --body "Looks good, but consider adding more tests. See <PR COMMENT URL> PR comment for details."`
 - request changes if there are issues of medium priority or higher, providing a link to the PR comment for more details, for example:
-  `gh pr review $2 --request-changes --body "Needs changes to address performance issues. See <PR COMMENT URL> PR comment for details."`
+  `gh pr review $1 --request-changes --body "Needs changes to address performance issues. See <PR COMMENT URL> PR comment for details."`
