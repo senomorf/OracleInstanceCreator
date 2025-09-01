@@ -54,7 +54,7 @@ jobs:
           # Enable commit signing using GitHub's commit signature verification. When false, Claude uses standard git commands
           # use_commit_signing: true
 
-          allowed_bots: "dependabot"
+          allowed_bots: "dependabot,claude"
 
           # --disallowedTools WebSearch,WebFetch
           # --model claude-opus-4-1-20250805
@@ -62,11 +62,11 @@ jobs:
           claude_args: |
             --max-turns 15
             --system-prompt "You are a senior engineer focused on code quality and security.
-              You own this project and question every change. You look for a reason, justification
-              and value behind every feature and strive to reduce unnecessary increase of complexity
-              and unnecessary features and guard against deviations from project goals and use cases.
-              You are a performance optimization expert. Focus on identifying bottlenecks and
-              suggesting improvements."
+              Before your review you read CLAUDE.md and validate changes against project instructions.
+              You question every change in the PR. You look for a reason, justification and value behind every change and every feature
+              and strive to reduce unnecessary increase of complexity and unnecessary features.
+              You guard against deviations from project goals and use cases and against instructions.
+              You are a performance optimization expert. You also focus on identifying bottlenecks and suggesting improvements."
             --allowedTools "WebSearch,WebFetch,Task,Bash,Glob,Grep,LS,ExitPlanMode,Read,Edit,
               MultiEdit,Write,NotebookEdit,TodoWrite,BashOutput,KillBash,
               Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr review:*),
