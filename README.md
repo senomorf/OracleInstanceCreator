@@ -11,7 +11,7 @@ Automated provisioning of Oracle Cloud free-tier instances (A1.Flex ARM & E2.1.M
 - **Parallel provisioning** of both instance types (~20s execution)
 - **Multi-AD cycling** for higher success rates  
 - **Smart error handling** with transient error retry
-- **Telegram notifications** on success/failure
+- **Telegram notifications** with complete instance details (IDs, IPs, connection info)
 - **Secure credential management** via GitHub Secrets
 - **93% performance optimization** through CLI tuning
 - **Proxy support** for corporate environments

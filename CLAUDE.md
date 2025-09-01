@@ -145,29 +145,38 @@ gh run watch <run-id>
 
 ## Telegram Notification Policy
 
+### Instance Hunting Goal:
+**NOTIFY: Any instance created OR critical failures**  
+**SILENT: Zero instances created (regardless of reason)**
+
 ### SEND notifications for:
-- ✅ **SUCCESS**: Instance creation completed (with instance details)
+- ✅ **SUCCESS**: ANY instance created with complete details (ID, IPs, AD, connection info)
 - ❌ **FAILURE**: Authentication/configuration errors requiring user action  
 - 🚨 **CRITICAL**: System failures requiring immediate attention
 - ❌ **ERROR**: Unexpected failures needing investigation
 
 ### DO NOT send notifications for:
-- ❌ User limits reached (expected free tier behavior - normal operation)
-- ❌ Oracle capacity unavailable (expected operational condition - will retry)
-- ❌ Rate limiting (standard cloud provider behavior - will retry)
+- ❌ Zero instances created due to capacity constraints (expected operational condition)
+- ❌ Zero instances created due to user limits (expected free tier behavior)
+- ❌ Zero instances created due to rate limiting (expected Oracle API behavior)
 - ❌ Instance already exists (expected when using state management cache)
-- ❌ Preflight check completion (operational validation - use silent connectivity test)
-- ❌ Any condition that resolves through automated retry cycles
+- ❌ Preflight check completion (operational validation)
 
-### Notification Behavior:
-- **Scheduled runs**: Notifications ENABLED by default (monitor automation)
-- **Manual runs**: User can toggle notifications via workflow dispatch
-- **Expected conditions**: Never generate notifications (silent operation)
-- **Actual failures**: Always generate notifications (require attention)
+### Key Behaviors:
+- **Mixed scenarios**: A1 success + E2 limits = **DETAILED NOTIFICATION** (hunting success with A1 details)
+- **Both constrained**: A1 capacity + E2 capacity = **NO NOTIFICATION** (zero instances)
+- **Pure success**: A1 success + E2 success = **DETAILED NOTIFICATION** (both instances with full details)
+
+### Notification Content:
+Success notifications include complete instance details:
+- Instance OCID for API access
+- Public & Private IP addresses
+- Availability Domain location  
+- Instance state and shape information
+- Ready-to-use connection details
 
 ### Philosophy:
-**Notify for successes and actionable failures. Never notify for expected operational conditions.**
-Expected conditions (limits, capacity constraints) are normal automation behavior that resolve through retry cycles.
+**Hunt for successful instance creation. Celebrate any hunting success, stay silent on zero results.**
 
 ### Configuration Variables:
 - `PREFLIGHT_SEND_TEST_NOTIFICATION=true`: Forces preflight check to send test notification (default: false)
