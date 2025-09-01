@@ -408,7 +408,7 @@ launch_instance() {
                 else
                     log_performance_metric "AD_CYCLE_COMPLETE" "ALL_ADS" "$max_attempts" "$max_attempts" "CAPACITY_EXHAUSTED"
                     log_info "All ADs exhausted - will retry on next schedule"
-                    return 0  # Not a failure, just capacity issue across all ADs
+                    return "$OCI_EXIT_CAPACITY_ERROR"  # Capacity issue across all ADs
                 fi
                 ;;
             "RATE_LIMIT")
