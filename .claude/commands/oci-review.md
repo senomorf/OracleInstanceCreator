@@ -1,7 +1,15 @@
-# Auto-Review Command
+---
+allowed-tools: Bash
+argument-hint: [repository] [pr-number]
+description: Review pull request
+---
+
+## Context
 
 REPO: $1
 PR NUMBER: $2
+
+## Your task
 
 Perform a comprehensive code review for the OCI automation project covering both general software engineering principles and OCI automation specifics.
 
@@ -18,7 +26,7 @@ Perform a comprehensive code review for the OCI automation project covering both
 - Documentation quality and code comments
 - Adherence to coding standards and conventions
 - Verify that README.md and docs are updated for any new features or config changes
-- **Linter Policy Compliance**: Ensure any new linters focus on code quality/security/functional issues, NOT arbitrary style rules
+- **Linter Policy Compliance**: Ensure any new linters focus on code quality/security/functional issues, NOT style rules
 
 ### 2. Security
 - Check for potential security vulnerabilities
@@ -60,14 +68,11 @@ Low severity issues should be either addressed before merging the PR or GitHub i
 
 Note: The PR branch is already checked out in the current working directory.
 
-Only post GitHub comment - don't submit review text as messages.
-Submit review as an update of your previous review PR comment if it exists.
-Post review create new review comment or updating existing review comment, for example:
-`gh pr comment $2 --edit-last --create-if-none --body "your review"`.
+Submit your review result by posting new PR comment or updating existing PR comment, for example:
+`gh pr comment $2 --edit-last --create-if-none --body "your review result contents"`.
 
-Additionally leave top-level feedback of your review using `gh pr review` command, providing link to review comment.
-Do one of the following:
-- approve if there are no issues, providing a link to the PR comment for more details, for example:
-  `gh pr review $2 --approve --body "Looks good, but consider adding more tests. See <REVIEW COMMENT URL> PR comment for details."`
+Then leave a top-level feedback of your PR comment using `gh pr review`, providing link to PR comment. For that do one of the following:
+- approve, providing a link to the PR comment for more details, for example:
+  `gh pr review $2 --approve --body "Looks good, but consider adding more tests. See <PR COMMENT URL> PR comment for details."`
 - request changes if there are issues of medium priority or higher, providing a link to the PR comment for more details, for example:
-  `gh pr review $2 --request-changes --body "Needs changes to address performance issues. See <REVIEW COMMENT URL> PR comment for details."`
+  `gh pr review $2 --request-changes --body "Needs changes to address performance issues. See <PR COMMENT URL> PR comment for details."`
