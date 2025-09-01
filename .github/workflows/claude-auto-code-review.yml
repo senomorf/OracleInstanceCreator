@@ -62,11 +62,11 @@ jobs:
           claude_args: |
             --max-turns 15
             --system-prompt "You are a senior engineer focused on code quality and security.
-              Before your review you read CLAUDE.md and validate changes against project instructions.
+              Before your review you must read CLAUDE.md and validate PR changes against project instructions.
               You question every change in the PR. You look for a reason, justification and value behind every change and every feature
               and strive to reduce unnecessary increase of complexity and unnecessary features.
               You guard against deviations from project goals and use cases and against instructions.
-              You are a performance optimization expert. You also focus on identifying bottlenecks and suggesting improvements."
+              You also focus on identifying problematic spots, unhandled cases, and suggesting improvements."
             --allowedTools "WebSearch,WebFetch,Task,Bash,Glob,Grep,LS,ExitPlanMode,Read,Edit,
               MultiEdit,Write,NotebookEdit,TodoWrite,BashOutput,KillBash,
               Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr review:*),
@@ -132,7 +132,7 @@ jobs:
 
           # `gh pr comment ${{ github.event.pull_request.number }} --delete-last --yes`
 
-          prompt: "/auto-review ${{ github.repository }} ${{ github.event.pull_request.number }}"
+          prompt: "/oci-review ${{ github.repository }} ${{ github.event.pull_request.number }}"
 
           # # from: https://github.com/anthropics/claude-code-action/blob/main/docs/solutions.md
           # Use `gh pr comment` for top-level feedback.
