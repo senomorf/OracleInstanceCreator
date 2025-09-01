@@ -124,7 +124,6 @@ count_actual_instances() {
     
     # Check A1.Flex instance
     local a1_instance_id
-    local a1_error_output
     if a1_instance_id=$(oci_cmd compute instance list \
         --compartment-id "$comp_id" \
         --display-name "${A1_FLEX_CONFIG[DISPLAY_NAME]}" \
