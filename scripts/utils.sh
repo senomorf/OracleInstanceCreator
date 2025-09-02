@@ -76,7 +76,8 @@ log_error() {
 }
 
 log_debug() {
-    if [[ "${DEBUG:-}" == "true" ]]; then
+    # Use INTERNAL_DEBUG for internal script logging
+    if [[ "${INTERNAL_DEBUG:-}" == "true" ]]; then
         if [[ "${LOG_FORMAT:-}" == "json" ]]; then
             log_json "debug" "$*"
         else
@@ -318,8 +319,9 @@ oci_cmd_debug() {
     local status
     local oci_args=()
     
-    # Add debug flag if DEBUG is enabled
-    if [[ "${DEBUG:-}" == "true" ]]; then
+    # Add debug flag if OCI CLI debug is specifically enabled
+    # This controls verbose Oracle API request/response logging
+    if [[ "${OCI_CLI_DEBUG:-}" == "true" ]]; then
         oci_args+=("--debug")
     fi
     

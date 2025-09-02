@@ -5,7 +5,7 @@ OCI free-tier automation: parallel A1.Flex (ARM) + E2.1.Micro (AMD) provisioning
 ## Architecture
 
 ```text
-.github/workflows/free-tier-creation.yml  # Single-job parallel execution
+.github/workflows/infrastructure-deployment.yml  # Single-job parallel execution
 scripts/
 ├── launch-parallel.sh      # Orchestrates both shapes with env injection
 ├── launch-instance.sh      # Shape-agnostic creation + transient retry
@@ -33,11 +33,14 @@ oci_args+=("--read-timeout" "15")           # 15s vs 60s default
 
 ### Error Classification (scripts/utils.sh)
 ```bash
-CAPACITY: "capacity|quota|limit|429"        → Schedule retry (treat as success)
-DUPLICATE: "already exists"                 → Success
+CAPACITY: "capacity|quota|limit|429"        → Schedule retry (treat as SUCCESS, exit 0)
+DUPLICATE: "already exists"                 → SUCCESS (exit 0)
 TRANSIENT: "internal|network|timeout"       → Retry 3x same AD, then next AD
-AUTH/CONFIG: "authentication|invalid.*ocid" → Alert user immediately
+AUTH/CONFIG: "authentication|invalid.*ocid" → Alert user immediately (FAILURE)
 ```
+
+### CRITICAL: NO RETRIES ON VALID ORACLE API RESPONSES
+**NEVER RETRY on 429/capacity/limit errors in scheduled workflows!** These are valid Oracle responses that indicate expected operational conditions. The whole point of this implementation is minimal Oracle API interaction through short scheduled runs. Only retry on actual API call failures (timeouts, network errors) - NOT on successful API responses indicating capacity constraints.
 
 ### Parallel Execution Pattern (launch-parallel.sh)
 ```bash
@@ -73,8 +76,9 @@ wait  # 55s timeout protection
 # Syntax validation
 bash -n scripts/*.sh
 
-# Debug mode
-DEBUG=true ./scripts/launch-instance.sh
+# Debug modes
+INTERNAL_DEBUG=true ./scripts/launch-instance.sh                    # Internal script logging only
+OCI_CLI_DEBUG=true INTERNAL_DEBUG=true ./scripts/launch-instance.sh # Full debug with Oracle API logs
 ```
 
 ## Environment Variables
@@ -90,16 +94,20 @@ RETRY_WAIT_TIME="30"                     # Seconds between AD attempts
 TRANSIENT_ERROR_MAX_RETRIES="3"         # Retry count per AD
 TRANSIENT_ERROR_RETRY_DELAY="15"        # Seconds between retries
 
-# Debugging
-DEBUG="true"                             # Enable verbose OCI CLI output
+# Debugging - Dual Debug Flag Support
+OCI_CLI_DEBUG="false"                    # Enable OCI CLI --debug flag (verbose Oracle API logs)
+INTERNAL_DEBUG="true"                    # Enable internal script debug logging (execution flow)
 LOG_FORMAT="text"                        # or "json" for structured logging
 ```
 
 ## Workflow Testing
 
 ```bash
-# Manual run with debug
-gh workflow run free-tier-creation.yml --field verbose_output=true --field send_notifications=false
+# Manual run with internal debug only (recommended)
+gh workflow run infrastructure-deployment.yml --field internal_debug=true --field send_notifications=false
+
+# Manual run with both debug flags (verbose Oracle API logs)
+gh workflow run infrastructure-deployment.yml --field oci_cli_debug=true --field internal_debug=true --field send_notifications=false
 
 # Monitor execution
 gh run watch <run-id>
@@ -142,6 +150,53 @@ gh run watch <run-id>
 - **Proxy inheritance**: Environment variables auto-propagate to parallel processes
 - **Shape requirements**: Flexible shapes need `--shape-config` parameter
 - **Never remove** OCI CLI optimization flags - they provide 93% performance improvement
+
+## Workflow Success/Failure Logic
+
+### CRITICAL: Expected Oracle Responses = Workflow SUCCESS
+The workflow is designed to treat expected Oracle Cloud operational responses as **successful completions**, not failures:
+
+- **Exit Code 0**: Instance creation succeeded OR expected constraints encountered
+- **Exit Code 2**: Oracle capacity constraints (SUCCESS - will retry on schedule)  
+- **Exit Code 5**: User free tier limits reached (SUCCESS - expected behavior)
+- **Exit Code 6**: Oracle API rate limiting (SUCCESS - expected behavior)
+
+### Only Genuine Errors = Workflow FAILURE  
+- **Exit Code 1**: Authentication/configuration errors (requires user action)
+- **Exit Code 3**: System/network failures (requires investigation)
+- **Exit Code 124**: Execution timeout (indicates performance issues)
+
+### Debug Workflow Execution
+Enhanced debugging with dual flag support:
+
+**Internal Debug** (`internal_debug=true` - default enabled):
+- Pre-launch environment validation
+- Detailed exit code interpretation  
+- Post-launch state verification
+- Comprehensive execution tracing
+- Script decision logic and state changes
+
+**OCI CLI Debug** (`oci_cli_debug=true` - default disabled):
+- Verbose Oracle API request/response logs
+- Detailed Oracle Cloud service communication
+- High verbosity Oracle API debugging
+- **Performance impact**: Significantly increases log volume
+
+**Recommended**: Use `internal_debug=true` only for normal troubleshooting. Only enable `oci_cli_debug=true` when investigating Oracle API-specific issues.
+
+This prevents false workflow failures and unwanted notifications for normal Oracle Cloud operational conditions.
+
+## Debug Flags Usage
+
+The workflow supports two independent debug flags for optimal debugging experience:
+
+**Flag Defaults:**
+- **Scheduled runs**: `internal_debug=true`, `oci_cli_debug=false` (clean logs, optimal performance)
+- **Manual runs**: `internal_debug=true`, `oci_cli_debug=false` (clean logs by default)
+
+**When to Use Each Flag:**
+- **`internal_debug=true`**: Default setting for script execution flow, state changes, decision logic
+- **`oci_cli_debug=true`**: Only when investigating Oracle API-specific issues (high log volume)
 
 ## Telegram Notification Policy
 

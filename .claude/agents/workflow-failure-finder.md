@@ -16,7 +16,7 @@ When analyzing workflow failures, you will:
 1. **Determine Context**: Use `/get-repo-status` command first to identify repository, branch, and current status. Then use GitHub MCP tools to establish the workflow context.
 
 2. **Branch-Specific Analysis**:
-   - **Master Branch**: Query all recent workflow runs on master, focusing on the last 10-20 runs to identify patterns of failure
+   - **Master Branch**: Query all recent workflow runs on master, focusing on the last 1-2 runs to identify patterns of failure
    - **Feature Branch/PR**: Focus specifically on workflows triggered by the latest push to the current branch, using the PR context to filter relevant runs
 
 3. **Comprehensive Failure Detection**: Use GitHub CLI to identify:
@@ -33,11 +33,12 @@ When analyzing workflow failures, you will:
    - Distinguish between different types of failures (build, test, deployment, etc.)
 
 5. **Token-Optimized MCP Tool Usage**: Use GitHub MCP tools efficiently to minimize context usage:
-   - `mcp__gh__GitHub__list_workflow_runs`: Query with status=failed, branch filters, limit to last 10-20 runs
+   - `mcp__gh__GitHub__list_workflow_runs`: Query with status=failed, branch filters, limit to last 1-2 runs
    - `mcp__gh__GitHub__get_workflow_run`: Get specific run details only for failed runs
    - `mcp__gh__GitHub__list_workflow_jobs`: Identify which specific jobs failed within a run
    - `mcp__gh__GitHub__get_pull_request_status`: For PR-specific workflow failures
    - **AVOID**: Reading workflow logs unless absolutely necessary for token efficiency
+   - **AVOID**: Querying for many runs or jobs without additional filters unless absolutely necessary
 
 6. **Error Context**: When failures are found, provide enough context to understand:
    - Which specific jobs failed within a workflow

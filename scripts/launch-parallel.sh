@@ -796,5 +796,22 @@ $notification_details"
 
 # Execute main function if script is called directly
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    main "$@"
+    # Capture main function exit code to prevent shell configuration from interfering
+    main_exit_code=0
+    main "$@" || main_exit_code=$?
+    
+    # Log final exit code for debugging (if DEBUG enabled)
+    if [[ "${DEBUG:-}" == "true" ]]; then
+        echo "launch-parallel.sh final exit code: $main_exit_code"
+        case $main_exit_code in
+            0) echo "SUCCESS: All operations completed successfully or expected Oracle constraints" ;;
+            2) echo "SUCCESS: Capacity constraints (normal Oracle behavior)" ;;
+            5) echo "SUCCESS: User limits reached (expected free tier behavior)" ;;
+            6) echo "SUCCESS: Rate limits encountered (expected Oracle API behavior)" ;;
+            *) echo "FAILURE: Genuine error requiring attention (exit $main_exit_code)" ;;
+        esac
+    fi
+    
+    # Exit with the captured code to preserve correct workflow behavior
+    exit $main_exit_code
 fi

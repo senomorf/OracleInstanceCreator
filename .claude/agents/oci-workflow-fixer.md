@@ -75,8 +75,8 @@ https://docs.oracle.com/en-us/iaas/tools/oci-cli/latest/oci_cli_docs/cmdref/comp
 
 #### **Search for OCI CLI Improvements**
 ```
-mcp__doc__firecrawl__firecrawl_search("OCI CLI compute instance optimization best practices", limit=5)
-mcp__doc__firecrawl__firecrawl_search("Oracle Cloud CLI performance flags timeout configuration", limit=3)
+mcp__doc__firecrawl__firecrawl_search("OCI CLI compute instance optimization best practices", limit=2)
+mcp__doc__firecrawl__firecrawl_search("Oracle Cloud CLI performance flags timeout configuration", limit=1)
 ```
 
 #### **Extract Specific Command Details**
