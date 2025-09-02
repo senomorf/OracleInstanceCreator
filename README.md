@@ -1,14 +1,14 @@
 # OCI Free Tier Automation
 
-[![GitHub Actions](https://github.com/senomorf/OracleInstanceCreator/workflows/OCI%20Free%20Tier%20Creation/badge.svg)](https://github.com/senomorf/OracleInstanceCreator/actions)
+[![GitHub Actions](https://github.com/senomorf/OracleInstanceCreator/workflows/OCI%20Free%20Tier%20-%20ARM%20+%20AMD%20Instance%20Hunter/badge.svg)](https://github.com/senomorf/OracleInstanceCreator/actions)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![OCI Compatible](https://img.shields.io/badge/OCI-Compatible-orange.svg)](https://cloud.oracle.com/)
 
-Automated provisioning of Oracle Cloud free-tier instances (A1.Flex ARM & E2.1.Micro AMD) via GitHub Actions with parallel execution and smart retry logic.
+Automated hunting for Oracle Cloud free-tier instances (A1.Flex ARM & E2.1.Micro AMD) via GitHub Actions with intelligent parallel execution and adaptive retry logic.
 
 ## Features
 
-- **Parallel provisioning** of both instance types (~20s execution)
+- **Parallel instance hunting** for both ARM and AMD shapes (~20s execution)
 - **Multi-AD cycling** for higher success rates  
 - **Smart error handling** with transient error retry
 - **Telegram notifications** with complete instance details (IDs, IPs, connection info)
@@ -23,7 +23,7 @@ Automated provisioning of Oracle Cloud free-tier instances (A1.Flex ARM & E2.1.M
 1. **Fork this repository**
 2. **Add GitHub Secrets** (see Configuration below)
 3. **Enable GitHub Actions** in repository settings
-4. **Run workflow**: Actions → "OCI Free Tier Creation" → Run workflow
+4. **Run workflow**: Actions → "OCI Free Tier - ARM + AMD Instance Hunter" → Run workflow
 
 ## Configuration
 
@@ -53,7 +53,7 @@ Automated provisioning of Oracle Cloud free-tier instances (A1.Flex ARM & E2.1.M
 
 ## How It Works
 
-The system executes both instance types in parallel for maximum efficiency:
+The system hunts both instance shapes simultaneously using separate jobs for optimal success rates:
 
 **A1.Flex (ARM Architecture)**
 - 4 OCPUs, 24GB RAM
@@ -65,13 +65,13 @@ The system executes both instance types in parallel for maximum efficiency:
 - Instance name: `e2-micro-sg`
 - Traditional x86 architecture
 
-Each shape independently cycles through configured availability domains until successful or capacity unavailable. The parallel approach maximizes your chances of securing at least one free-tier instance.
+Each shape runs in its own job, independently cycling through configured availability domains until successful or capacity unavailable. The separate jobs approach maximizes your chances of securing at least one free-tier instance while leveraging unlimited GitHub Actions minutes.
 
-## Deployment Scenarios
+## Hunt Results
 
-- **Both instances created**: Complete success ✅✅
-- **One instance created**: Partial success ✅⏳  
-- **Zero instances created**: Retry on schedule ⏳⏳
+- **Both instances hunted**: Complete success 🎯🎯
+- **One instance hunted**: Partial success 🎯⏳  
+- **Zero instances hunted**: Retry on schedule ⏳⏳
 
 ## Troubleshooting
 
@@ -79,15 +79,15 @@ Each shape independently cycles through configured availability domains until su
 |-------|----------|
 | **Capacity errors** | Normal - Oracle has limited free resources. Workflow retries automatically every 6 hours |
 | **Authentication failed** | Verify API key fingerprint and private key format in GitHub Secrets |
-| **Timeout after 55s** | Built-in protection to prevent excessive GitHub Actions billing |
+| **Long execution times** | Optimized for public repositories with unlimited GitHub Actions minutes |
 | **"Out of host capacity"** | Expected during peak usage - not a configuration error |
 | **Proxy connection issues** | Check proxy URL format: `username:password@proxy.example.com:3128` |
 
 ## Performance
 
 - **Execution time**: ~20-25 seconds for both shapes in parallel
-- **GitHub Actions billing**: Single job execution (1 minute minimum charge)
-- **Monthly usage**: ~2,880 minutes at default */6 schedule ⚠️ EXCEEDS FREE TIER
+- **GitHub Actions billing**: FREE for public repositories (unlimited minutes)
+- **Monthly usage**: Unlimited execution time available
 - **Optimization**: 93% improvement via OCI CLI flag tuning
 
 ## Local Testing

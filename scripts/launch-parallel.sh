@@ -336,10 +336,10 @@ main() {
     start_timer "parallel_execution"
     log_info "Starting parallel OCI instance creation for both free tier shapes"
 
-    # Set timeout to prevent exceeding 60 seconds (GitHub Actions billing boundary)
-    # Using constant defined in constants.sh for consistency and maintainability
-    local timeout_seconds=$GITHUB_ACTIONS_BILLING_TIMEOUT
-    log_debug "Setting execution timeout to ${timeout_seconds}s to avoid 2-minute billing"
+    # Set reasonable timeout for parallel execution - no billing constraints for public repos
+    # Allow sufficient time for both Oracle shapes to complete with proper retry handling
+    local timeout_seconds=300  # 5 minutes - generous timeout for optimal success rates
+    log_debug "Setting execution timeout to ${timeout_seconds}s for reliable Oracle API completion"
 
     # Create temporary files for process communication with secure permissions
     umask 077             # Ensure secure permissions (owner only)

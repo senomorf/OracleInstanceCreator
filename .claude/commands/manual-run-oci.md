@@ -8,7 +8,7 @@ model: claude-sonnet-4-20250514
 
 - GitHub Repository: !`git remote get-url origin | sed 's/^.*://;s/.git$//'`
 
-!`gh workflow run infrastructure-deployment.yml --ref $(git branch --show-current) -f check_existing_instance=false -f adaptive_scheduling=false -f region_optimization=false`
+!`gh workflow run infrastructure-deployment.yml --ref $(git branch --show-current) -f check_existing_instance=false -f adaptive_scheduling=false -f region_optimization=false -f script_debug=true -f oci_api_debug=false`
 
 - Workflow run id: !`gh run list --workflow infrastructure-deployment.yml --branch $(git branch --show-current) --limit 1 --json databaseId --jq '.[0].databaseId' | awk '{print($0)}' | column`
 

@@ -5,7 +5,7 @@ OCI free-tier automation: parallel A1.Flex (ARM) + E2.1.Micro (AMD) provisioning
 ## Architecture
 
 ```text
-.github/workflows/infrastructure-deployment.yml  # Single-job parallel execution
+.github/workflows/infrastructure-deployment.yml  # Separate jobs (default) with unified fallback option
 scripts/
 ├── launch-parallel.sh      # Orchestrates both shapes with env injection
 ├── launch-instance.sh      # Shape-agnostic creation + transient retry
@@ -47,7 +47,7 @@ AUTH/CONFIG: "authentication|invalid.*ocid" → Alert user immediately (FAILURE)
 # Environment variable injection per shape:
 (export OCI_SHAPE="VM.Standard.A1.Flex" OCI_OCPUS="4" OCI_MEMORY_IN_GBS="24"; ./launch-instance.sh) &
 (export OCI_SHAPE="VM.Standard.E2.1.Micro" OCI_OCPUS="" OCI_MEMORY_IN_GBS=""; ./launch-instance.sh) &
-wait  # 55s timeout protection
+wait  # Generous timeout for optimal success rate
 ```
 
 ### Shape Configurations
@@ -77,8 +77,8 @@ wait  # 55s timeout protection
 bash -n scripts/*.sh
 
 # Debug modes
-INTERNAL_DEBUG=true ./scripts/launch-instance.sh                    # Internal script logging only
-OCI_CLI_DEBUG=true INTERNAL_DEBUG=true ./scripts/launch-instance.sh # Full debug with Oracle API logs
+SCRIPT_DEBUG=true ./scripts/launch-instance.sh                      # Internal script logging only
+OCI_API_DEBUG=true SCRIPT_DEBUG=true ./scripts/launch-instance.sh   # Full debug with Oracle API logs
 ```
 
 ## Environment Variables
@@ -95,8 +95,8 @@ TRANSIENT_ERROR_MAX_RETRIES="3"         # Retry count per AD
 TRANSIENT_ERROR_RETRY_DELAY="15"        # Seconds between retries
 
 # Debugging - Dual Debug Flag Support
-OCI_CLI_DEBUG="false"                    # Enable OCI CLI --debug flag (verbose Oracle API logs)
-INTERNAL_DEBUG="true"                    # Enable internal script debug logging (execution flow)
+OCI_API_DEBUG="false"                    # Enable Oracle API --debug flag (verbose API logs)
+SCRIPT_DEBUG="true"                      # Enable internal script debug logging (execution flow)
 LOG_FORMAT="text"                        # or "json" for structured logging
 ```
 
@@ -104,15 +104,15 @@ LOG_FORMAT="text"                        # or "json" for structured logging
 
 ```bash
 # Manual run with internal debug only (recommended)
-gh workflow run infrastructure-deployment.yml --field internal_debug=true --field send_notifications=false
+gh workflow run infrastructure-deployment.yml --field script_debug=true --field send_notifications=false
 
 # Manual run with both debug flags (verbose Oracle API logs)
-gh workflow run infrastructure-deployment.yml --field oci_cli_debug=true --field internal_debug=true --field send_notifications=false
+gh workflow run infrastructure-deployment.yml --field oci_api_debug=true --field script_debug=true --field send_notifications=false
 
 # Monitor execution
 gh run watch <run-id>
 
-# Expected timing: ~20-25 seconds total, ~14 seconds parallel phase
+# Expected timing: Optimized for success rate rather than speed (public repo = unlimited minutes)
 ```
 
 ## Error Patterns
@@ -145,8 +145,8 @@ gh run watch <run-id>
 ## Gotchas
 
 - **Capacity errors are EXPECTED** (treat as success - retry on schedule)
-- **Single job strategy** (avoid matrix = 2x GitHub Actions cost)
-- **55-second timeout protection** prevents 2-minute billing
+- **Separate job strategy** (improved maintainability - unlimited minutes for public repos)
+- **Generous timeout strategy** allows optimal Oracle API completion
 - **Proxy inheritance**: Environment variables auto-propagate to parallel processes
 - **Shape requirements**: Flexible shapes need `--shape-config` parameter
 - **Never remove** OCI CLI optimization flags - they provide 93% performance improvement
@@ -169,20 +169,20 @@ The workflow is designed to treat expected Oracle Cloud operational responses as
 ### Debug Workflow Execution
 Enhanced debugging with dual flag support:
 
-**Internal Debug** (`internal_debug=true` - default enabled):
+**Script Debug** (`script_debug=true` - default enabled):
 - Pre-launch environment validation
 - Detailed exit code interpretation  
 - Post-launch state verification
 - Comprehensive execution tracing
 - Script decision logic and state changes
 
-**OCI CLI Debug** (`oci_cli_debug=true` - default disabled):
+**Oracle API Debug** (`oci_api_debug=true` - default disabled):
 - Verbose Oracle API request/response logs
 - Detailed Oracle Cloud service communication
 - High verbosity Oracle API debugging
 - **Performance impact**: Significantly increases log volume
 
-**Recommended**: Use `internal_debug=true` only for normal troubleshooting. Only enable `oci_cli_debug=true` when investigating Oracle API-specific issues.
+**Recommended**: Use `script_debug=true` only for normal troubleshooting. Only enable `oci_api_debug=true` when investigating Oracle API-specific issues.
 
 This prevents false workflow failures and unwanted notifications for normal Oracle Cloud operational conditions.
 
@@ -191,38 +191,38 @@ This prevents false workflow failures and unwanted notifications for normal Orac
 The workflow supports two independent debug flags for optimal debugging experience:
 
 **Flag Defaults:**
-- **Scheduled runs**: `internal_debug=true`, `oci_cli_debug=false` (clean logs, optimal performance)
-- **Manual runs**: `internal_debug=true`, `oci_cli_debug=false` (clean logs by default)
+- **Scheduled runs**: `script_debug=true`, `oci_api_debug=false` (clean logs, optimal performance)
+- **Manual runs**: `script_debug=true`, `oci_api_debug=false` (clean logs by default)
 
 **When to Use Each Flag:**
-- **`internal_debug=true`**: Default setting for script execution flow, state changes, decision logic
-- **`oci_cli_debug=true`**: Only when investigating Oracle API-specific issues (high log volume)
+- **`script_debug=true`**: Default setting for script execution flow, state changes, decision logic
+- **`oci_api_debug=true`**: Only when investigating Oracle API-specific issues (high log volume)
 
 ## Telegram Notification Policy
 
-### Instance Hunting Goal:
+### Instance Hunting Goal: <!-- markdownlint-disable-line MD026 -->
 **NOTIFY: Any instance created OR critical failures**  
 **SILENT: Zero instances created (regardless of reason)**
 
-### SEND notifications for:
+### SEND notifications for: <!-- markdownlint-disable-line MD026 -->
 - ✅ **SUCCESS**: ANY instance created with complete details (ID, IPs, AD, connection info)
 - ❌ **FAILURE**: Authentication/configuration errors requiring user action  
 - 🚨 **CRITICAL**: System failures requiring immediate attention
 - ❌ **ERROR**: Unexpected failures needing investigation
 
-### DO NOT send notifications for:
+### DO NOT send notifications for: <!-- markdownlint-disable-line MD026 -->
 - ❌ Zero instances created due to capacity constraints (expected operational condition)
 - ❌ Zero instances created due to user limits (expected free tier behavior)
 - ❌ Zero instances created due to rate limiting (expected Oracle API behavior)
 - ❌ Instance already exists (expected when using state management cache)
 - ❌ Preflight check completion (operational validation)
 
-### Key Behaviors:
+### Key Behaviors: <!-- markdownlint-disable-line MD026 -->
 - **Mixed scenarios**: A1 success + E2 limits = **DETAILED NOTIFICATION** (hunting success with A1 details)
 - **Both constrained**: A1 capacity + E2 capacity = **NO NOTIFICATION** (zero instances)
 - **Pure success**: A1 success + E2 success = **DETAILED NOTIFICATION** (both instances with full details)
 
-### Notification Content:
+### Notification Content: <!-- markdownlint-disable-line MD026 -->
 Success notifications include complete instance details:
 - Instance OCID for API access
 - Public & Private IP addresses
@@ -230,10 +230,10 @@ Success notifications include complete instance details:
 - Instance state and shape information
 - Ready-to-use connection details
 
-### Philosophy:
+### Philosophy: <!-- markdownlint-disable-line MD026 -->
 **Hunt for successful instance creation. Celebrate any hunting success, stay silent on zero results.**
 
-### Configuration Variables:
+### Configuration Variables: <!-- markdownlint-disable-line MD026 -->
 - `PREFLIGHT_SEND_TEST_NOTIFICATION=true`: Forces preflight check to send test notification (default: false)
 - Preflight checks use silent `/getMe` API endpoint for connectivity validation without generating notifications
 
@@ -257,9 +257,35 @@ Linters should catch bugs, security issues, and functional problems - not enforc
 - **OCID validation**: `^ocid1\.type\.[a-z0-9-]*\.[a-z0-9-]*\..+`
 - **Proxy formats**: `username:password@proxy.example.com:3128` (URL encoding supported)
 
+## GitHub Actions Minutes Policy
+
+### Public vs Private Repository Implications
+
+**This repository is PUBLIC** - GitHub Actions provides **unlimited minutes** for public repositories using standard runners.
+
+- **Public repositories**: Unlimited GitHub Actions minutes (current setup)
+- **Private repositories**: Limited to plan allowance (2,000 minutes/month for free tier)
+
+### Architecture Implications
+
+- **No artificial timeout constraints**: Jobs can run as long as needed for optimal success
+- **Separate jobs as default**: Better maintainability without cost concerns
+- **Unified job fallback**: Available via workflow input for specific use cases
+- **Focus on Oracle API optimization**: Rather than GitHub Actions execution time
+
+### If Repository Becomes Private
+
+If this repository is made private, consider:
+1. Enable unified job strategy as default (reduce minute consumption)
+2. Re-implement timeout constraints from previous implementation
+3. Monitor monthly minute usage via GitHub billing dashboard
+4. Consider upgrading to paid plan if needed for automation requirements
+
 ## Performance Indicators
 
-- **<20 seconds**: Optimal performance ✅
-- **20-30 seconds**: Acceptable with minor delays
-- **30-60 seconds**: Investigate - config/network issues ⚠️
-- **>1 minute**: Critical - missing optimizations ❌
+**Note**: Performance expectations updated for public repository (unlimited GitHub Actions minutes)
+
+- **<30 seconds**: Excellent performance ✅
+- **30-60 seconds**: Good performance with proper Oracle API handling
+- **1-3 minutes**: Acceptable with retry logic and capacity constraints
+- **>5 minutes**: Investigate - likely configuration or network issues ❌

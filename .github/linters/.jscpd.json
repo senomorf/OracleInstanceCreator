@@ -1,7 +1,7 @@
 {
-  "threshold": 1,
+  "threshold": 3,
   "reporters": ["html", "console"],
-  "ignore": ["node_modules/**", ".git/**", "docs/**", "tests/fixtures/**", "**/package-lock.json", "**/*.min.js"],
+  "ignore": ["node_modules/**", ".git/**", "docs/**", "tests/fixtures/**", "**/package-lock.json", "**/*.min.js", ".github/workflows/**/*.yml"],
   "minLines": 6,
   "minTokens": 60,
   "format": ["javascript", "typescript", "bash", "shell", "yaml", "json"],

@@ -4,14 +4,14 @@ This document provides comprehensive information about configuring and using the
 
 ## Overview
 
-The Oracle Instance Creator has been refactored into a modular architecture with separate scripts for different functions, structured configuration files, and enhanced error handling.
+The Oracle Instance Creator uses a separate jobs architecture where ARM and AMD instance hunting run in parallel jobs, with intelligent retry logic and enhanced error handling.
 
 ## Architecture
 
 ### File Structure
 ```
 ├── .github/workflows/
-│   └── free-tier-creation.yml     # Simplified GitHub Actions workflow
+│   └── infrastructure-deployment.yml  # Separate jobs workflow for parallel hunting
 ├── scripts/
 │   ├── setup-oci.sh               # OCI CLI configuration
 │   ├── setup-ssh.sh               # SSH key configuration
@@ -29,12 +29,14 @@ The Oracle Instance Creator has been refactored into a modular architecture with
 
 ### Workflow Jobs
 
-The GitHub Actions workflow consists of two focused jobs with secure credential handling:
+The GitHub Actions workflow uses separate jobs strategy for optimal performance:
 
-1. **create-instance**: Validates configuration, sets up environment, and creates OCI instance (all in one job for security)
-2. **notify-on-failure**: Sends failure notifications if the main job fails
+1. **Hunt A1.Flex ARM Instance**: Dedicated job for ARM instance hunting
+2. **Hunt E2.Micro AMD Instance**: Dedicated job for AMD instance hunting  
+3. **Hunt Both Shapes (Unified Strategy)**: Fallback unified job option
+4. **Send Hunt Results**: Consolidated notifications from all jobs
 
-**Security Note**: All credential operations occur within a single job to avoid storing sensitive data in artifacts between jobs.
+**Architecture**: Each job runs independently with shared setup via composite actions, maximizing parallel execution while maintaining security.
 
 ## Configuration
 

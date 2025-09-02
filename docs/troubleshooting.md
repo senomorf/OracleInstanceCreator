@@ -177,10 +177,10 @@ This is **NOT a failure** - it's Oracle's normal response when free tier capacit
 Check for these performance indicators in logs:
 ```
 # Good performance (17-18 seconds):
-[INFO] Instance launch completed in 17.234 seconds
+[INFO] ⏱️ instance_hunt completed: 17.234s
 
 # Poor performance (>30 seconds indicates issues):
-[INFO] Instance launch completed in 67.891 seconds
+[INFO] ⏱️ instance_hunt completed: 67.891s
 ```
 
 **Solutions:**
@@ -274,9 +274,9 @@ get_exit_code_for_error_type "UNKNOWN"      # Should return 1
 #### Check Optimization Flags
 ```bash
 # Verify critical performance optimizations are active
-export DEBUG=true
-./scripts/launch-parallel.sh 2>&1 | grep "Executing OCI debug command"
-# Should show: --no-retry --connection-timeout 5 --read-timeout 15
+export SCRIPT_DEBUG=true
+./scripts/launch-parallel.sh 2>&1 | grep "OCI command"
+# Should show: (flags: --no-retry --connection-timeout 5 --read-timeout 15)
 ```
 
 #### Monitor Race Conditions  
@@ -389,8 +389,8 @@ LOG_FORMAT: "json"  # For structured logs
 #### Log Analysis Tips
 1. **Timing Analysis**:
    ```
-   Good: [INFO] Instance launch completed in 17.234 seconds
-   Poor: [INFO] Instance launch completed in 67.891 seconds
+   Good: [INFO] ⏱️ instance_hunt completed: 17.234s
+   Poor: [INFO] ⏱️ instance_hunt completed: 67.891s
    ```
 
 2. **Error Pattern Recognition**:
@@ -528,7 +528,7 @@ done
 - Changed exit codes
 
 **Expected Changes (Normal):**
-- More consistent timeout handling (55 seconds exactly)
+- More generous timeout handling for optimal Oracle API completion
 - Better process cleanup (no zombie processes)
 - Improved error classification
 - Enhanced result file handling

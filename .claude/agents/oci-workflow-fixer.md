@@ -43,14 +43,14 @@ AUTH/CONFIG: "authentication|invalid.*ocid" → Alert user immediately
 ```bash
 (export OCI_SHAPE="VM.Standard.A1.Flex" OCI_OCPUS="4" OCI_MEMORY_IN_GBS="24"; ./launch-instance.sh) &
 (export OCI_SHAPE="VM.Standard.E2.1.Micro" OCI_OCPUS="" OCI_MEMORY_IN_GBS=""; ./launch-instance.sh) &
-wait  # 55s timeout protection
+wait  # Generous timeout for optimal success rate
 ```
 
-### **Performance Benchmarks**
-- **<20 seconds**: Optimal performance ✅
-- **20-30 seconds**: Acceptable with minor delays
-- **30-60 seconds**: Investigate - config/network issues ⚠️
-- **>1 minute**: Critical - missing optimizations ❌
+### **Performance Benchmarks** (Updated for Public Repository)
+- **<30 seconds**: Excellent performance ✅
+- **30-60 seconds**: Good performance with proper Oracle API handling
+- **1-3 minutes**: Acceptable with retry logic and capacity constraints
+- **>5 minutes**: Investigate - likely configuration or network issues ❌
 
 ### **Telegram Notification Policy**
 - **NOTIFY**: Any instance created OR critical failures
