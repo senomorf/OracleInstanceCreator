@@ -200,29 +200,29 @@ The workflow supports two independent debug flags for optimal debugging experien
 
 ## Telegram Notification Policy
 
-### Instance Hunting Goal:
+### Instance Hunting Goal: <!-- markdownlint-disable-line MD026 -->
 **NOTIFY: Any instance created OR critical failures**  
 **SILENT: Zero instances created (regardless of reason)**
 
-### SEND notifications for:
+### SEND notifications for: <!-- markdownlint-disable-line MD026 -->
 - ✅ **SUCCESS**: ANY instance created with complete details (ID, IPs, AD, connection info)
 - ❌ **FAILURE**: Authentication/configuration errors requiring user action  
 - 🚨 **CRITICAL**: System failures requiring immediate attention
 - ❌ **ERROR**: Unexpected failures needing investigation
 
-### DO NOT send notifications for:
+### DO NOT send notifications for: <!-- markdownlint-disable-line MD026 -->
 - ❌ Zero instances created due to capacity constraints (expected operational condition)
 - ❌ Zero instances created due to user limits (expected free tier behavior)
 - ❌ Zero instances created due to rate limiting (expected Oracle API behavior)
 - ❌ Instance already exists (expected when using state management cache)
 - ❌ Preflight check completion (operational validation)
 
-### Key Behaviors:
+### Key Behaviors: <!-- markdownlint-disable-line MD026 -->
 - **Mixed scenarios**: A1 success + E2 limits = **DETAILED NOTIFICATION** (hunting success with A1 details)
 - **Both constrained**: A1 capacity + E2 capacity = **NO NOTIFICATION** (zero instances)
 - **Pure success**: A1 success + E2 success = **DETAILED NOTIFICATION** (both instances with full details)
 
-### Notification Content:
+### Notification Content: <!-- markdownlint-disable-line MD026 -->
 Success notifications include complete instance details:
 - Instance OCID for API access
 - Public & Private IP addresses
@@ -230,10 +230,10 @@ Success notifications include complete instance details:
 - Instance state and shape information
 - Ready-to-use connection details
 
-### Philosophy:
+### Philosophy: <!-- markdownlint-disable-line MD026 -->
 **Hunt for successful instance creation. Celebrate any hunting success, stay silent on zero results.**
 
-### Configuration Variables:
+### Configuration Variables: <!-- markdownlint-disable-line MD026 -->
 - `PREFLIGHT_SEND_TEST_NOTIFICATION=true`: Forces preflight check to send test notification (default: false)
 - Preflight checks use silent `/getMe` API endpoint for connectivity validation without generating notifications
 

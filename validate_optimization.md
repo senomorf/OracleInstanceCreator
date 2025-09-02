@@ -99,7 +99,7 @@ set_success_variable "test-ocid" "test-ad"
 
 ## Advanced Scheduling Patterns
 
-### Current Multi-Schedule Configuration:
+### Current Multi-Schedule Configuration: <!-- markdownlint-disable-line MD026 -->
 ```yaml
 schedule:
   # Off-peak aggressive: 2-7am UTC (10am-3pm SGT)
@@ -110,12 +110,12 @@ schedule:
   - cron: "*/20 1-6 * * 6,0"  # 18 runs per weekend (6 hours × 3/hour)
 ```
 
-### Regional Optimization Examples:
+### Regional Optimization Examples: <!-- markdownlint-disable-line MD026 -->
 - **Singapore (ap-singapore-1):** Business hours 9am-6pm SGT = 1am-10am UTC
 - **US East (us-east-1):** Business hours 9am-6pm EST = 2pm-11pm UTC
 - **Europe (eu-frankfurt-1):** Business hours 9am-6pm CET = 8am-5pm UTC
 
-### Intelligence Features:
+### Intelligence Features: <!-- markdownlint-disable-line MD026 -->
 - **Context awareness:** Knows if running during off-peak, peak, or weekend
 - **Pattern learning:** Accumulates success data for optimization
 - **Regional adaptation:** Auto-detects region and adjusts recommendations
