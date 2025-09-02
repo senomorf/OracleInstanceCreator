@@ -17,4 +17,4 @@ rules:
     min-spaces-from-content: 1
   indentation:
     spaces: 2
-  trailing-spaces: enable
+  trailing-spaces: disable
