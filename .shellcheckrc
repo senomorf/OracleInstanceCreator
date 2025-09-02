@@ -8,3 +8,4 @@ disable=SC2181  # Check exit code directly (sometimes $? is clearer)
 disable=SC1091  # Not following sourced files (external dependencies)
 disable=SC2155  # Declare and assign separately (sometimes combined is clearer)
 disable=SC2001  # See if you can use ${variable//search/replace} instead of sed
+disable=SC2329  # Function never invoked (test functions called indirectly)
