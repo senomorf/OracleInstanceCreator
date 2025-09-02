@@ -46,7 +46,6 @@ Perform a comprehensive code review for the OCI automation project covering both
 - Verify adequate test coverage
 - Review test quality and edge cases
 - Check for missing test scenarios
-- All PR workflows with checks, linters pass successfully
 
 ### 5. Documentation
 - Ensure code is properly documented
@@ -57,7 +56,6 @@ Perform a comprehensive code review for the OCI automation project covering both
 - Verify capacity errors return 0 (expected) vs 1 (real failure)
 - OCI CLI optimization to minimize Oracle API calls
 - Optimal connect/receive timeouts
-- PR workflows using OCI must be passing (assume credentials and configurations and valid)
 - Distinguish capacity issues from real failures
 
 ## Review Process
@@ -68,12 +66,3 @@ Medium, High and Critical severity issues must be addressed before merging the P
 Low severity issues should be either addressed before merging the PR or GitHub issues must be created for each issue found in review.
 
 Note: The PR branch is already checked out in the current working directory.
-
-Submit your review result by posting new PR comment or updating existing PR comment, for example:
-`gh pr comment $1 --edit-last --create-if-none --body "your review result contents"`.
-
-Then leave a top-level feedback of your PR comment using `gh pr review`, providing link to PR comment. For that do one of the following:
-- approve, providing a link to the PR comment for more details, for example:
-  `gh pr review $1 --approve --body "Looks good, but consider adding more tests. See <PR COMMENT URL> PR comment for details."`
-- request changes if there are issues of medium priority or higher, providing a link to the PR comment for more details, for example:
-  `gh pr review $1 --request-changes --body "Needs changes to address performance issues. See <PR COMMENT URL> PR comment for details."`
