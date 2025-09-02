@@ -27,6 +27,9 @@ on:
     # Saturdays and Sundays - lower weekend cloud usage, no overlap with weekday tiers
     - cron: "*/10 * * * 6,0"
 
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
   workflow_dispatch:
     inputs:
       verbose_output:
