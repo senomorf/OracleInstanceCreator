@@ -77,17 +77,21 @@ Your analysis output MUST follow this exact format for downstream agents:
 - **Benchmark Compliance**: [pass/fail vs CLAUDE.md standards]
 - **Optimization Opportunities**: [specific recommendations]
 
-### Recommended Actions
-**For oci-workflow-fixer agent:**
-- [ ] [Specific task with file paths and line numbers]
-- [ ] [Specific configuration change needed]
+### Initial Fix Directions (For Expert Validation)
+**For oci-workflow-fixer specialist:**
+- **Potential Approach**: [Initial suggestion based on analysis]
+- **Domain Expertise Required**: [OCI-specific knowledge needed for validation]
+- **Alternative Considerations**: [Other approaches the OCI expert should evaluate]
+- **Performance Context**: [Benchmark targets and optimization opportunities]
 
-**For pr-check-fixer agent:**  
-- [ ] [Specific linter rule to disable/configure]
-- [ ] [Specific file modification needed]
+**For pr-check-fixer specialist:**  
+- **Potential Approach**: [Initial configuration recommendation]
+- **Configuration Areas**: [Specific linter files and rules to examine with expert knowledge]
+- **Project Policy Alignment**: [How suggestions align with CLAUDE.md linter policy]
+- **Expert Validation Required**: [Specialized CI/linter knowledge needed]
 
-### Handoff Instructions
-[Detailed context and implementation guidance for the receiving agent]
+### Context for Implementation Specialists
+[Detailed background, constraints, and considerations that domain experts should factor into their implementation decisions. Include any edge cases, performance requirements, or integration concerns that require specialized knowledge to address properly.]
 ```
 
 **OUTPUT REQUIREMENTS**:
