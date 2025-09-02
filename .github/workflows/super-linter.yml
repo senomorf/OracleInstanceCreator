@@ -45,4 +45,3 @@ jobs:
           SHELLCHECK_OPTS: "--severity=warning --exclude=SC2034,SC2086,SC2181,SC1091,SC2155,SC2001,SC2329"
           # Configure markdownlint to disable style-only rules
           MARKDOWNLINT_CONFIG_FILE: ".github/linters/.markdownlint.json"
-          MARKDOWN_CONFIG_FILE: ".github/linters/.markdownlint.json"
