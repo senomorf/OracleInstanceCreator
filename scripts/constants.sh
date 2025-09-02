@@ -11,17 +11,13 @@ fi
 readonly OIC_CONSTANTS_LOADED=true
 
 # =============================================================================
-# GITHUB ACTIONS & BILLING OPTIMIZATION
+# EXECUTION TIMING CONFIGURATION
 # =============================================================================
 
-# GitHub Actions billing optimization - stay under 60s to avoid 2-minute billing boundary
-# CRITICAL BILLING LOGIC: GitHub Actions bills in whole-minute increments
-# - Jobs under 60s = 1 minute billing
-# - Jobs 60s+ = 2 minutes billing 
-# - 55s timeout provides 5s safety buffer for job cleanup/finalization
-# - This optimization saves 50% cost vs 2-minute billing (1 min vs 2 min per run)
-readonly GITHUB_ACTIONS_BILLING_TIMEOUT=55
-readonly GITHUB_ACTIONS_BILLING_BOUNDARY=60
+# NOTE: GitHub Actions minutes are FREE for public repositories
+# Private repositories have billing constraints, but public repos have unlimited minutes
+# Removed artificial timeout constraints to optimize for success rate over execution time
+# Focus is now on Oracle API reliability rather than GitHub Actions billing optimization
 
 # Process monitoring and cleanup timing
 readonly PROCESS_MONITORING_INTERVAL=1  # Monitor processes every 1s for responsive detection without excessive CPU usage
@@ -207,7 +203,6 @@ get_retry_config() {
 
 # Export commonly used constants as environment variables
 export_common_constants() {
-    export GITHUB_ACTIONS_TIMEOUT_SECONDS="$GITHUB_ACTIONS_BILLING_TIMEOUT"
     export OCI_CONNECTION_TIMEOUT="$OCI_CONNECTION_TIMEOUT_SECONDS"
     export OCI_READ_TIMEOUT="$OCI_READ_TIMEOUT_SECONDS"
     export SECURE_UMASK="$UMASK_SECURE"
@@ -221,11 +216,7 @@ export_common_constants() {
 validate_constants() {
     local errors=0
     
-    # Basic sanity checks
-    if [[ "$GITHUB_ACTIONS_BILLING_TIMEOUT" -ge "$GITHUB_ACTIONS_BILLING_BOUNDARY" ]]; then
-        echo "ERROR: GITHUB_ACTIONS_BILLING_TIMEOUT ($GITHUB_ACTIONS_BILLING_TIMEOUT) must be less than boundary ($GITHUB_ACTIONS_BILLING_BOUNDARY)" >&2
-        ((errors++))
-    fi
+    # Basic sanity checks - billing timeout validation removed as constraints no longer apply
     
     if [[ "$OCI_CONNECTION_TIMEOUT_SECONDS" -ge "$OCI_READ_TIMEOUT_SECONDS" ]]; then
         echo "ERROR: OCI_CONNECTION_TIMEOUT_SECONDS should be less than OCI_READ_TIMEOUT_SECONDS" >&2

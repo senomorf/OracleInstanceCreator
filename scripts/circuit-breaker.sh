@@ -3,8 +3,11 @@
 # Circuit breaker pattern for Oracle Cloud Availability Domain failures
 # Prevents wasted attempts on consistently failing ADs by tracking failure patterns
 
-source "$(dirname "$0")/utils.sh"
-source "$(dirname "$0")/constants.sh"
+# Get the directory containing this script (works when sourced)
+CIRCUIT_BREAKER_DIR="$(dirname "${BASH_SOURCE[0]}")"
+
+source "$CIRCUIT_BREAKER_DIR/utils.sh"
+source "$CIRCUIT_BREAKER_DIR/constants.sh"
 
 # Circuit breaker constants
 readonly MAX_CONSECUTIVE_FAILURES=3

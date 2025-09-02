@@ -113,16 +113,12 @@ calculate_monthly_usage() {
     # Total: ~1068 runs/month = ~1068 minutes (assuming 1 min per run)
     
     local monthly_runs=$((22 * weekday_runs + 4 * weekend_runs))
-    local monthly_minutes=$monthly_runs  # Each run bills as 1 minute minimum
     
-    echo "Expected monthly usage: $monthly_runs runs = $monthly_minutes minutes"
+    echo "Expected monthly usage: $monthly_runs runs"
     
-    if [[ $monthly_minutes -lt 2000 ]]; then
-        echo "✅ Within free tier limit (2000 minutes)"
-        echo "Buffer remaining: $((2000 - monthly_minutes)) minutes"
-    else
-        echo "❌ Exceeds free tier limit by $((monthly_minutes - 2000)) minutes"
-    fi
+    # Note: This repository is public - unlimited GitHub Actions minutes
+    echo "ℹ️  Public repository: Unlimited GitHub Actions minutes (no billing constraints)"
+    echo "📊 For reference: $monthly_runs runs/month (private repos would need <2000 minutes for free tier)"
 }
 
 # Recommend schedule adjustments based on success patterns

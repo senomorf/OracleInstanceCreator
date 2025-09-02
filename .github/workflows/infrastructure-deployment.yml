@@ -2,43 +2,29 @@
 permissions:
   contents: read
   actions: write
-name: 'OCI Orchestrator - Infrastructure Deployment'
+name: 'OCI Free Tier - ARM + AMD Instance Hunter'
 
 on:
   # schedule:
-    # Four-tier optimization: 10-min off-peak weekdays, 15-min peak weekdays, 10-min all weekend (~4,320 runs/month)
-    # All schedules target Oracle Cloud optimal availability windows for maximum deployment success
+    # Intelligent 4-tier scheduling optimized for Oracle Cloud availability patterns
+    # Off-peak: 10min intervals | Peak: 15min intervals | ~4,320 hunts/month
+    # - cron: "*/10 2-7 * * 1-5"   # UTC 2-7am (off-peak weekdays)
+    # - cron: "*/10 20-23 * * 1-5" # UTC 20-23 (late night weekdays)  
+    # - cron: "*/15 8-19 * * 1-5"  # UTC 8-19 (peak weekdays)
+    # - cron: "*/10 * * * 6,0"     # All day weekends
 
-    # TIER 1: Off-peak aggressive (10-min intervals) - Weekdays only
-    # UTC 2-7am = SGT 10am-3pm (lunch/afternoon lull)
-    # UTC 2-7am = EST 9pm-2am (late evening/night)
-    # UTC 2-7am = CET 3-8am (early morning)
-    # - cron: "*/10 2-7 * * 1-5"
-
-    # TIER 2: Late night/early morning (10-min intervals) - Weekdays only
-    # UTC 20-23 = SGT 4am-7am (early morning low usage, avoids overlap with TIER 1)
-    # - cron: "*/10 20-23 * * 1-5"
-
-    # TIER 3: Peak hours conservative (15-min intervals) - Weekdays only
-    # UTC 8-19 = SGT 4pm-3am (business end + evening peak)
-    # - cron: "*/15 8-19 * * 1-5"
-
-    # TIER 4: Weekend boost (10-min intervals all day)
-    # Saturdays and Sundays - lower weekend cloud usage, no overlap with weekday tiers
-    # - cron: "*/10 * * * 6,0"
-
-  # Disabled to avoid triggering 429 on OCI API; also failures confuse claude when trying to fix PR checks
+  # Disabled: Prevents OCI API rate limits during PR testing
   # pull_request:
   #  types: [opened, synchronize, ready_for_review, reopened]
 
   workflow_dispatch:
     inputs:
-      oci_cli_debug:
-        description: 'Enable OCI CLI --debug flag (verbose Oracle API request/response logs)'
+      oci_api_debug:
+        description: 'Enable Oracle API debug logging (verbose request/response logs)'
         type: boolean
         default: false
-      internal_debug:
-        description: 'Enable internal script debug logging (execution flow, decisions, state changes)'
+      script_debug:
+        description: 'Enable script execution debug logging (flow, decisions, state changes)'
         type: boolean
         default: true
       send_notifications:
@@ -61,109 +47,81 @@ on:
         description: 'Use region-specific timing optimization'
         type: boolean
         default: true
+      job_strategy:
+        description: 'Job execution strategy: separate jobs (default) or unified single job'
+        type: choice
+        options:
+          - separate
+          - unified
+        default: separate
 
-# Prevent multiple workflow runs from overlapping to avoid billing spikes
+# Prevent overlapping hunts (public repo = unlimited minutes, but avoid OCI rate limits)
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
 
 env:
-  # Global environment variables - Dual debug flag support
-  OCI_CLI_DEBUG: ${{ inputs.oci_cli_debug && 'true' || 'false' }}
-  INTERNAL_DEBUG: ${{ github.event_name == 'workflow_dispatch' && (inputs.internal_debug && 'true' || 'false') || 'true' }}
+  # Dual debug strategy: API debug (verbose) + Script debug (execution flow)
+  OCI_API_DEBUG: ${{ inputs.oci_api_debug && 'true' || 'false' }}
+  SCRIPT_DEBUG: ${{ github.event_name == 'workflow_dispatch' && (inputs.script_debug && 'true' || 'false') || 'true' }}
   ENABLE_NOTIFICATIONS: ${{ github.event_name == 'workflow_dispatch' && (inputs.send_notifications && 'true' || 'false') || 'true' }}
-  # Enable instance check by default to use state management cache (can be overridden manually)
+  # Use state management cache to avoid redundant instance creation
   CHECK_EXISTING_INSTANCE: ${{ github.event_name == 'workflow_dispatch' && (inputs.check_existing_instance && 'true' || 'false') || 'true' }}
-  # Suppress OCI CLI file permissions warnings
+  # Suppress OCI CLI permission warnings in GitHub Actions environment
   OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: true
 
 jobs:
-  create-instance:
-    # Skip execution if instance already created (unless manually reset)
-    if: ${{ github.event.repository.vars.INSTANCE_CREATED != 'true' || inputs.reset_success_state }}
+  # =============================================================================
+  # SEPARATE JOBS STRATEGY (DEFAULT) - Run A1.Flex and E2.Micro in separate jobs
+  # =============================================================================
+
+  create-a1-flex:
+    if: ${{ (github.event.repository.vars.INSTANCE_CREATED != 'true' || inputs.reset_success_state) && (inputs.job_strategy != 'unified' || github.event_name != 'workflow_dispatch') }}
     runs-on: ubuntu-latest
-    name: Deploy OCI Infrastructure (Parallel Orchestration)
+    name: Hunt A1.Flex ARM Instance
     permissions:
       contents: read
     outputs:
-      script_exit_code: ${{ steps.launch-instances.outputs.script_exit_code }}
+      arm_hunt_exit_code: ${{ steps.launch-instance.outputs.script_exit_code }}
+      arm_instance_created: ${{ steps.launch-instance.outputs.instance_created }}
     env:
-      # Common configuration for both shapes
-      # Multi-AD support: Use comma-separated list for multiple ADs
-      # Example: "fgaj:AP-SINGAPORE-1-AD-1,fgaj:AP-SINGAPORE-1-AD-2,fgaj:AP-SINGAPORE-1-AD-3"
+      # Common OCI configuration
       OCI_AD: "fgaj:AP-SINGAPORE-1-AD-1"
-      OCI_SHAPE: "VM.Standard.A1.Flex"  # Default shape for validation (overridden per-shape)
-      OCI_OCPUS: "4"  # Default for A1.Flex validation (overridden per-shape)
-      OCI_MEMORY_IN_GBS: "24"  # Default for A1.Flex validation (overridden per-shape)
-      INSTANCE_DISPLAY_NAME: "default-instance"  # Default for validation (overridden per-shape)
       ASSIGN_PUBLIC_IP: "false"
       OPERATING_SYSTEM: "Oracle Linux"
       OS_VERSION: "9"
-      # Boot volume configuration
       BOOT_VOLUME_SIZE: "50"
-      # Instance recovery and compatibility settings
       RECOVERY_ACTION: "RESTORE_INSTANCE"
       LEGACY_IMDS_ENDPOINTS: "false"
-      # Retry configuration for multi-AD cycling
       RETRY_WAIT_TIME: "30"
-      # Transient error retry configuration (retries on same AD before cycling)
       TRANSIENT_ERROR_MAX_RETRIES: "3"
       TRANSIENT_ERROR_RETRY_DELAY: "15"
-      # Instance verification timeout configuration
       INSTANCE_VERIFY_MAX_CHECKS: "5"
       INSTANCE_VERIFY_DELAY: "30"
-      # Logging configuration (set to 'json' for structured logging)
       LOG_FORMAT: "text"
-      # Cached image IDs for supported instance shapes (update periodically)
       OCI_CACHED_OL9_ARM_IMAGE: "ocid1.image.oc1.ap-singapore-1.aaaaaaaalp5rsngiayobfuxdurkxdnxgkxjfbfqpl2c2yebldjmrrtbrteaa"
-      OCI_CACHED_OL9_AMD_IMAGE: "ocid1.image.oc1.ap-singapore-1.aaaaaaaaejbjeklplq5qnuqlbpfszmywma2j3en3o7pjuc7jidtifmqgqxlq"
-      # Adaptive scheduling configuration
       ENABLE_ADAPTIVE_SCHEDULING: ${{ inputs.adaptive_scheduling && 'true' || 'true' }}
       ENABLE_REGION_OPTIMIZATION: ${{ inputs.region_optimization && 'true' || 'true' }}
       ORACLE_REGION_TIMEZONE: "Asia/Singapore"
       SUCCESS_TRACKING_ENABLED: "true"
     steps:
-      - name: Checkout repository
+      - name: Checkout OCI Hunter Code
         uses: actions/checkout@v5
 
-      - name: Get current date for cache key
-        id: get-date
-        run: echo "date=$(date '+%Y-%m-%d')" >> "$GITHUB_OUTPUT"
-
-      - name: Generate cache key with region hash
-        id: cache-key
-        env:
-          OCI_REGION: ${{ secrets.OCI_REGION }}
-        run: |
-          # Generate region hash to match state-manager.sh logic
-          region_hash=$(echo -n "$OCI_REGION" | sha256sum | cut -d' ' -f1 | head -c 8)
-          echo "key=oci-instances-${region_hash}-v1-${{ steps.get-date.outputs.date }}" >> "$GITHUB_OUTPUT"
-          echo "prefix=oci-instances-${region_hash}-v1-" >> "$GITHUB_OUTPUT"
-
-      - name: Restore instance state cache
-        id: cache-instance-state
-        uses: actions/cache/restore@v4.2.4
+      - name: Configure OCI + Telegram
+        id: setup-oci
+        uses: ./.github/actions/setup-oci
         with:
-          path: .cache/oci-state
-          key: ${{ steps.cache-key.outputs.key }}
-          restore-keys: |
-            ${{ steps.cache-key.outputs.prefix }}
-            oci-instances-
-
-      - name: Initialize state manager
-        env:
-          CACHE_ENABLED: "true"
-          CACHE_TTL_HOURS: "24"
-          CACHE_DATE_KEY: ${{ steps.get-date.outputs.date }}
-        run: |
-          # Make state manager executable
-          chmod +x scripts/state-manager.sh
-          # Initialize state management system
-          ./scripts/state-manager.sh init
-          # Show current state for debugging
-          if [[ "$INTERNAL_DEBUG" == "true" ]]; then
-            ./scripts/state-manager.sh print
-          fi
+          oci_user_ocid: ${{ secrets.OCI_USER_OCID }}
+          oci_key_fingerprint: ${{ secrets.OCI_KEY_FINGERPRINT }}
+          oci_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
+          oci_region: ${{ secrets.OCI_REGION }}
+          oci_private_key: ${{ secrets.OCI_PRIVATE_KEY }}
+          oci_proxy_url: ${{ secrets.OCI_PROXY_URL }}
+          instance_ssh_public_key: ${{ secrets.INSTANCE_SSH_PUBLIC_KEY }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_user_id: ${{ secrets.TELEGRAM_USER_ID }}
+          enable_notifications: ${{ env.ENABLE_NOTIFICATIONS }}
 
       - name: Reset success state if requested
         if: inputs.reset_success_state
@@ -182,83 +140,282 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./scripts/adaptive-scheduler.sh
 
-      - name: Create requirements file
-        run: echo "oci-cli" > requirements.txt
+      - name: ARM Hunt Debug Info
+        if: env.SCRIPT_DEBUG == 'true'
+        run: |
+          echo "=== A1.FLEX PRE-LAUNCH DEBUG INFO ==="
+          echo "Workflow: ${{ github.workflow }}"
+          echo "Run ID: ${{ github.run_id }}"
+          echo "Job Strategy: ${{ inputs.job_strategy || 'separate (default)' }}"
+          echo "Shape: A1.Flex (ARM)"
+          echo "OCI_API_DEBUG: $OCI_API_DEBUG"
+          echo "SCRIPT_DEBUG: $SCRIPT_DEBUG"
+          echo "ENABLE_NOTIFICATIONS: $ENABLE_NOTIFICATIONS"
+          echo "=== END A1.FLEX PRE-LAUNCH DEBUG ==="
 
-      - name: Setup Python
-        uses: actions/setup-python@v5.6.0
-        id: setup-python
-        with:
-          python-version: '3.x'
-          check-latest: false
-          update-environment: true
-
-      - name: Cache pip dependencies
-        uses: actions/cache@v4.2.4
-        with:
-          path: |
-            ~/.cache/pip
-            ~/.local/lib
-            ~/.local/bin
-          key: ${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-pip-
-
-      - name: Install OCI CLI
-        run: pip install --user -r requirements.txt
-
-      - name: Production preflight check
+      - name: Hunt A1.Flex ARM Instance
+        id: launch-instance
         env:
-          OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
-          OCI_KEY_FINGERPRINT: ${{ secrets.OCI_KEY_FINGERPRINT }}
-          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
-          OCI_REGION: ${{ secrets.OCI_REGION }}
-          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
           OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
           OCI_SUBNET_ID: ${{ secrets.OCI_SUBNET_ID }}
           OCI_IMAGE_ID: ${{ secrets.OCI_IMAGE_ID }}
-          OCI_PROXY_URL: ${{ secrets.OCI_PROXY_URL }}
-          INSTANCE_SSH_PUBLIC_KEY: ${{ secrets.INSTANCE_SSH_PUBLIC_KEY }}
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
-        run: ./scripts/preflight-check.sh
-
-      - name: Setup OCI and SSH configuration (parallel)
-        env:
-          OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
-          OCI_KEY_FINGERPRINT: ${{ secrets.OCI_KEY_FINGERPRINT }}
           OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
           OCI_REGION: ${{ secrets.OCI_REGION }}
-          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
           OCI_PROXY_URL: ${{ secrets.OCI_PROXY_URL }}
-          INSTANCE_SSH_PUBLIC_KEY: ${{ secrets.INSTANCE_SSH_PUBLIC_KEY }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
+          CACHE_ENABLED: "true"
+          CACHE_TTL_HOURS: "24"
         run: |
-          # Run setup scripts in parallel for faster execution
-          ./scripts/setup-oci.sh &
-          ./scripts/setup-ssh.sh &
-          wait
+          echo "=== LAUNCHING A1.FLEX INSTANCE ==="
+          echo "Timestamp: $(date -Iseconds)"
 
-      - name: Pre-Launch Debug Info
-        if: env.INTERNAL_DEBUG == 'true'
+          set -euo pipefail
+          script_exit_code=0
+          instance_created="false"
+
+          # Run A1.Flex specific launcher
+          if ./scripts/launch-a1-flex.sh; then
+            script_exit_code=0
+            instance_created="true"
+            echo "A1.Flex instance creation: SUCCESS"
+          else
+            script_exit_code=$?
+            echo "A1.Flex instance creation failed with exit code: $script_exit_code"
+          fi
+
+          echo "script_exit_code=$script_exit_code" >> $GITHUB_OUTPUT
+          echo "instance_created=$instance_created" >> $GITHUB_OUTPUT
+
+          # Workflow success logic for expected Oracle responses
+          if [[ $script_exit_code -eq 0 || $script_exit_code -eq 2 || $script_exit_code -eq 5 || $script_exit_code -eq 6 ]]; then
+            echo "WORKFLOW SUCCESS: Exit code $script_exit_code indicates expected behavior"
+            exit 0
+          else
+            echo "WORKFLOW FAILURE: Exit code $script_exit_code indicates genuine failure"
+            exit $script_exit_code
+          fi
+
+      - name: ARM Hunt Results Debug
+        if: always() && env.SCRIPT_DEBUG == 'true'
         run: |
-          echo "=== PRE-LAUNCH DEBUG INFO ==="
+          echo "=== A1.FLEX POST-LAUNCH DEBUG INFO ==="
+          echo "Step conclusion: ${{ steps.launch-instance.conclusion }}"
+          echo "Script exit code: ${{ steps.launch-instance.outputs.script_exit_code }}"
+          echo "Instance created: ${{ steps.launch-instance.outputs.instance_created }}"
+          echo "Timestamp: $(date -Iseconds)"
+          echo "=== END A1.FLEX POST-LAUNCH DEBUG ==="
+
+      - name: Cache ARM Hunt State
+        if: always()
+        uses: actions/cache/save@v4.2.4
+        with:
+          path: .cache/oci-state
+          key: ${{ steps.setup-oci.outputs.cache_key }}-a1-flex
+
+  create-e2-micro:
+    if: ${{ (github.event.repository.vars.INSTANCE_CREATED != 'true' || inputs.reset_success_state) && (inputs.job_strategy != 'unified' || github.event_name != 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    name: Hunt E2.Micro AMD Instance
+    permissions:
+      contents: read
+    outputs:
+      amd_hunt_exit_code: ${{ steps.launch-instance.outputs.script_exit_code }}
+      amd_instance_created: ${{ steps.launch-instance.outputs.instance_created }}
+    env:
+      # Common OCI configuration
+      OCI_AD: "fgaj:AP-SINGAPORE-1-AD-1"
+      ASSIGN_PUBLIC_IP: "false"
+      OPERATING_SYSTEM: "Oracle Linux"
+      OS_VERSION: "9"
+      BOOT_VOLUME_SIZE: "50"
+      RECOVERY_ACTION: "RESTORE_INSTANCE"
+      LEGACY_IMDS_ENDPOINTS: "false"
+      RETRY_WAIT_TIME: "30"
+      TRANSIENT_ERROR_MAX_RETRIES: "3"
+      TRANSIENT_ERROR_RETRY_DELAY: "15"
+      INSTANCE_VERIFY_MAX_CHECKS: "5"
+      INSTANCE_VERIFY_DELAY: "30"
+      LOG_FORMAT: "text"
+      OCI_CACHED_OL9_AMD_IMAGE: "ocid1.image.oc1.ap-singapore-1.aaaaaaaaejbjeklplq5qnuqlbpfszmywma2j3en3o7pjuc7jidtifmqgqxlq"
+      ENABLE_ADAPTIVE_SCHEDULING: ${{ inputs.adaptive_scheduling && 'true' || 'true' }}
+      ENABLE_REGION_OPTIMIZATION: ${{ inputs.region_optimization && 'true' || 'true' }}
+      ORACLE_REGION_TIMEZONE: "Asia/Singapore"
+      SUCCESS_TRACKING_ENABLED: "true"
+    steps:
+      - name: Checkout OCI Hunter Code
+        uses: actions/checkout@v5
+
+      - name: Configure OCI + Telegram
+        id: setup-oci
+        uses: ./.github/actions/setup-oci
+        with:
+          oci_user_ocid: ${{ secrets.OCI_USER_OCID }}
+          oci_key_fingerprint: ${{ secrets.OCI_KEY_FINGERPRINT }}
+          oci_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
+          oci_region: ${{ secrets.OCI_REGION }}
+          oci_private_key: ${{ secrets.OCI_PRIVATE_KEY }}
+          oci_proxy_url: ${{ secrets.OCI_PROXY_URL }}
+          instance_ssh_public_key: ${{ secrets.INSTANCE_SSH_PUBLIC_KEY }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_user_id: ${{ secrets.TELEGRAM_USER_ID }}
+          enable_notifications: ${{ env.ENABLE_NOTIFICATIONS }}
+
+      - name: AMD Hunt Debug Info
+        if: env.SCRIPT_DEBUG == 'true'
+        run: |
+          echo "=== E2.MICRO PRE-LAUNCH DEBUG INFO ==="
           echo "Workflow: ${{ github.workflow }}"
           echo "Run ID: ${{ github.run_id }}"
-          echo "Event: ${{ github.event_name }}"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "OCI_CLI_DEBUG: $OCI_CLI_DEBUG"
-          echo "INTERNAL_DEBUG: $INTERNAL_DEBUG"
+          echo "Job Strategy: ${{ inputs.job_strategy || 'separate (default)' }}"
+          echo "Shape: E2.1.Micro (AMD)"
+          echo "OCI_API_DEBUG: $OCI_API_DEBUG"
+          echo "SCRIPT_DEBUG: $SCRIPT_DEBUG"
           echo "ENABLE_NOTIFICATIONS: $ENABLE_NOTIFICATIONS"
-          echo "Current directory: $(pwd)"
-          echo "Available scripts:"
-          ls -la scripts/
-          echo "launch-parallel.sh permissions:"
-          ls -la scripts/launch-parallel.sh
-          echo "Shell options before execution:"
-          set +x || true  # Don't fail if -x not set
-          echo "=== END PRE-LAUNCH DEBUG ==="
+          echo "=== END E2.MICRO PRE-LAUNCH DEBUG ==="
 
-      - name: Launch OCI Instances (Parallel)
+      - name: Hunt E2.Micro AMD Instance
+        id: launch-instance
+        env:
+          OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
+          OCI_SUBNET_ID: ${{ secrets.OCI_SUBNET_ID }}
+          OCI_IMAGE_ID: ${{ secrets.OCI_IMAGE_ID }}
+          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+          OCI_PROXY_URL: ${{ secrets.OCI_PROXY_URL }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
+          CACHE_ENABLED: "true"
+          CACHE_TTL_HOURS: "24"
+        run: |
+          echo "=== LAUNCHING E2.MICRO INSTANCE ==="
+          echo "Timestamp: $(date -Iseconds)"
+
+          set -euo pipefail
+          script_exit_code=0
+          instance_created="false"
+
+          # Run E2.1.Micro specific launcher
+          if ./scripts/launch-e2-micro.sh; then
+            script_exit_code=0
+            instance_created="true"
+            echo "E2.1.Micro instance creation: SUCCESS"
+          else
+            script_exit_code=$?
+            echo "E2.1.Micro instance creation failed with exit code: $script_exit_code"
+          fi
+
+          echo "script_exit_code=$script_exit_code" >> $GITHUB_OUTPUT
+          echo "instance_created=$instance_created" >> $GITHUB_OUTPUT
+
+          # Workflow success logic for expected Oracle responses
+          if [[ $script_exit_code -eq 0 || $script_exit_code -eq 2 || $script_exit_code -eq 5 || $script_exit_code -eq 6 ]]; then
+            echo "WORKFLOW SUCCESS: Exit code $script_exit_code indicates expected behavior"
+            exit 0
+          else
+            echo "WORKFLOW FAILURE: Exit code $script_exit_code indicates genuine failure"
+            exit $script_exit_code
+          fi
+
+      - name: AMD Hunt Results Debug
+        if: always() && env.SCRIPT_DEBUG == 'true'
+        run: |
+          echo "=== E2.MICRO POST-LAUNCH DEBUG INFO ==="
+          echo "Step conclusion: ${{ steps.launch-instance.conclusion }}"
+          echo "Script exit code: ${{ steps.launch-instance.outputs.script_exit_code }}"
+          echo "Instance created: ${{ steps.launch-instance.outputs.instance_created }}"
+          echo "Timestamp: $(date -Iseconds)"
+          echo "=== END E2.MICRO POST-LAUNCH DEBUG ==="
+
+      - name: Cache AMD Hunt State
+        if: always()
+        uses: actions/cache/save@v4.2.4
+        with:
+          path: .cache/oci-state
+          key: ${{ steps.setup-oci.outputs.cache_key }}-e2-micro
+
+  # UNIFIED JOB STRATEGY (fallback): Both shapes in single job
+
+  create-instance-unified:
+    if: ${{ (github.event.repository.vars.INSTANCE_CREATED != 'true' || inputs.reset_success_state) && (inputs.job_strategy == 'unified' && github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    name: Hunt Both Shapes (Unified Strategy)
+    permissions:
+      contents: read
+    outputs:
+      unified_hunt_exit_code: ${{ steps.launch-instances.outputs.script_exit_code }}
+    env:
+      # Common configuration for both shapes in unified mode
+      OCI_AD: "fgaj:AP-SINGAPORE-1-AD-1"
+      OCI_SHAPE: "VM.Standard.A1.Flex"  # Default shape for validation
+      OCI_OCPUS: "4"
+      OCI_MEMORY_IN_GBS: "24"
+      INSTANCE_DISPLAY_NAME: "default-instance"
+      ASSIGN_PUBLIC_IP: "false"
+      OPERATING_SYSTEM: "Oracle Linux"
+      OS_VERSION: "9"
+      BOOT_VOLUME_SIZE: "50"
+      RECOVERY_ACTION: "RESTORE_INSTANCE"
+      LEGACY_IMDS_ENDPOINTS: "false"
+      RETRY_WAIT_TIME: "30"
+      TRANSIENT_ERROR_MAX_RETRIES: "3"
+      TRANSIENT_ERROR_RETRY_DELAY: "15"
+      INSTANCE_VERIFY_MAX_CHECKS: "5"
+      INSTANCE_VERIFY_DELAY: "30"
+      LOG_FORMAT: "text"
+      OCI_CACHED_OL9_ARM_IMAGE: "ocid1.image.oc1.ap-singapore-1.aaaaaaaalp5rsngiayobfuxdurkxdnxgkxjfbfqpl2c2yebldjmrrtbrteaa"
+      OCI_CACHED_OL9_AMD_IMAGE: "ocid1.image.oc1.ap-singapore-1.aaaaaaaaejbjeklplq5qnuqlbpfszmywma2j3en3o7pjuc7jidtifmqgqxlq"
+      ENABLE_ADAPTIVE_SCHEDULING: ${{ inputs.adaptive_scheduling && 'true' || 'true' }}
+      ENABLE_REGION_OPTIMIZATION: ${{ inputs.region_optimization && 'true' || 'true' }}
+      ORACLE_REGION_TIMEZONE: "Asia/Singapore"
+      SUCCESS_TRACKING_ENABLED: "true"
+    steps:
+      - name: Checkout OCI Hunter Code
+        uses: actions/checkout@v5
+
+      - name: Configure OCI + Telegram
+        id: setup-oci
+        uses: ./.github/actions/setup-oci
+        with:
+          oci_user_ocid: ${{ secrets.OCI_USER_OCID }}
+          oci_key_fingerprint: ${{ secrets.OCI_KEY_FINGERPRINT }}
+          oci_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
+          oci_region: ${{ secrets.OCI_REGION }}
+          oci_private_key: ${{ secrets.OCI_PRIVATE_KEY }}
+          oci_proxy_url: ${{ secrets.OCI_PROXY_URL }}
+          instance_ssh_public_key: ${{ secrets.INSTANCE_SSH_PUBLIC_KEY }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_user_id: ${{ secrets.TELEGRAM_USER_ID }}
+          enable_notifications: ${{ env.ENABLE_NOTIFICATIONS }}
+
+      - name: Reset success state if requested
+        if: inputs.reset_success_state
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Resetting INSTANCE_CREATED variable to allow new deployment attempts"
+          gh variable set INSTANCE_CREATED --body "false" || true
+          gh variable delete INSTANCE_CREATED_INFO 2>/dev/null || true
+          gh variable delete SUCCESS_PATTERN_DATA 2>/dev/null || true
+          echo "Success state and pattern tracking reset completed"
+
+      - name: Adaptive Scheduling Intelligence
+        if: env.ENABLE_ADAPTIVE_SCHEDULING == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/adaptive-scheduler.sh
+
+      - name: Unified Hunt Debug Info
+        if: env.SCRIPT_DEBUG == 'true'
+        run: |
+          echo "=== UNIFIED INSTANCE HUNT DEBUG ==="
+          echo "Hunt Targets: ARM (4 OCPU) + AMD (1 OCPU)"
+          echo "Strategy: Unified Parallel (${{ github.run_id }})"
+          echo "API Debug: $OCI_API_DEBUG | Script Debug: $SCRIPT_DEBUG"
+          echo "Notifications: $ENABLE_NOTIFICATIONS"
+          echo "=== END UNIFIED HUNT DEBUG ==="
+
+      - name: Hunt Both Shapes (Unified Parallel)
         id: launch-instances
         env:
           OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
@@ -271,91 +428,47 @@ jobs:
           TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
           CACHE_ENABLED: "true"
           CACHE_TTL_HOURS: "24"
-          CACHE_DATE_KEY: ${{ steps.get-date.outputs.date }}
         run: |
-          # CRITICAL: This step MUST NOT fail on expected Oracle responses
-          # Expected responses (capacity/limits/rate limits) should return exit 0
-          # Only auth/config/system errors should return non-zero
-          #
-          # DEBUG FLAGS:
-          # - OCI_CLI_DEBUG: Controls --debug flag for Oracle API request/response logging
-          # - INTERNAL_DEBUG: Controls internal script logging and workflow debug steps
-          
-          echo "=== LAUNCHING OCI INSTANCES (PARALLEL) ==="
+          echo "=== LAUNCHING OCI INSTANCES (UNIFIED PARALLEL) ==="
           echo "Timestamp: $(date -Iseconds)"
-          
-          # Execute with explicit exit code capture and debugging
+
           set -euo pipefail
           script_exit_code=0
-          
-          # Run the script and capture its exit code
+
+          # Run the unified parallel script
           ./scripts/launch-parallel.sh || script_exit_code=$?
-          
+
           echo "=== LAUNCH SCRIPT COMPLETED ==="
           echo "Script exit code: $script_exit_code"
           echo "Timestamp: $(date -Iseconds)"
-          
-          # Log exit code interpretation for debugging
-          case $script_exit_code in
-            0) echo "SUCCESS: Instance creation succeeded or expected Oracle constraints encountered" ;;
-            1) echo "FAILURE: General error or authentication/configuration issue" ;;
-            2) echo "SUCCESS: Oracle capacity constraint (expected, will retry on schedule)" ;;  
-            5) echo "SUCCESS: User limit reached (expected free tier behavior)" ;;
-            6) echo "SUCCESS: Rate limit encountered (expected Oracle API behavior)" ;;
-            124) echo "TIMEOUT: Script execution timeout" ;;
-            *) echo "UNKNOWN: Unexpected exit code $script_exit_code" ;;
-          esac
-          
-          # Workflow success logic: Only fail on genuine errors (not expected Oracle responses)
+
+          echo "script_exit_code=$script_exit_code" >> $GITHUB_OUTPUT
+
+          # Workflow success logic for expected Oracle responses
           if [[ $script_exit_code -eq 0 || $script_exit_code -eq 2 || $script_exit_code -eq 5 || $script_exit_code -eq 6 ]]; then
             echo "WORKFLOW SUCCESS: Exit code $script_exit_code indicates expected behavior"
-            # Store exit code for post-launch debug step
-            echo "script_exit_code=$script_exit_code" >> $GITHUB_OUTPUT
-            exit 0  # Ensure workflow step succeeds for expected scenarios
+            exit 0
           else
             echo "WORKFLOW FAILURE: Exit code $script_exit_code indicates genuine failure"
-            echo "script_exit_code=$script_exit_code" >> $GITHUB_OUTPUT
-            exit $script_exit_code  # Propagate actual failure
+            exit $script_exit_code
           fi
 
-      - name: Post-Launch Debug Info
-        if: always() && env.INTERNAL_DEBUG == 'true'
+      - name: Unified Hunt Results Debug
+        if: always() && env.SCRIPT_DEBUG == 'true'
         run: |
-          echo "=== POST-LAUNCH DEBUG INFO ==="
+          echo "=== UNIFIED POST-LAUNCH DEBUG INFO ==="
           echo "Step conclusion: ${{ steps.launch-instances.conclusion }}"
           echo "Script exit code: ${{ steps.launch-instances.outputs.script_exit_code }}"
           echo "Workflow job status: ${{ job.status }}"
           echo "Timestamp: $(date -Iseconds)"
-          
-          # Show any cached state for debugging
-          if [[ -d .cache/oci-state ]]; then
-            echo "OCI state cache contents:"
-            find .cache/oci-state -type f -exec echo "  {}: $(cat {})" \;
-          fi
-          
-          echo "=== END POST-LAUNCH DEBUG ==="
+          echo "=== END UNIFIED POST-LAUNCH DEBUG ==="
 
-      - name: Verify instances and update state
-        if: always()
-        env:
-          OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
-          OCI_REGION: ${{ secrets.OCI_REGION }}
-          CACHE_ENABLED: "true"
-          CACHE_TTL_HOURS: "24"
-          CACHE_DATE_KEY: ${{ steps.get-date.outputs.date }}
-        run: |
-          # Verify actual instance state via OCI API and update cache
-          echo "Verifying instance state and updating cache..."
-          if [[ "$INTERNAL_DEBUG" == "true" ]]; then
-            ./scripts/state-manager.sh print
-          fi
-
-      - name: Save instance state cache
+      - name: Cache Unified Hunt State
         if: always()
         uses: actions/cache/save@v4.2.4
         with:
           path: .cache/oci-state
-          key: ${{ steps.cache-key.outputs.key }}
+          key: ${{ steps.setup-oci.outputs.cache_key }}-unified
 
       - name: Schedule Optimization Analysis
         if: always() && env.ENABLE_ADAPTIVE_SCHEDULING == 'true'
@@ -364,39 +477,91 @@ jobs:
           OCI_REGION: ${{ secrets.OCI_REGION }}
         run: ./scripts/schedule-optimizer.sh
 
-  notify-on-genuine-failure:
+  # NOTIFICATION JOB: Consolidate and send hunt results
+
+  notify-results:
     runs-on: ubuntu-latest
-    name: Send Failure Notification (Genuine Errors Only)
-    needs: create-instance
-    # CRITICAL LOGIC: Only notify on genuine failures, NOT on expected Oracle responses
-    # This job should NOT trigger since the main job now handles expected responses correctly
-    # If this job triggers, it indicates a real authentication/configuration/system failure
-    if: failure()
+    name: Send Hunt Results
+    needs: [create-a1-flex, create-e2-micro, create-instance-unified]
+    if: always() && (needs.create-a1-flex.result != 'skipped' || needs.create-e2-micro.result != 'skipped' || needs.create-instance-unified.result != 'skipped')
     steps:
-      - name: Checkout repository
+      - name: Checkout OCI Hunter Code
         uses: actions/checkout@v5
 
-      - name: Debug Failure Analysis
-        run: |
-          echo "=== GENUINE FAILURE DETECTED ==="
-          echo "This notification job should NOT trigger for capacity/limit/rate limit responses"
-          echo "If this job is running, it indicates a real system/auth/config failure"
-          echo "Job status: ${{ needs.create-instance.result }}"
-          echo "Script exit code: ${{ needs.create-instance.outputs.script_exit_code }}"
-          echo "Timestamp: $(date -Iseconds)"
-          echo "=== ANALYSIS COMPLETE ==="
-
-      - name: Send genuine failure notification
+      - name: Analyze Results and Send Notifications
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
+          A1_RESULT: ${{ needs.create-a1-flex.result }}
+          A1_EXIT_CODE: ${{ needs.create-a1-flex.outputs.script_exit_code }}
+          A1_CREATED: ${{ needs.create-a1-flex.outputs.instance_created }}
+          E2_RESULT: ${{ needs.create-e2-micro.result }}
+          E2_EXIT_CODE: ${{ needs.create-e2-micro.outputs.script_exit_code }}
+          E2_CREATED: ${{ needs.create-e2-micro.outputs.instance_created }}
+          UNIFIED_RESULT: ${{ needs.create-instance-unified.result }}
+          UNIFIED_EXIT_CODE: ${{ needs.create-instance-unified.outputs.script_exit_code }}
         run: |
+          echo "=== NOTIFICATION ANALYSIS ==="
+          echo "A1.Flex Job: $A1_RESULT (exit: $A1_EXIT_CODE, created: $A1_CREATED)"
+          echo "E2.Micro Job: $E2_RESULT (exit: $E2_EXIT_CODE, created: $E2_CREATED)"
+          echo "Unified Job: $UNIFIED_RESULT (exit: $UNIFIED_EXIT_CODE)"
+
           # Only send notifications if enabled
           if [[ "$ENABLE_NOTIFICATIONS" == "true" ]]; then
             source scripts/notify.sh
-            
-            # Enhanced failure notification with context  
-            notify_workflow_completed "failed" "🚨 OCI Workflow Genuine Failure - Run ID: ${{ github.run_id }} - This is NOT a capacity/limit issue but indicates real auth/config problems requiring attention."
+
+            # Determine if any instances were created for notification
+            instances_created=false
+            success_details=""
+
+            if [[ "$A1_CREATED" == "true" || "$E2_CREATED" == "true" ]]; then
+              instances_created=true
+              if [[ "$A1_CREATED" == "true" ]]; then
+                success_details="A1.Flex (ARM) instance created successfully"
+              fi
+              if [[ "$E2_CREATED" == "true" ]]; then
+                success_details="${success_details:+$success_details, }E2.1.Micro (AMD) instance created successfully"
+              fi
+            elif [[ "$UNIFIED_RESULT" == "success" ]]; then
+              instances_created=true
+              success_details="Instances created via unified parallel execution"
+            fi
+
+            # Send notification based on hunting success policy
+            if [[ "$instances_created" == "true" ]]; then
+              success_message="🎉 OCI Instance Hunting Success!
+
+          $success_details
+
+          Strategy: ${{ inputs.job_strategy || 'separate (default)' }}
+          Run ID: ${{ github.run_id }}"
+              send_telegram_notification "success" "$success_message"
+            elif [[ "$A1_RESULT" == "failure" || "$E2_RESULT" == "failure" || "$UNIFIED_RESULT" == "failure" ]]; then
+              # Only notify for genuine failures (not capacity/limits)
+              genuine_failure=false
+              if [[ "$A1_EXIT_CODE" != "0" && "$A1_EXIT_CODE" != "2" && "$A1_EXIT_CODE" != "5" && "$A1_EXIT_CODE" != "6" ]]; then
+                genuine_failure=true
+              fi
+              if [[ "$E2_EXIT_CODE" != "0" && "$E2_EXIT_CODE" != "2" && "$E2_EXIT_CODE" != "5" && "$E2_EXIT_CODE" != "6" ]]; then
+                genuine_failure=true
+              fi
+              if [[ "$UNIFIED_EXIT_CODE" != "0" && "$UNIFIED_EXIT_CODE" != "2" && "$UNIFIED_EXIT_CODE" != "5" && "$UNIFIED_EXIT_CODE" != "6" ]]; then
+                genuine_failure=true
+              fi
+
+              if [[ "$genuine_failure" == "true" ]]; then
+                failure_message="🚨 OCI Workflow Genuine Failure
+
+          This indicates real configuration or authentication issues requiring attention.
+          Run ID: ${{ github.run_id }}
+          Strategy: ${{ inputs.job_strategy || 'separate (default)' }}"
+                send_telegram_notification "error" "$failure_message"
+              else
+                echo "No notification needed - zero instances but only capacity/limit constraints (expected behavior)"
+              fi
+            else
+              echo "No notification needed - zero instances created due to expected Oracle constraints"
+            fi
           else
-            echo "Notifications disabled - would have sent genuine failure alert"
+            echo "Notifications disabled"
           fi

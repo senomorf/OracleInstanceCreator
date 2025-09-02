@@ -32,7 +32,7 @@
 4. On capacity issues: Continues with schedule (expected behavior)
 
 ### Manual Reset
-1. Go to Actions → "Oracle Free Tier Instance Creator"
+1. Go to Actions → "OCI Free Tier - ARM + AMD Instance Hunter"
 2. Click "Run workflow" → Enable "Reset success state"
 3. This allows new instance creation attempts to resume
 
@@ -56,7 +56,7 @@ source scripts/utils.sh
 set_success_variable "test-ocid" "test-ad"
 
 # Manual workflow trigger (via GitHub web interface)
-# Actions → Free Tier Creation → Run workflow
+# Actions → OCI Free Tier - ARM + AMD Instance Hunter → Run workflow
 ```
 
 ## Implementation Status

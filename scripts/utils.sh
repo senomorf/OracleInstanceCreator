@@ -1,14 +1,13 @@
 #!/bin/bash
 
-# Utility functions for Oracle Instance Creator scripts
-# Common functions for logging, error handling, and validation
+# Core utility functions: logging, error handling, OCI CLI wrappers
 
 set -euo pipefail
 
 # Source centralized constants
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/constants.sh"
 
-# Colors for logging (if terminal supports it)
+# Terminal color support detection
 if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
     RED=$(tput setaf 1)
     GREEN=$(tput setaf 2)
@@ -25,8 +24,7 @@ else
     RESET=""
 fi
 
-# Logging functions with colors for clear output and optional JSON format
-# Set LOG_FORMAT=json to enable structured logging
+# Dual-format logging: colorized text (default) or structured JSON
 
 log_json() {
     local level="$1"
@@ -76,8 +74,8 @@ log_error() {
 }
 
 log_debug() {
-    # Use INTERNAL_DEBUG for internal script logging
-    if [[ "${INTERNAL_DEBUG:-}" == "true" ]]; then
+    # Use SCRIPT_DEBUG for internal script logging
+    if [[ "${SCRIPT_DEBUG:-}" == "true" ]]; then
         if [[ "${LOG_FORMAT:-}" == "json" ]]; then
             log_json "debug" "$*"
         else
@@ -86,8 +84,7 @@ log_debug() {
     fi
 }
 
-# Enhanced logging with context (useful for structured logging)
-# Parameters: level, message, optional JSON context object
+# Context-aware logging for structured output
 log_with_context() {
     local level="$1"
     local message="$2"
@@ -108,8 +105,7 @@ log_with_context() {
     fi
 }
 
-# Timing functions for performance monitoring
-# Note: Using bash 4+ associative arrays if available, otherwise simple variables
+# Performance timing with bash version compatibility
 if [[ -n "${BASH_VERSION:-}" ]] && [[ ${BASH_VERSION%%.*} -ge 4 ]]; then
     declare -A TIMER_START_TIMES
 else
@@ -125,7 +121,7 @@ start_timer() {
         # Fallback - only support one timer at a time
         TIMER_START_TIME=$(date +%s.%N)
     fi
-    log_debug "Started timer: $timer_name"
+    log_debug "⏱️ Timer started: $timer_name"
 }
 
 log_elapsed() {
@@ -148,13 +144,13 @@ log_elapsed() {
         local end_time=$(date +%s.%N)
         # shellcheck disable=SC2155  # Mathematical calculation with fallback
         local elapsed=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0")
-        log_info "Timer '$timer_name' elapsed: ${elapsed}s"
+        log_info "⏱️ $timer_name completed: ${elapsed}s"
     else
-        log_warning "Timer '$timer_name' was not started"
+        log_warning "Timer '$timer_name' was not initialized"
     fi
 }
 
-# Error handling
+# Standardized error handling with exit codes
 die() {
     local message="$1"
     local exit_code="${2:-1}"  # Default to general error
@@ -162,7 +158,7 @@ die() {
     exit "$exit_code"
 }
 
-# Standardized error handling functions using OCI constants
+# OCI-specific error handling
 die_config_error() {
     die "$1" "$OCI_EXIT_CONFIG_ERROR"
 }
@@ -175,7 +171,7 @@ die_timeout_error() {
     die "$1" "$TIMEOUT_EXIT_CODE"
 }
 
-# Return standardized exit codes based on error type
+# Error type to exit code mapping
 handle_error_by_type() {
     local error_message="$1"
     local error_type
@@ -203,7 +199,7 @@ handle_error_by_type() {
     esac
 }
 
-# Environment variable validation
+# Configuration validation utilities
 require_env_var() {
     local var_name="$1"
     local var_value="${!var_name:-}"
@@ -222,13 +218,13 @@ get_env_var_or_default() {
     echo "$var_value"
 }
 
-# OCI CLI command wrapper for data extraction (no debug pollution)
+# Clean OCI data queries (no debug output)
 oci_cmd_data() {
     local cmd=("$@")
     local output
     local status
     
-    log_debug "Executing OCI data command: oci ${cmd[*]}"
+    log_debug "OCI data query: ${cmd[0]} ${cmd[1]:-}..."
     
     set +e
     output=$(oci --no-retry --connection-timeout $OCI_CONNECTION_TIMEOUT_SECONDS --read-timeout $OCI_READ_TIMEOUT_SECONDS "${cmd[@]}" 2>&1)
@@ -319,9 +315,9 @@ oci_cmd_debug() {
     local status
     local oci_args=()
     
-    # Add debug flag if OCI CLI debug is specifically enabled
+    # Add debug flag if Oracle API debug is specifically enabled
     # This controls verbose Oracle API request/response logging
-    if [[ "${OCI_CLI_DEBUG:-}" == "true" ]]; then
+    if [[ "${OCI_API_DEBUG:-}" == "true" ]]; then
         oci_args+=("--debug")
     fi
     
@@ -338,7 +334,7 @@ oci_cmd_debug() {
     # Create redacted command for secure logging
     local redacted_cmd_str
     redacted_cmd_str=$(redact_sensitive_params "${cmd[@]}")
-    log_debug "Executing OCI debug command: oci ${oci_args[*]} $redacted_cmd_str"
+    log_debug "OCI command: ${cmd[0]} ${cmd[1]:-}... (flags: ${oci_args[*]})"
     
     set +e
     output=$(oci "${oci_args[@]}" "${cmd[@]}" 2>&1)
@@ -424,15 +420,15 @@ extract_instance_ocid() {
     # Validate the extracted OCID format before returning
     if [[ -n "$instance_id" ]]; then
         if is_valid_ocid "$instance_id"; then
-            log_debug "Successfully extracted and validated instance OCID: ${instance_id:0:12}...${instance_id: -8}"
+            log_info "Instance OCID extracted: ${instance_id:0:12}...${instance_id: -8}"
             echo "$instance_id"
         else
-            log_warning "Extracted string '$instance_id' does not pass OCID format validation"
+            log_warning "Invalid OCID format: ${instance_id:0:20}..."
             echo ""
             return 1
         fi
     else
-        log_debug "No instance OCID found in output"
+        log_debug "No instance OCID in response"
         echo ""
     fi
 }
@@ -507,46 +503,46 @@ get_error_type() {
     
     # Check for user limit reached errors first (most specific - E2/A1 instance limits)
     if echo "$error_output" | grep -qi "limitexceeded.*core.*count\|standard.*micro.*core.*count\|\"code\".*\"LimitExceeded\".*core.*count"; then
-        log_debug "Detected USER_LIMIT_REACHED error pattern in: $error_output"
+        log_debug "Error classification: USER_LIMIT_REACHED"
         echo "USER_LIMIT_REACHED"
     # Check for Oracle capacity unavailable errors (specific Oracle capacity constraints)
     elif echo "$error_output" | grep -qi "out of host capacity\|insufficient.*host.*capacity\|host.*capacity.*unavailable\|\"code\".*\"InternalError\".*host.*capacity"; then
-        log_debug "Detected ORACLE_CAPACITY_UNAVAILABLE error pattern in: $error_output"
+        log_debug "Error classification: ORACLE_CAPACITY_UNAVAILABLE"
         echo "ORACLE_CAPACITY_UNAVAILABLE"
     # Check for general limit exceeded errors (fallback for other limit types)
     elif echo "$error_output" | grep -qi "limitexceeded\|\"code\".*\"LimitExceeded\""; then
-        log_debug "Detected LIMIT_EXCEEDED error pattern in: $error_output"
+        log_debug "Error classification: LIMIT_EXCEEDED"
         echo "LIMIT_EXCEEDED"
     # Check for rate limiting (treat as capacity issue)
     elif echo "$error_output" | grep -qi "too.*many.*requests\|rate.*limit\|throttle\|429\|TooManyRequests\|\"code\".*\"TooManyRequests\"\|\"status\".*429\|'status':.*429\|'code':.*'TooManyRequests'"; then
-        log_debug "Detected RATE_LIMIT error pattern in: $error_output"
+        log_debug "Error classification: RATE_LIMIT"
         echo "RATE_LIMIT"
     # Check for capacity-related errors (more general patterns)
     elif echo "$error_output" | grep -qi "capacity\|host capacity\|out of capacity\|service limit\|quota exceeded\|resource unavailable\|insufficient capacity"; then
-        log_debug "Detected CAPACITY error pattern in: $error_output"
+        log_debug "Error classification: CAPACITY"
         echo "CAPACITY"
     # Check for internal/gateway errors (retry-able)
     elif echo "$error_output" | grep -qi "internal.*error\|internalerror\|\"code\".*\"InternalError\"\|bad.*gateway\|502\|\"status\".*502"; then
-        log_debug "Detected INTERNAL/GATEWAY error pattern in: $error_output"
+        log_debug "Error classification: INTERNAL_ERROR"
         echo "INTERNAL_ERROR"
     # Check for duplicate instances
     elif echo "$error_output" | grep -qi "display name already exists\|instance.*already exists\|duplicate.*name"; then
-        log_debug "Detected DUPLICATE error pattern in: $error_output"
+        log_debug "Error classification: DUPLICATE"
         echo "DUPLICATE"
     # Check for authentication/authorization errors
     elif echo "$error_output" | grep -qi "authentication\|authorization\|unauthorized\|forbidden\|401\|403"; then
-        log_debug "Detected AUTH error pattern in: $error_output"
+        log_debug "Error classification: AUTH"
         echo "AUTH"
     # Check for network/connectivity errors
     elif echo "$error_output" | grep -qi "network\|timeout\|connection\|unreachable\|dns"; then
-        log_debug "Detected NETWORK error pattern in: $error_output"
+        log_debug "Error classification: NETWORK"
         echo "NETWORK"
     # Check for configuration errors
     elif echo "$error_output" | grep -qi "not found\|invalid.*id\|does not exist\|bad.*request\|400\|parameter"; then
-        log_debug "Detected CONFIG error pattern in: $error_output"
+        log_debug "Error classification: CONFIG"
         echo "CONFIG"
     else
-        log_debug "No specific error pattern matched in: $error_output"
+        log_debug "Error classification: UNKNOWN (no patterns matched)"
         echo "UNKNOWN"
     fi
 }
@@ -565,8 +561,12 @@ calculate_exponential_backoff() {
     local base_delay="${2:-5}"
     local max_delay="${3:-40}"
     
-    # Calculate 2^(attempt-1) * base_delay
-    local delay=$((base_delay * (2 ** (attempt - 1))))
+    # Calculate 2^(attempt-1) * base_delay, but ensure non-negative exponent
+    local exponent=$((attempt - 1))
+    if [[ $exponent -lt 0 ]]; then
+        exponent=0
+    fi
+    local delay=$((base_delay * (2 ** exponent)))
     
     # Cap at maximum delay
     if [[ $delay -gt $max_delay ]]; then
