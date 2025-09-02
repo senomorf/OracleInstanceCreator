@@ -85,6 +85,8 @@ jobs:
     name: Deploy OCI Infrastructure (Parallel Orchestration)
     permissions:
       contents: read
+    outputs:
+      script_exit_code: ${{ steps.launch-instances.outputs.script_exit_code }}
     env:
       # Common configuration for both shapes
       # Multi-AD support: Use comma-separated list for multiple ADs
