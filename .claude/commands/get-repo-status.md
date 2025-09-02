@@ -13,7 +13,8 @@ model: claude-sonnet-4-20250514
 ## Your task
 
 Provide repository brief:
-- owner
-- name
-- branch
-- status
+- remote repository
+- remote repository owner username
+- remote repository name
+- current branch
+- current branch status
