@@ -12,7 +12,7 @@ profiles:
     ocpus: 4
     memory_gb: 24
     operating_system: "Oracle Linux"
-    os_version: "9"
+    os_version: "10"
     assign_public_ip: false
 
   # Alternative AMD instance
@@ -22,7 +22,7 @@ profiles:
     availability_domain: "fgaj:AP-SINGAPORE-1-AD-1"
     shape: "VM.Standard.E2.1.Micro"
     operating_system: "Oracle Linux"
-    os_version: "9"
+    os_version: "10"
     assign_public_ip: false
 
   # ARM instance with public IP
@@ -34,7 +34,7 @@ profiles:
     ocpus: 2
     memory_gb: 12
     operating_system: "Oracle Linux"
-    os_version: "9"
+    os_version: "10"
     assign_public_ip: true
 
   # Frankfurt region alternative
@@ -46,7 +46,7 @@ profiles:
     ocpus: 4
     memory_gb: 24
     operating_system: "Oracle Linux"
-    os_version: "9"
+    os_version: "10"
     assign_public_ip: false
 
   # Ubuntu instance
@@ -58,7 +58,7 @@ profiles:
     ocpus: 4
     memory_gb: 24
     operating_system: "Canonical Ubuntu"
-    os_version: "22.04"
+    os_version: "24.04"
     assign_public_ip: false
 
 # Default profile to use if none specified
