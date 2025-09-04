@@ -52,7 +52,7 @@ validate_instance_configuration() {
     export OCI_SHAPE="${OCI_SHAPE:-VM.Standard.A1.Flex}"
     export INSTANCE_DISPLAY_NAME="${INSTANCE_DISPLAY_NAME:-oci-free-instance}"
     export OPERATING_SYSTEM="${OPERATING_SYSTEM:-Oracle Linux}"
-    export OS_VERSION="${OS_VERSION:-9}"
+    export OS_VERSION="${OS_VERSION:-10}"
     export ASSIGN_PUBLIC_IP="${ASSIGN_PUBLIC_IP:-false}"
     
     # New configuration options with defaults
