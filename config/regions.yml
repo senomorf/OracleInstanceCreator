@@ -98,12 +98,12 @@ free_tier_shapes:
 operating_systems:
   oracle_linux:
     name: "Oracle Linux"
-    versions: ["8", "9"]
-    default_version: "9"
+    versions: ["8", "9", "10"]
+    default_version: "10"
   ubuntu:
     name: "Canonical Ubuntu"
-    versions: ["20.04", "22.04"]
-    default_version: "22.04"
+    versions: ["20.04", "22.04", "24.04"]
+    default_version: "24.04"
   centos:
     name: "CentOS"
     versions: ["7", "8"]
