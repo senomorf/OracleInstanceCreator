@@ -14,7 +14,7 @@ ASSIGN_PUBLIC_IP: "false"        # Set to "true" if you need public access
 
 # Operating System
 OPERATING_SYSTEM: "Oracle Linux"
-OS_VERSION: "9"
+OS_VERSION: "10"
 
 # Boot Volume Configuration
 BOOT_VOLUME_SIZE: "50"           # Minimum 50 GB (max 200 GB for free tier)
@@ -34,8 +34,8 @@ INSTANCE_VERIFY_DELAY: "30"
 LOG_FORMAT: "text"               # or "json" for structured logging
 
 # ARM Image Cache (Update periodically)
-# Check latest ARM images: oci compute image list --compartment-id <tenancy-ocid> --operating-system "Oracle Linux" --operating-system-version "9" --shape "VM.Standard.A1.Flex" --sort-by TIMECREATED --sort-order DESC
-OCI_CACHED_OL9_ARM_IMAGE: "ocid1.image.oc1.ap-singapore-1.aaaaaaaalp5rsngiayobfuxdurkxdnxgkxjfbfqpl2c2yebldjmrrtbrteaa"
+# Check latest ARM images: oci compute image list --compartment-id <tenancy-ocid> --operating-system "Oracle Linux" --operating-system-version "10" --shape "VM.Standard.A1.Flex" --sort-by TIMECREATED --sort-order DESC
+OCI_CACHED_OL10_ARM_IMAGE: "ocid1.image.oc1.ap-singapore-1.aaaaaaaay4vc5rcekxthq7cillis3qred5xyz7kmqd6wuaoknk4zukohqlua"
 
 # Required GitHub Secrets (not environment variables):
 # OCI_USER_OCID: Your OCI user OCID
