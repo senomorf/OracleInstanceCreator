@@ -98,7 +98,7 @@ jobs:
       INSTANCE_DISPLAY_NAME: "default-instance"  # Default for validation (overridden per-shape)
       ASSIGN_PUBLIC_IP: "false"
       OPERATING_SYSTEM: "Oracle Linux"
-      OS_VERSION: "9"
+      OS_VERSION: "10"
       # Boot volume configuration
       BOOT_VOLUME_SIZE: "50"
       # Instance recovery and compatibility settings

@@ -14,7 +14,7 @@ ASSIGN_PUBLIC_IP: "true"
 
 # Operating System
 OPERATING_SYSTEM: "Oracle Linux"
-OS_VERSION: "9"
+OS_VERSION: "10"
 
 # Boot Volume Configuration - Performance
 BOOT_VOLUME_SIZE: "100"          # Larger boot volume for production

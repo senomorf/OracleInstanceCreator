@@ -12,7 +12,7 @@ ASSIGN_PUBLIC_IP: "true"         # Common for US region setups
 
 # Operating System
 OPERATING_SYSTEM: "Oracle Linux"
-OS_VERSION: "9"
+OS_VERSION: "10"
 
 # Boot Volume Configuration
 BOOT_VOLUME_SIZE: "50"           # Minimum 50 GB (max 200 GB for free tier)
@@ -32,8 +32,8 @@ INSTANCE_VERIFY_DELAY: "30"
 LOG_FORMAT: "text"               # or "json" for structured logging
 
 # AMD Image Cache (Update periodically)
-# Check latest AMD images: oci compute image list --compartment-id <tenancy-ocid> --operating-system "Oracle Linux" --operating-system-version "9" --shape "VM.Standard.E2.1.Micro" --sort-by TIMECREATED --sort-order DESC
-OCI_CACHED_OL9_AMD_IMAGE: "ocid1.image.oc1.iad.aaaaaaaaexampleamdimage123456789"
+# Check latest AMD images: oci compute image list --compartment-id <tenancy-ocid> --operating-system "Oracle Linux" --operating-system-version "10" --shape "VM.Standard.E2.1.Micro" --sort-by TIMECREATED --sort-order DESC
+OCI_CACHED_OL10_AMD_IMAGE: "ocid1.image.oc1.ap-singapore-1.aaaaaaaaitll52n3sr73g2gaclby2ph5whrmb5l3tbo47i6atle6z3cemr6a"
 
 # Required GitHub Secrets (not environment variables):
 # OCI_USER_OCID: Your OCI user OCID

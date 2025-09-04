@@ -98,18 +98,18 @@ lookup_image_id() {
         # Try common cached image IDs first
         local cache_key="${operating_system}_${os_version}_${OCI_SHAPE}"
         case "$cache_key" in
-            "Oracle Linux_9_VM.Standard.A1.Flex")
+            "Oracle Linux_10_VM.Standard.A1.Flex")
                 # Common Oracle Linux 10 ARM image ID - update as needed
                 image_id="${OCI_CACHED_OL10_ARM_IMAGE:-}"
                 if [[ -n "$image_id" ]]; then
-                    log_info "Using cached Oracle Linux 9 ARM image ID"
+                    log_info "Using cached Oracle Linux 10 ARM image ID"
                 fi
                 ;;
-            "Oracle Linux_9_VM.Standard.E2.1.Micro")
+            "Oracle Linux_10_VM.Standard.E2.1.Micro")
                 # Common Oracle Linux 10 AMD image ID - update as needed
                 image_id="${OCI_CACHED_OL10_AMD_IMAGE:-}"
                 if [[ -n "$image_id" ]]; then
-                    log_info "Using cached Oracle Linux 9 AMD image ID"
+                    log_info "Using cached Oracle Linux 10 AMD image ID"
                 fi
                 ;;
         esac

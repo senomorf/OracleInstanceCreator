@@ -74,7 +74,7 @@ These can be set in the GitHub Actions workflow file:
 | `INSTANCE_DISPLAY_NAME` | Instance display name | `a1-sg` |
 | `ASSIGN_PUBLIC_IP` | Assign public IP | `false` |
 | `OPERATING_SYSTEM` | Operating system | `Oracle Linux` |
-| `OS_VERSION` | OS version | `9` |
+| `OS_VERSION` | OS version | `10` |
 
 ## Using Instance Profiles
 
