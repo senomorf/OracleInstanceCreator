@@ -1,7 +1,5 @@
 ---
-name: Claude Over Preheating
-permissions:
-  contents: read
+name: Claude Oven Preheating
 
 on:
   schedule:
@@ -14,6 +12,8 @@ on:
 jobs:
   preheat:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - name: Tell Me Fun Fact
         uses: anthropics/claude-code-action@v1
