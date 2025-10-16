@@ -1,0 +1,39 @@
+# Hyperfine Configuration for Oracle Instance Creator
+# Performance benchmarking settings
+
+# Default benchmark settings
+default:
+  runs: 10
+  warm_up: 3
+  min_benchmarking_time: 5
+  max_benchmarking_time: 30
+  
+# Export formats
+export:
+  formats: [json, csv, markdown]
+  directory: ./benchmarks
+
+# Shell settings for script benchmarking
+shell:
+  command: bash
+  options: [-e, -u, -o, pipefail]
+  
+# Environment variables for consistent testing
+environment:
+  DEBUG: "false"
+  OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: "True"
+  
+# Benchmark profiles for different script types
+profiles:
+  quick:
+    runs: 3
+    warm_up: 1
+    
+  thorough:
+    runs: 20
+    warm_up: 5
+    
+  ci:
+    runs: 5
+    warm_up: 2
+    max_benchmarking_time: 60
